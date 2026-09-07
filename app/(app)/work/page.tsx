@@ -1,6 +1,7 @@
 import { updateWorkItemAction } from "@/app/actions/workers";
 import { PageHeader, Panel, StatusBadge, statusLabels } from "@/components/app-shell";
 import { ReportActions } from "@/components/report-actions";
+import { SubmitButton } from "@/components/submit-button";
 import { formatDate, formatMoney } from "@/lib/format";
 import { getJobs, getMasterData, getWorkItems, getWorkers, workerDisplayName, workTitle } from "@/lib/supabase/queries";
 
@@ -51,7 +52,7 @@ export default async function WorkPage() {
                       <select name="status" defaultValue={item.status} className="field"><option value="TODO">Gözləyir</option><option value="IN_PROGRESS">İcra olunur</option><option value="DONE">Tamamlandı</option><option value="CANCELLED">Ləğv edildi</option></select>
                       <input name="labor_cost" type="number" min="0" step="0.01" defaultValue={item.labor_cost} className="field" placeholder="Usta iş ödənişi / əmək xərci" />
                       <input name="notes" defaultValue={item.notes ?? ""} className="field" placeholder="Qeyd" />
-                      <button className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm">Yenilə</button>
+                      <SubmitButton variant="secondary" pendingText="Yenilənir...">Yenilə</SubmitButton>
                     </form>
                   </Panel>
                 );

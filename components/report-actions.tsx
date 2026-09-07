@@ -1,18 +1,16 @@
 "use client";
 
-import { Download, Printer } from "lucide-react";
+import { Printer } from "lucide-react";
+import { PdfLink } from "@/components/pdf-link";
 
 export function ReportActions({ report }: { report: string }) {
   return (
     <div className="flex items-center gap-2">
-      <button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm text-white">
+      <button onClick={() => window.print()} className="btn btn-secondary report-button">
         <Printer size={16} />
         Çap
       </button>
-      <a href={`/api/reports/${report}/pdf`} className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-semibold text-black">
-        <Download size={16} />
-        PDF
-      </a>
+      <PdfLink href={`/api/reports/${report}/pdf`} />
     </div>
   );
 }

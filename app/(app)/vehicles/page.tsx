@@ -11,7 +11,7 @@ export default async function VehiclesPage() {
   const [jobs, allPurchases, allWorkItems] = await Promise.all([getJobs(), getPurchases(), getWorkItems()]);
   return (
     <>
-      <PageHeader title="Avtomobillər" eyebrow="Servis kartları" actions={<Link href="/vehicles/new" className="inline-flex items-center gap-2 rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-black"><Plus size={16} />Yeni avtomobil / servis kartı</Link>} />
+      <PageHeader title="Avtomobillər" eyebrow="Servis kartları" actions={<Link href="/vehicles/new" className="btn btn-primary"><Plus size={16} />Yeni avtomobil / servis kartı</Link>} />
       <div className="mb-5 grid gap-3 md:grid-cols-4">
         <input className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 outline-none" placeholder="Nömrə axtarışı" />
         <select className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2"><option>Status</option><option>İş gedir</option><option>Hazırdır</option></select>

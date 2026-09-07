@@ -1,6 +1,8 @@
 "use client";
 
 import { Trash2 } from "lucide-react";
+import { useFormStatus } from "react-dom";
+import { WorkshopLoader } from "@/components/workshop-loader";
 
 export function ConfirmButton({
   message,
@@ -11,15 +13,18 @@ export function ConfirmButton({
   children?: React.ReactNode;
   danger?: boolean;
 }) {
+  const { pending } = useFormStatus();
   return (
     <button
       onClick={(event) => {
         if (!window.confirm(message)) event.preventDefault();
       }}
-      className={danger ? "inline-flex items-center gap-2 rounded-lg border border-[rgba(232,91,91,.45)] px-3 py-2 text-sm text-[var(--danger)]" : undefined}
+      disabled={pending}
+      aria-disabled={pending}
+      className={danger ? "btn btn-danger" : "btn btn-danger !min-h-0 !p-2"}
       title={typeof children === "string" ? children : undefined}
     >
-      {children ?? <Trash2 size={16} />}
+      {pending ? <WorkshopLoader label="Gözləyin..." compact /> : children ?? <Trash2 size={16} />}
     </button>
   );
 }

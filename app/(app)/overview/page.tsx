@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowUpRight, CarFront, CircleDollarSign, ClipboardCheck, WalletCards } from "lucide-react";
 import { fundingLabels, PageHeader, Panel, StatusBadge, statusLabels } from "@/components/app-shell";
+import { PdfLink } from "@/components/pdf-link";
 import { ReportActions } from "@/components/report-actions";
 import { formatDate, formatMoney } from "@/lib/format";
 import { dbFinancialSummary } from "@/lib/supabase/finance";
@@ -67,8 +68,8 @@ export default async function OverviewPage() {
                   <Money label="Borc" value={financial.unpaidSupplierAmount} />
                 </div>
                 <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-                  <a href={`/api/reports/vehicle/${job.id}/pdf`} className="rounded-lg bg-[var(--accent)] px-3 py-2 text-sm font-semibold text-black">PDF</a>
-                  <Link href={`/vehicles/${job.id}`} className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm text-white">Aç</Link>
+                  <PdfLink href={`/api/reports/vehicle/${job.id}/pdf`} compact />
+                  <Link href={`/vehicles/${job.id}`} className="btn btn-secondary">Aç</Link>
                 </div>
               </div>
               <div className="mt-4">

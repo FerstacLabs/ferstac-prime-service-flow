@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { redirect } from "next/navigation";
 import { signInAction } from "@/app/actions/auth";
+import { SubmitButton } from "@/components/submit-button";
 import { getCurrentUser } from "@/lib/supabase/auth";
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
@@ -17,7 +18,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         <form action={signInAction} className="mt-6 grid gap-4">
           <label className="text-sm text-[var(--muted)]">Email<input name="email" type="email" required className="mt-2 w-full rounded-lg border border-[var(--border)] bg-black/20 px-3 py-3 text-white outline-none" /></label>
           <label className="text-sm text-[var(--muted)]">Şifrə<input name="password" type="password" required className="mt-2 w-full rounded-lg border border-[var(--border)] bg-black/20 px-3 py-3 text-white outline-none" /></label>
-          <button className="rounded-lg bg-[var(--accent)] px-4 py-3 font-semibold text-black">Daxil ol</button>
+          <SubmitButton pendingText="Yoxlanılır...">Daxil ol</SubmitButton>
         </form>
       </section>
     </main>

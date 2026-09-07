@@ -31,7 +31,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Link
               key={item.href}
               href={item.href}
-              className="flex min-w-max items-center gap-3 rounded-lg px-3 py-3 text-sm text-[var(--muted)] transition hover:bg-[var(--elevated)] hover:text-white lg:mb-1"
+              className="flex min-w-max items-center gap-3 rounded-lg px-3 py-3 text-sm text-[var(--muted)] transition duration-150 hover:bg-[var(--elevated)] hover:text-white active:scale-[0.985] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] lg:mb-1"
             >
               <item.icon size={18} />
               {item.label}
@@ -40,9 +40,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="hidden px-5 pb-5 lg:absolute lg:bottom-0 lg:block">
-          <div className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--elevated)]">
-            <Image src="/brand/prime-transformer-f30.png" alt="PRIME F30 layihəsi" width={420} height={280} className="h-28 w-full object-cover opacity-55" />
-            <div className="p-3 text-sm text-[var(--muted)]">F30 build demo məlumatlarında aktiv layihə kimi görünür.</div>
+          <div className="flex justify-center border-t border-[var(--border)] pt-5">
+            <Image src="/brand/prime-bot-icon.svg" alt="" width={74} height={74} className="h-[74px] w-[74px] opacity-80 drop-shadow-[0_0_18px_rgba(229,193,77,0.18)]" />
           </div>
         </div>
       </aside>
@@ -56,7 +55,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </label>
             <QuickActions />
             <form action={signOutAction}>
-              <button className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm text-[var(--muted)]">
+              <button className="btn btn-secondary text-[var(--muted)]">
                 <LogOut size={16} />
                 Çıxış
               </button>

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { saveWorkerAction } from "@/app/actions/workers";
 import { PageHeader, Panel } from "@/components/app-shell";
 import { ReportActions } from "@/components/report-actions";
+import { SubmitButton } from "@/components/submit-button";
 import { formatMoney } from "@/lib/format";
 import { getJobs, getMasterData, getWorkItems, getWorkers, workerDisplayName, workTitle } from "@/lib/supabase/queries";
 
@@ -26,7 +27,7 @@ export default async function WorkersPage() {
           <input name="hire_date" type="date" className="field" />
           <select name="active" className="field"><option value="true">Aktiv</option><option value="false">Deaktiv</option></select>
           <input name="notes" className="field md:col-span-3" placeholder="Qeyd" />
-          <button className="rounded-lg bg-[var(--accent)] px-4 py-3 font-semibold text-black">İşçini saxla</button>
+          <SubmitButton pendingText="Saxlanır...">İşçini saxla</SubmitButton>
         </form>
       </Panel>
       <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">

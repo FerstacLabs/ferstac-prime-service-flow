@@ -2,6 +2,7 @@ import { deletePurchaseAction, savePurchaseAction, saveSupplierAction } from "@/
 import { PageHeader, Panel, StatusBadge } from "@/components/app-shell";
 import { ConfirmButton } from "@/components/confirm-button";
 import { ReportActions } from "@/components/report-actions";
+import { SubmitButton } from "@/components/submit-button";
 import { dbPurchaseOutstanding, dbPurchaseTotal } from "@/lib/supabase/finance";
 import { formatDate, formatMoney } from "@/lib/format";
 import { getJobs, getMasterData, getPurchases, getSuppliers, getWorkers, partTitle, supplierDisplayName, workerDisplayName } from "@/lib/supabase/queries";
@@ -36,7 +37,7 @@ export default async function PurchasesPage() {
             <input name="serial_no" className="field" placeholder="Serial nömrəsi" />
             <input name="document_no" className="field" placeholder="Qaimə/sənəd" />
             <input name="notes" className="field md:col-span-2" placeholder="Qeyd" />
-            <button className="rounded-lg bg-[var(--accent)] px-4 py-3 font-semibold text-black">Alışı saxla</button>
+            <SubmitButton pendingText="Saxlanır...">Alışı saxla</SubmitButton>
           </form>
         </Panel>
         <Panel>
@@ -52,7 +53,7 @@ export default async function PurchasesPage() {
             <input name="phone" className="field" placeholder="Əlaqə nömrəsi" />
             <input name="address" className="field md:col-span-2" placeholder="Ünvan" />
             <input name="notes" className="field md:col-span-2" placeholder="Qeyd" />
-            <button className="rounded-lg border border-[var(--border)] px-4 py-3 text-white md:col-span-2">Təchizatçını saxla</button>
+            <SubmitButton variant="secondary" pendingText="Saxlanır..." className="md:col-span-2">Təchizatçını saxla</SubmitButton>
           </form>
         </Panel>
       </div>

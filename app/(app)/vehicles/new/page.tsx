@@ -2,6 +2,7 @@ import { Save } from "lucide-react";
 import { createServiceJobAction } from "@/app/actions/vehicles";
 import { PageHeader, Panel } from "@/components/app-shell";
 import { PlateInput } from "@/components/plate-input";
+import { SubmitButton } from "@/components/submit-button";
 import { getMasterData } from "@/lib/supabase/queries";
 
 export const dynamic = "force-dynamic";
@@ -73,10 +74,10 @@ export default async function NewVehiclePage() {
             <input name="custom_work_title" className="field mt-3" placeholder="Digər iş" />
           </section>
 
-          <button className="inline-flex w-fit items-center gap-2 rounded-lg bg-[var(--accent)] px-5 py-3 font-semibold text-black">
+          <SubmitButton className="w-fit px-5 py-3" pendingText="Saxlanır...">
             <Save size={18} />
             Servis kartını saxla
-          </button>
+          </SubmitButton>
         </form>
       </Panel>
     </>
