@@ -16,9 +16,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[17rem_1fr]">
       <aside className="no-print border-b border-[var(--border)] bg-[rgba(17,19,24,0.92)] lg:sticky lg:top-0 lg:h-screen lg:border-b-0 lg:border-r">
-        <div className="flex items-center justify-between gap-4 px-4 py-4 lg:block lg:px-5">
-          <Link href="/overview" className="flex items-center gap-3">
-            <Image src="/brand/prime-logo.png" alt="PRIME" width={116} height={32} className="h-8 w-auto object-contain" style={{ width: "auto", height: "auto" }} priority />
+        <div className="flex items-center justify-between gap-4 px-4 py-4 lg:block lg:px-5 lg:pb-3">
+          <Link href="/overview" className="flex items-center gap-3 lg:block">
+            <Image src="/brand/prime-logo.png" alt="PRIME" width={224} height={65} className="h-auto w-[9.75rem] max-w-full object-contain lg:w-[14rem]" priority />
             <span className="sr-only">PRIME Flow</span>
           </Link>
           <div className="rounded-full border border-[var(--border)] px-3 py-1 text-sm text-[var(--muted)] lg:mt-4 lg:inline-flex">
@@ -39,9 +39,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           ))}
         </nav>
 
-        <div className="pointer-events-none hidden px-6 pb-6 lg:absolute lg:bottom-0 lg:left-0 lg:block">
+        <div className="pointer-events-none hidden w-full px-2 pb-5 lg:absolute lg:bottom-0 lg:left-0 lg:block">
           <div className="flex justify-center">
-            <Image src="/brand/prime-bot-icon.png" alt="" width={144} height={144} className="sidebar-bot" />
+            <Image src="/brand/prime-bot-icon.png" alt="" width={256} height={256} className="sidebar-bot" />
           </div>
         </div>
       </aside>

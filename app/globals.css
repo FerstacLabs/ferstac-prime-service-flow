@@ -121,11 +121,11 @@ a {
 }
 
 .sidebar-bot {
-  width: 9rem;
-  height: 9rem;
+  width: clamp(12rem, 31vh, 16rem);
+  height: clamp(12rem, 31vh, 16rem);
   object-fit: contain;
   opacity: 0.92;
-  filter: drop-shadow(0 18px 24px rgba(0, 0, 0, 0.42)) drop-shadow(0 0 20px rgba(229, 193, 77, 0.14));
+  filter: drop-shadow(0 22px 28px rgba(0, 0, 0, 0.42)) drop-shadow(0 0 22px rgba(229, 193, 77, 0.13));
 }
 
 .burnout-loader {
