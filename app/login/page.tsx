@@ -11,7 +11,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   return (
     <main className="grid min-h-screen place-items-center px-4">
       <section className="w-full max-w-md rounded-lg border border-[var(--border)] bg-[var(--surface)] p-6 shadow-2xl">
-        <Image src="/brand/prime-logo.png" alt="PRIME" width={140} height={42} className="mb-8 h-10 w-auto object-contain" priority />
+        <Image src="/brand/prime-logo.png" alt="PRIME" width={140} height={42} className="mb-8 h-10 w-auto object-contain" style={{ width: "auto", height: "auto" }} priority />
         <h1 className="text-2xl font-semibold">PRIME Flow giriş</h1>
         <p className="mt-2 text-sm text-[var(--muted)]">Supabase Auth admin istifadəçisi ilə daxil olun.</p>
         {error ? <p className="mt-4 rounded-lg border border-[rgba(232,91,91,.45)] p-3 text-sm text-[var(--danger)]">{error}</p> : null}

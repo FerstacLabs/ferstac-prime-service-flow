@@ -18,7 +18,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <aside className="no-print border-b border-[var(--border)] bg-[rgba(17,19,24,0.92)] lg:sticky lg:top-0 lg:h-screen lg:border-b-0 lg:border-r">
         <div className="flex items-center justify-between gap-4 px-4 py-4 lg:block lg:px-5">
           <Link href="/overview" className="flex items-center gap-3">
-            <Image src="/brand/prime-logo.png" alt="PRIME" width={116} height={32} className="h-8 w-auto object-contain" priority />
+            <Image src="/brand/prime-logo.png" alt="PRIME" width={116} height={32} className="h-8 w-auto object-contain" style={{ width: "auto", height: "auto" }} priority />
             <span className="sr-only">PRIME Flow</span>
           </Link>
           <div className="rounded-full border border-[var(--border)] px-3 py-1 text-sm text-[var(--muted)] lg:mt-4 lg:inline-flex">
@@ -41,7 +41,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         <div className="hidden px-5 pb-5 lg:absolute lg:bottom-0 lg:block">
           <div className="flex justify-center border-t border-[var(--border)] pt-5">
-            <Image src="/brand/prime-bot-icon.svg" alt="" width={74} height={74} className="h-[74px] w-[74px] opacity-80 drop-shadow-[0_0_18px_rgba(229,193,77,0.18)]" />
+            <div className="sidebar-bot-frame">
+              <Image src="/brand/prime-bot-icon.png" alt="" width={96} height={96} className="h-[76px] w-[76px] object-contain drop-shadow-[0_0_20px_rgba(229,193,77,0.22)]" />
+            </div>
           </div>
         </div>
       </aside>

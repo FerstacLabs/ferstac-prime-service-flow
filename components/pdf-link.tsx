@@ -17,7 +17,7 @@ export function PdfLink({ href, compact = false }: { href: string; compact?: boo
       aria-disabled={pending}
       className={cn("btn btn-secondary report-button border-[rgba(229,193,77,.58)] text-[var(--accent)]", compact && "min-w-[4.6rem]")}
     >
-      {pending ? <WorkshopLoader label="PDF..." compact /> : <><Download size={16} />PDF</>}
+      {pending ? <WorkshopLoader label="Hazırlanır..." compact /> : <><Download size={16} />PDF</>}
     </a>
   );
 }
