@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { CarFront, ClipboardList, LayoutDashboard, LogOut, Search, ShoppingCart, Users } from "lucide-react";
 import { QuickActions } from "@/components/quick-actions";
+import { signOutAction } from "@/app/actions/auth";
 
 const navItems = [
   { href: "/vehicles", label: "Avtomobillər", icon: CarFront },
@@ -54,10 +55,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <input className="w-full bg-transparent text-white outline-none placeholder:text-[var(--muted)]" placeholder="Nömrə ilə axtar: 10-PR-030" />
             </label>
             <QuickActions />
-            <button className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm text-[var(--muted)]">
-              <LogOut size={16} />
-              Çıxış
-            </button>
+            <form action={signOutAction}>
+              <button className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm text-[var(--muted)]">
+                <LogOut size={16} />
+                Çıxış
+              </button>
+            </form>
           </div>
         </header>
         <div className="px-4 py-6 lg:px-8">{children}</div>

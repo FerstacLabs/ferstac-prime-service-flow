@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Car, Plus, ShoppingCart } from "lucide-react";
+import { Car, ShoppingCart } from "lucide-react";
 
 export function QuickActions() {
   return (
@@ -14,9 +14,6 @@ export function QuickActions() {
         <ShoppingCart size={16} />
         Yeni alış
       </Link>
-      <button aria-label="Əlavə et" className="grid size-9 place-items-center rounded-lg border border-[var(--border)] text-[var(--muted)]">
-        <Plus size={16} />
-      </button>
     </div>
   );
 }

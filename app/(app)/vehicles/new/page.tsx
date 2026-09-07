@@ -1,90 +1,84 @@
-"use client";
-
-import { useMemo, useState } from "react";
-import { Check, Save, X } from "lucide-react";
+import { Save } from "lucide-react";
+import { createServiceJobAction } from "@/app/actions/vehicles";
 import { PageHeader, Panel } from "@/components/app-shell";
-import { normalizeAzPlate, isValidAzPlate } from "@/lib/plate";
-import { vehicles, workCatalog } from "@/lib/demo-data";
+import { PlateInput } from "@/components/plate-input";
+import { getMasterData } from "@/lib/supabase/queries";
 
-export default function NewVehiclePage() {
-  const [plate, setPlate] = useState("");
-  const [selectedWork, setSelectedWork] = useState<string[]>(["initial-inspection"]);
-  const existingVehicle = useMemo(() => vehicles.find((vehicle) => vehicle.plate === normalizeAzPlate(plate)), [plate]);
-  const selectedItems = workCatalog.filter((item) => selectedWork.includes(item.id));
+export const dynamic = "force-dynamic";
+
+export default async function NewVehiclePage() {
+  const { workCatalog } = await getMasterData();
 
   return (
     <>
       <PageHeader title="Yeni avtomobil / servis kartı" eyebrow="Sürətli qəbul" />
       <Panel>
-        <form className="grid gap-6">
+        <form action={createServiceJobAction} className="grid gap-6">
           <section className="grid gap-4 md:grid-cols-2">
-            <Field label="Dövlət qeydiyyat nişanı">
-              <input
-                value={plate}
-                onChange={(event) => setPlate(normalizeAzPlate(event.target.value))}
-                className="w-full rounded-lg border border-[var(--border)] bg-black/25 px-3 py-3 font-mono text-2xl font-bold uppercase outline-none focus:border-[var(--accent)]"
-                placeholder="99-AA-999"
-                required
-              />
-              <p className={`mt-2 text-sm ${plate && isValidAzPlate(plate) ? "text-[var(--success)]" : "text-[var(--muted)]"}`}>
-                {existingVehicle ? `${existingVehicle.make} ${existingVehicle.model} tapıldı, yeni servis kartı yaradılacaq.` : "Nömrə avtomatik böyük hərflə 99-AA-999 formatına salınır."}
-              </p>
-            </Field>
+            <Field label="Dövlət qeydiyyat nişanı"><PlateInput /></Field>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Marka"><input defaultValue={existingVehicle?.make} required className="field" /></Field>
-              <Field label="Model"><input defaultValue={existingVehicle?.model} required className="field" /></Field>
+              <Field label="Marka"><input name="make" required className="field" /></Field>
+              <Field label="Model"><input name="model" required className="field" /></Field>
             </div>
-            <Field label="Müştərinin adı"><input className="field" /></Field>
-            <Field label="Müştərinin telefon nömrəsi"><input className="field" /></Field>
+            <Field label="Müştərinin adı"><input name="customer_name" className="field" /></Field>
+            <Field label="Müştərinin telefon nömrəsi"><input name="customer_phone" className="field" /></Field>
           </section>
 
           <details className="rounded-lg border border-[var(--border)] p-4">
             <summary className="cursor-pointer font-semibold">Qeydiyyat məlumatları</summary>
             <div className="mt-4 grid gap-4 md:grid-cols-3">
-              {["nəqliyyat vasitəsinin tipi", "banın tipi", "buraxılış ili", "ilk qeydiyyat tarixi", "mühərrik nömrəsi", "ban/VIN nömrəsi", "şassi nömrəsi", "rəng", "mühərrik gücü (a.g. / kW)", "qeydiyyat şəhadətnaməsinin seriya və nömrəsi", "qeydiyyatda olan sahibin soyadı, adı, ata adı", "sahibin ünvanı"].map((label) => (
-                <Field key={label} label={label}><input className="field" /></Field>
-              ))}
+              <Field label="nəqliyyat vasitəsinin tipi"><input name="vehicle_type" className="field" /></Field>
+              <Field label="istehsalçı"><input name="manufacturer" className="field" /></Field>
+              <Field label="banın tipi"><input name="body_type" className="field" /></Field>
+              <Field label="buraxılış ili"><input name="production_year" type="number" className="field" /></Field>
+              <Field label="ilk qeydiyyat tarixi"><input name="first_registration_date" type="date" className="field" /></Field>
+              <Field label="mühərrik nömrəsi"><input name="engine_number" className="field" /></Field>
+              <Field label="ban/VIN nömrəsi"><input name="vin_body_number" className="field uppercase" /></Field>
+              <Field label="şassi nömrəsi"><input name="chassis_number" className="field" /></Field>
+              <Field label="rəng"><input name="color" className="field" /></Field>
+              <Field label="mühərrik gücü (a.g.)"><input name="engine_power_hp" type="number" className="field" /></Field>
+              <Field label="mühərrik gücü (kW)"><input name="engine_power_kw" type="number" className="field" /></Field>
+              <Field label="qeydiyyat şəhadətnaməsi"><input name="registration_certificate_series_no" className="field" /></Field>
+              <Field label="etibarlılıq tarixi"><input name="registration_valid_until" type="date" className="field" /></Field>
+              <Field label="qeydiyyatda olan sahib"><input name="registered_owner_full_name" className="field" /></Field>
+              <Field label="sahibin ünvanı"><input name="registered_owner_address" className="field" /></Field>
+              <Field label="icazə verilən maksimum kütlə"><input name="max_permitted_mass_kg" type="number" className="field" /></Field>
+              <Field label="yüksüz kütlə"><input name="unladen_mass_kg" type="number" className="field" /></Field>
             </div>
           </details>
 
-          <section className="grid gap-4 md:grid-cols-3">
+          <section className="grid gap-4 md:grid-cols-4">
             <Field label="Mənbə">
-              <select className="field"><option>Müştəri hesabına</option><option>Sığorta hadisəsi üzrə</option></select>
+              <select name="funding_source" className="field"><option value="CUSTOMER_FUNDED">Müştəri hesabına</option><option value="INSURANCE_CLAIM">Sığorta hadisəsi üzrə</option></select>
             </Field>
-            <Field label="Razılaşdırılmış büdcə (AZN)"><input type="number" min="0" defaultValue="0" className="field text-xl font-semibold" /></Field>
-            <Field label="Hədəf təhvil tarixi"><input type="date" className="field" /></Field>
+            <Field label="Sığorta şirkəti"><input name="insurance_company" className="field" /></Field>
+            <Field label="Sığorta işi / claim nömrəsi"><input name="insurance_claim_no" className="field" /></Field>
+            <Field label="Sığorta təsdiq məbləği"><input name="insurance_approved_amount" type="number" min="0" className="field" /></Field>
+            <Field label="Razılaşdırılmış büdcə (AZN)"><input name="agreed_budget" type="number" min="0" defaultValue="0" className="field text-xl font-semibold" /></Field>
+            <Field label="Qəbul tarixi"><input name="received_at" type="datetime-local" className="field" /></Field>
+            <Field label="Hədəf təhvil tarixi"><input name="target_delivery_date" type="date" className="field" /></Field>
+            <Field label="Qeyd"><input name="notes" className="field" /></Field>
           </section>
 
           <section>
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold">Planlaşdırılan işlər</h2>
-              <select
-                className="field max-w-sm"
-                onChange={(event) => {
-                  if (event.target.value && !selectedWork.includes(event.target.value)) setSelectedWork([...selectedWork, event.target.value]);
-                }}
-              >
-                <option value="">+ Əlavə et</option>
-                {workCatalog.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-              </select>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {selectedItems.map((item) => (
-                <button key={item.id} type="button" onClick={() => setSelectedWork(selectedWork.filter((id) => id !== item.id))} className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] px-3 py-2 text-sm">
-                  <Check size={14} />{item.name}<X size={14} />
-                </button>
+            <h2 className="mb-3 text-lg font-semibold">Planlaşdırılan işlər</h2>
+            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+              {workCatalog.map((item) => (
+                <label key={item.id} className="flex items-start gap-2 rounded-lg border border-[var(--border)] p-3 text-sm">
+                  <input name="work_catalog_id" value={item.id} type="checkbox" className="mt-1" />
+                  <span><span className="block font-medium">{item.name}</span><span className="text-[var(--muted)]">{item.category}</span></span>
+                </label>
               ))}
             </div>
-            <input className="field mt-3" placeholder="Digər iş" />
+            <input name="custom_work_title" className="field mt-3" placeholder="Digər iş" />
           </section>
 
-          <button type="button" className="inline-flex w-fit items-center gap-2 rounded-lg bg-[var(--accent)] px-5 py-3 font-semibold text-black">
+          <button className="inline-flex w-fit items-center gap-2 rounded-lg bg-[var(--accent)] px-5 py-3 font-semibold text-black">
             <Save size={18} />
             Servis kartını saxla
           </button>
         </form>
       </Panel>
-      <style jsx global>{`.field{width:100%;border:1px solid var(--border);background:rgba(0,0,0,.22);border-radius:.5rem;padding:.75rem;color:white;outline:none}.field:focus{border-color:var(--accent)}`}</style>
     </>
   );
 }

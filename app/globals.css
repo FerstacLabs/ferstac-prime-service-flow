@@ -46,6 +46,20 @@ textarea {
   font: inherit;
 }
 
+.field {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.22);
+  border-radius: 0.5rem;
+  padding: 0.72rem;
+  color: white;
+  outline: none;
+}
+
+.field:focus {
+  border-color: var(--accent);
+}
+
 @media print {
   body {
     background: #fff;
