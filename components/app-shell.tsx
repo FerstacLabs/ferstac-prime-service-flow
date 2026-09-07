@@ -39,11 +39,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           ))}
         </nav>
 
-        <div className="hidden px-5 pb-5 lg:absolute lg:bottom-0 lg:block">
-          <div className="flex justify-center border-t border-[var(--border)] pt-5">
-            <div className="sidebar-bot-frame">
-              <Image src="/brand/prime-bot-icon.png" alt="" width={96} height={96} className="h-[76px] w-[76px] object-contain drop-shadow-[0_0_20px_rgba(229,193,77,0.22)]" />
-            </div>
+        <div className="pointer-events-none hidden px-6 pb-6 lg:absolute lg:bottom-0 lg:left-0 lg:block">
+          <div className="flex justify-center">
+            <Image src="/brand/prime-bot-icon.png" alt="" width={144} height={144} className="sidebar-bot" />
           </div>
         </div>
       </aside>
