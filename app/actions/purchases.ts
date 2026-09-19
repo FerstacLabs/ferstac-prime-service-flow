@@ -2,6 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { getAuthedSupabase } from "@/lib/supabase/queries";
+import { moneySchema, noteValue, uuidValue } from "@/lib/workshop-validation";
+import { bakuDate } from "@/lib/filters";
+import { z } from "zod";
 
 const text = (value: FormDataEntryValue | null) => {
   const next = String(value ?? "").trim();
@@ -13,7 +16,10 @@ export async function saveSupplierAction(formData: FormData) {
   const id = text(formData.get("id"));
   const payload = {
     owner_user_id: user.id,
-    entity_type: formData.get("entity_type") === "LEGAL_ENTITY" ? "LEGAL_ENTITY" : "INDIVIDUAL",
+    entity_type:
+      formData.get("entity_type") === "LEGAL_ENTITY"
+        ? "LEGAL_ENTITY"
+        : "INDIVIDUAL",
     first_name: text(formData.get("first_name")),
     last_name: text(formData.get("last_name")),
     father_name: text(formData.get("father_name")),
@@ -22,10 +28,14 @@ export async function saveSupplierAction(formData: FormData) {
     tax_id_voen: text(formData.get("tax_id_voen")),
     phone: text(formData.get("phone")),
     address: text(formData.get("address")),
-    notes: text(formData.get("notes")),
-    active: formData.get("active") !== "false"
+    notes: noteValue(formData),
+    active: formData.get("active") !== "false",
   };
-  const query = id ? supabase.from("suppliers").update(payload).eq("id", id) : supabase.from("suppliers").insert(payload);
+  if (!payload.company_name && !payload.shop_name && !payload.first_name)
+    throw new Error("Firma, mağaza və ya şəxsin adı tələb olunur.");
+  const query = id
+    ? supabase.from("suppliers").update(payload).eq("id", id)
+    : supabase.from("suppliers").insert(payload);
   const { error } = await query;
   if (error) throw error;
   revalidatePath("/purchases");
@@ -33,20 +43,38 @@ export async function saveSupplierAction(formData: FormData) {
 
 export async function archiveSupplierAction(formData: FormData) {
   const { supabase } = await getAuthedSupabase();
-  const { error } = await supabase.from("suppliers").update({ active: false }).eq("id", String(formData.get("id") ?? ""));
+  const { error } = await supabase
+    .from("suppliers")
+    .update({ active: false })
+    .eq("id", String(formData.get("id") ?? ""));
   if (error) throw error;
   revalidatePath("/purchases");
 }
 
 export async function savePurchaseAction(formData: FormData) {
   const { supabase, user } = await getAuthedSupabase();
-  const quantity = Number(formData.get("quantity") || 1);
-  const unitPrice = Number(formData.get("unit_price") || 0);
-  const status = String(formData.get("payment_status") || "UNPAID");
-  const paidAmount = status === "PAID" ? quantity * unitPrice : status === "UNPAID" ? 0 : Number(formData.get("paid_amount") || 0);
-  const sourceType = String(formData.get("source_type") || "SUPPLIER");
+  const quantity = z.coerce
+    .number()
+    .positive()
+    .max(100000)
+    .parse(formData.get("quantity") || 1);
+  const unitPrice = moneySchema.parse(formData.get("unit_price") || 0);
+  const status = z
+    .enum(["PAID", "PARTIAL", "UNPAID"])
+    .parse(formData.get("payment_status") || "UNPAID");
+  const paidAmount =
+    status === "PAID"
+      ? quantity * unitPrice
+      : status === "UNPAID"
+        ? 0
+        : moneySchema.parse(formData.get("paid_amount") || 0);
+  const sourceType = z
+    .enum(["SUPPLIER", "INTERNAL_STOCK", "CUSTOMER_PROVIDED"])
+    .parse(formData.get("source_type"));
   const id = text(formData.get("id"));
   const payload = {
+    id,
+    required_part_id: text(formData.get("required_part_id")),
     owner_user_id: user.id,
     service_job_id: String(formData.get("service_job_id") ?? ""),
     part_catalog_id: text(formData.get("part_catalog_id")),
@@ -54,7 +82,8 @@ export async function savePurchaseAction(formData: FormData) {
     quantity,
     unit_price: unitPrice,
     source_type: sourceType,
-    supplier_id: sourceType === "SUPPLIER" ? text(formData.get("supplier_id")) : null,
+    supplier_id:
+      sourceType === "SUPPLIER" ? text(formData.get("supplier_id")) : null,
     purchased_by_worker_id: text(formData.get("purchased_by_worker_id")),
     purchased_by_admin: formData.get("purchased_by") !== "worker",
     payment_status: status,
@@ -63,23 +92,41 @@ export async function savePurchaseAction(formData: FormData) {
     brand_model: text(formData.get("brand_model")),
     serial_no: text(formData.get("serial_no")),
     document_no: text(formData.get("document_no")),
-    purchase_date: text(formData.get("purchase_date")) ?? new Date().toISOString().slice(0, 10),
-    notes: text(formData.get("notes"))
+    purchase_date: z.iso
+      .date()
+      .parse(text(formData.get("purchase_date")) ?? bakuDate()),
+    notes: noteValue(formData),
   };
-  const query = id ? supabase.from("purchases").update(payload).eq("id", id) : supabase.from("purchases").insert(payload);
-  const { error } = await query;
+  if (sourceType === "SUPPLIER" && !payload.supplier_id)
+    throw new Error("Təchizatçı seçilməlidir.");
+  if (!payload.purchased_by_admin && !payload.purchased_by_worker_id)
+    throw new Error("Alan işçini seçin.");
+  if (
+    status === "PARTIAL" &&
+    (paidAmount <= 0 || paidAmount >= quantity * unitPrice)
+  )
+    throw new Error(
+      "Qismən ödəniş maya dəyərindən kiçik və sıfırdan böyük olmalıdır.",
+    );
+  const { error } = await supabase.rpc("save_workshop_purchase", {
+    p_data: payload,
+    p_key: uuidValue(formData, "idempotency_key"),
+  });
   if (error) throw error;
   revalidatePath("/purchases");
   revalidatePath("/overview");
   revalidatePath("/vehicles");
+  revalidatePath("/kassa");
 }
 
 export async function deletePurchaseAction(formData: FormData) {
   const { supabase } = await getAuthedSupabase();
-  const { error } = await supabase.from("purchases").delete().eq("id", String(formData.get("id") ?? ""));
+  const { error } = await supabase
+    .from("purchases")
+    .update({ voided_at: new Date().toISOString() })
+    .eq("id", uuidValue(formData, "id"));
   if (error) throw error;
   revalidatePath("/purchases");
   revalidatePath("/overview");
   revalidatePath("/vehicles");
 }
-

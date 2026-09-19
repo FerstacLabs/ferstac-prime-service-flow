@@ -1,4 +1,12 @@
-export type ReportScope = "overview" | "purchases" | "workers" | "work" | "vehicle";
+export type ReportScope =
+  | "overview"
+  | "purchases"
+  | "workers"
+  | "work"
+  | "vehicle"
+  | "quotation"
+  | "handover"
+  | "kassa";
 
 export type ReportSummaryItem = {
   label: string;
@@ -28,6 +36,8 @@ export type ReportTable = {
 };
 
 export type ReportSection = {
+  paragraphs?: string[];
+  signatures?: string[];
   title: string;
   summary?: ReportSummaryItem[];
   fields?: ReportField[];
@@ -35,6 +45,8 @@ export type ReportSection = {
 };
 
 export type PrimeReport = {
+  filters?: string;
+  subtitle?: string;
   scope: ReportScope;
   title: string;
   generatedAt: string;

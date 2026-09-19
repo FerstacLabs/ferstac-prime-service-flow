@@ -1,5 +1,11 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import type { FundingSource, JobStatus, PaymentStatus, PurchaseSource, WorkStatus } from "@/lib/types";
+import type {
+  FundingSource,
+  JobStatus,
+  PaymentStatus,
+  PurchaseSource,
+  WorkStatus,
+} from "@/lib/types";
 
 export type DbVehicle = {
   id: string;
@@ -27,6 +33,7 @@ export type DbVehicle = {
 };
 
 export type DbServiceJob = {
+  has_line_quotes?: boolean;
   id: string;
   vehicle_id: string;
   job_no: string;
@@ -47,6 +54,9 @@ export type DbServiceJob = {
 };
 
 export type DbWorkItem = {
+  quoted_price?: number | null;
+  labor_cost_known?: boolean;
+  display_order?: number;
   id: string;
   service_job_id: string;
   work_catalog_id: string | null;
@@ -59,10 +69,17 @@ export type DbWorkItem = {
   started_at: string | null;
   completed_at: string | null;
   work_catalog?: { id: string; category: string; name: string } | null;
-  workers?: { id: string; first_name: string; last_name: string; role_id: string } | null;
+  workers?: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    role_id: string;
+  } | null;
 };
 
 export type DbPurchase = {
+  required_part_id?: string | null;
+  voided_at?: string | null;
   id: string;
   service_job_id: string;
   part_catalog_id: string | null;
@@ -83,7 +100,14 @@ export type DbPurchase = {
   purchase_date: string;
   notes: string | null;
   part_catalog?: { id: string; name: string; category: string } | null;
-  suppliers?: { id: string; company_name: string | null; shop_name: string | null; first_name: string | null; last_name: string | null; father_name: string | null } | null;
+  suppliers?: {
+    id: string;
+    company_name: string | null;
+    shop_name: string | null;
+    first_name: string | null;
+    last_name: string | null;
+    father_name: string | null;
+  } | null;
   workers?: { id: string; first_name: string; last_name: string } | null;
 };
 
@@ -115,9 +139,27 @@ export type DbWorker = {
   worker_roles?: { id: string; name: string } | null;
 };
 
-export type DbWorkCatalog = { id: string; code: string; category: string; name: string; active: boolean; sort_order: number };
-export type DbPartCatalog = { id: string; category: string; name: string; active: boolean; sort_order: number };
-export type DbWorkerRole = { id: string; name: string; active: boolean; sort_order: number };
+export type DbWorkCatalog = {
+  id: string;
+  code: string;
+  category: string;
+  name: string;
+  active: boolean;
+  sort_order: number;
+};
+export type DbPartCatalog = {
+  id: string;
+  category: string;
+  name: string;
+  active: boolean;
+  sort_order: number;
+};
+export type DbWorkerRole = {
+  id: string;
+  name: string;
+  active: boolean;
+  sort_order: number;
+};
 
 export async function getAuthedSupabase() {
   const supabase = await createSupabaseServerClient();
@@ -154,7 +196,9 @@ export async function getWorkItems(serviceJobId?: string) {
   const { supabase } = await getAuthedSupabase();
   let query = supabase
     .from("job_work_items")
-    .select("*, work_catalog(id, category, name), workers(id, first_name, last_name, role_id)")
+    .select(
+      "*, work_catalog(id, category, name), workers(id, first_name, last_name, role_id)",
+    )
     .order("planned_at", { ascending: false });
   if (serviceJobId) query = query.eq("service_job_id", serviceJobId);
   const { data, error } = await query;
@@ -166,7 +210,9 @@ export async function getPurchases(serviceJobId?: string) {
   const { supabase } = await getAuthedSupabase();
   let query = supabase
     .from("purchases")
-    .select("*, part_catalog(id, name, category), suppliers(id, company_name, shop_name, first_name, last_name, father_name), workers(id, first_name, last_name)")
+    .select(
+      "*, part_catalog(id, name, category), suppliers(id, company_name, shop_name, first_name, last_name, father_name), workers(id, first_name, last_name)",
+    )
     .order("purchase_date", { ascending: false });
   if (serviceJobId) query = query.eq("service_job_id", serviceJobId);
   const { data, error } = await query;
@@ -176,14 +222,20 @@ export async function getPurchases(serviceJobId?: string) {
 
 export async function getSuppliers() {
   const { supabase } = await getAuthedSupabase();
-  const { data, error } = await supabase.from("suppliers").select("*").order("created_at", { ascending: false });
+  const { data, error } = await supabase
+    .from("suppliers")
+    .select("*")
+    .order("created_at", { ascending: false });
   if (error) throw error;
   return (data ?? []) as DbSupplier[];
 }
 
 export async function getWorkers() {
   const { supabase } = await getAuthedSupabase();
-  const { data, error } = await supabase.from("workers").select("*, worker_roles(id, name)").order("created_at", { ascending: false });
+  const { data, error } = await supabase
+    .from("workers")
+    .select("*, worker_roles(id, name)")
+    .order("created_at", { ascending: false });
   if (error) throw error;
   return (data ?? []) as DbWorker[];
 }
@@ -191,9 +243,21 @@ export async function getWorkers() {
 export async function getMasterData() {
   const { supabase } = await getAuthedSupabase();
   const [work, parts, roles] = await Promise.all([
-    supabase.from("work_catalog").select("*").eq("active", true).order("sort_order"),
-    supabase.from("part_catalog").select("*").eq("active", true).order("sort_order"),
-    supabase.from("worker_roles").select("*").eq("active", true).order("sort_order")
+    supabase
+      .from("work_catalog")
+      .select("*")
+      .eq("active", true)
+      .order("sort_order"),
+    supabase
+      .from("part_catalog")
+      .select("*")
+      .eq("active", true)
+      .order("sort_order"),
+    supabase
+      .from("worker_roles")
+      .select("*")
+      .eq("active", true)
+      .order("sort_order"),
   ]);
   if (work.error) throw work.error;
   if (parts.error) throw parts.error;
@@ -201,24 +265,43 @@ export async function getMasterData() {
   return {
     workCatalog: (work.data ?? []) as DbWorkCatalog[],
     partCatalog: (parts.data ?? []) as DbPartCatalog[],
-    workerRoles: (roles.data ?? []) as DbWorkerRole[]
+    workerRoles: (roles.data ?? []) as DbWorkerRole[],
   };
 }
 
-export function supplierDisplayName(supplier?: Pick<DbSupplier, "company_name" | "shop_name" | "first_name" | "last_name" | "father_name"> | null) {
+export function supplierDisplayName(
+  supplier?: Pick<
+    DbSupplier,
+    "company_name" | "shop_name" | "first_name" | "last_name" | "father_name"
+  > | null,
+) {
   if (!supplier) return "Servis daxili ehtiyat";
-  return supplier.company_name || supplier.shop_name || [supplier.first_name, supplier.last_name, supplier.father_name].filter(Boolean).join(" ") || "Təchizatçı";
+  return (
+    supplier.company_name ||
+    supplier.shop_name ||
+    [supplier.first_name, supplier.last_name, supplier.father_name]
+      .filter(Boolean)
+      .join(" ") ||
+    "Təchizatçı"
+  );
 }
 
-export function workerDisplayName(worker?: Pick<DbWorker, "first_name" | "last_name"> | null) {
-  return worker ? `${worker.first_name} ${worker.last_name}` : "Usta seçilməyib";
+export function workerDisplayName(
+  worker?: Pick<DbWorker, "first_name" | "last_name"> | null,
+) {
+  return worker
+    ? `${worker.first_name} ${worker.last_name}`
+    : "Usta seçilməyib";
 }
 
-export function workTitle(item: DbWorkItem) {
-  return item.custom_title || item.work_catalog?.name || "Digər iş";
+export function workTitle(item?: DbWorkItem) {
+  return item?.custom_title || item?.work_catalog?.name || "Digər iş";
 }
 
-export function partTitle(purchase: DbPurchase) {
-  return purchase.custom_item_name || purchase.part_catalog?.name || "Detal / material";
+export function partTitle(purchase?: DbPurchase) {
+  return (
+    purchase?.custom_item_name ||
+    purchase?.part_catalog?.name ||
+    "Detal / material"
+  );
 }
-

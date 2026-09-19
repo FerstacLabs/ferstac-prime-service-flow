@@ -1,6 +1,15 @@
 import Image from "next/image";
 import Link from "next/link";
-import { CarFront, ClipboardList, LayoutDashboard, LogOut, Search, ShoppingCart, Users } from "lucide-react";
+import {
+  CarFront,
+  ClipboardList,
+  LayoutDashboard,
+  LogOut,
+  Search,
+  ShoppingCart,
+  Users,
+  Wallet,
+} from "lucide-react";
 import { QuickActions } from "@/components/quick-actions";
 import { signOutAction } from "@/app/actions/auth";
 
@@ -9,7 +18,8 @@ const navItems = [
   { href: "/purchases", label: "Satınalma", icon: ShoppingCart },
   { href: "/workers", label: "İşçilər", icon: Users },
   { href: "/work", label: "Görüləcək işlər", icon: ClipboardList },
-  { href: "/overview", label: "İcmal", icon: LayoutDashboard }
+  { href: "/overview", label: "İcmal", icon: LayoutDashboard },
+  { href: "/kassa", label: "Kassa", icon: Wallet },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -18,7 +28,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <aside className="no-print border-b border-[var(--border)] bg-[rgba(17,19,24,0.92)] lg:sticky lg:top-0 lg:h-screen lg:border-b-0 lg:border-r">
         <div className="flex items-center justify-between gap-4 px-4 py-4 lg:block lg:px-5 lg:pb-3">
           <Link href="/overview" className="flex items-center gap-3 lg:block">
-            <Image src="/brand/prime-logo.png" alt="PRIME" width={224} height={65} className="h-auto w-[9.75rem] max-w-full object-contain lg:w-[14rem]" priority />
+            <Image
+              src="/brand/prime-logo.png"
+              alt="PRIME"
+              width={224}
+              height={65}
+              className="h-auto w-[9.75rem] max-w-full object-contain lg:w-[14rem]"
+              priority
+            />
             <span className="sr-only">PRIME Flow</span>
           </Link>
           <div className="rounded-full border border-[var(--border)] px-3 py-1 text-sm text-[var(--muted)] lg:mt-4 lg:inline-flex">
@@ -41,18 +58,32 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         <div className="pointer-events-none hidden w-full px-2 pb-5 lg:absolute lg:bottom-0 lg:left-0 lg:block">
           <div className="flex justify-center">
-            <Image src="/brand/prime-bot-icon.png" alt="" width={256} height={256} className="sidebar-bot" />
+            <Image
+              src="/brand/prime-bot-icon.png"
+              alt=""
+              width={256}
+              height={256}
+              className="sidebar-bot"
+            />
           </div>
         </div>
       </aside>
 
-      <main>
+      <main className="min-w-0">
         <header className="no-print sticky top-0 z-20 border-b border-[var(--border)] bg-[rgba(7,8,10,0.88)] px-4 py-3 backdrop-blur lg:px-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <label className="flex min-w-[16rem] flex-1 items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--muted)]">
+            <form
+              action="/vehicles"
+              className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--muted)]"
+            >
               <Search size={16} />
-              <input className="w-full bg-transparent text-white outline-none placeholder:text-[var(--muted)]" placeholder="Nömrə ilə axtar: 10-PR-030" />
-            </label>
+              <input
+                name="plate"
+                aria-label="Nömrə axtarışı"
+                className="w-full bg-transparent text-white outline-none placeholder:text-[var(--muted)]"
+                placeholder="Nömrə ilə axtar: 10-PR-030"
+              />
+            </form>
             <QuickActions />
             <form action={signOutAction}>
               <button className="btn btn-secondary text-[var(--muted)]">
@@ -68,30 +99,68 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function PageHeader({ title, eyebrow, actions }: { title: string; eyebrow?: string; actions?: React.ReactNode }) {
+export function PageHeader({
+  title,
+  eyebrow,
+  actions,
+}: {
+  title: string;
+  eyebrow?: string;
+  actions?: React.ReactNode;
+}) {
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
       <div>
-        {eyebrow ? <p className="mb-2 text-sm font-medium text-[var(--accent)]">{eyebrow}</p> : null}
-        <h1 className="text-2xl font-semibold tracking-normal text-white md:text-3xl">{title}</h1>
+        {eyebrow ? (
+          <p className="mb-2 text-sm font-medium text-[var(--accent)]">
+            {eyebrow}
+          </p>
+        ) : null}
+        <h1 className="text-2xl font-semibold tracking-normal text-white md:text-3xl">
+          {title}
+        </h1>
       </div>
       {actions}
     </div>
   );
 }
 
-export function StatusBadge({ children, tone = "neutral" }: { children: React.ReactNode; tone?: "neutral" | "success" | "warning" | "danger" }) {
+export function StatusBadge({
+  children,
+  tone = "neutral",
+}: {
+  children: React.ReactNode;
+  tone?: "neutral" | "success" | "warning" | "danger";
+}) {
   const colors = {
     neutral: "border-[var(--border)] text-[var(--silver)]",
     success: "border-[rgba(69,201,121,0.45)] text-[var(--success)]",
     warning: "border-[rgba(232,169,59,0.45)] text-[var(--warning)]",
-    danger: "border-[rgba(232,91,91,0.45)] text-[var(--danger)]"
+    danger: "border-[rgba(232,91,91,0.45)] text-[var(--danger)]",
   };
-  return <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${colors[tone]}`}>{children}</span>;
+  return (
+    <span
+      className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${colors[tone]}`}
+    >
+      {children}
+    </span>
+  );
 }
 
-export function Panel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <section className={`print-surface rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 shadow-2xl shadow-black/20 ${className}`}>{children}</section>;
+export function Panel({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section
+      className={`print-surface rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 shadow-2xl shadow-black/20 ${className}`}
+    >
+      {children}
+    </section>
+  );
 }
 
 export const statusLabels = {
@@ -104,10 +173,10 @@ export const statusLabels = {
   PAUSED: "Dayandırılıb",
   TODO: "Gözləyir",
   DONE: "Tamamlandı",
-  CANCELLED: "Ləğv edildi"
+  CANCELLED: "Ləğv edildi",
 } as const;
 
 export const fundingLabels = {
   CUSTOMER_FUNDED: "Müştəri hesabına",
-  INSURANCE_CLAIM: "Sığorta hadisəsi üzrə"
+  INSURANCE_CLAIM: "Sığorta hadisəsi üzrə",
 } as const;

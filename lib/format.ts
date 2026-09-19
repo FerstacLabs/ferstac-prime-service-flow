@@ -1,18 +1,23 @@
-import { az } from "date-fns/locale";
-import { format } from "date-fns";
+import { bakuDate } from "@/lib/filters";
 
 export const moneyFormatter = new Intl.NumberFormat("az-AZ", {
   style: "currency",
   currency: "AZN",
-  maximumFractionDigits: 2
+  maximumFractionDigits: 2,
 });
 
 export function formatMoney(value: number) {
-  return moneyFormatter.format(value);
+  const [whole, fraction] = Math.abs(Number(value)).toFixed(2).split(".");
+  return `${value < 0 ? "-" : ""}${whole.replace(/\B(?=(\d{3})+(?!\d))/g, " ")},${fraction} ₼`;
 }
 
 export function formatDate(value: string) {
-  return format(new Date(value), "dd MMM yyyy", { locale: az });
+  return new Intl.DateTimeFormat("az-AZ", {
+    timeZone: "Asia/Baku",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(`${bakuDate(value)}T12:00:00+04:00`));
 }
 
 export function cn(...classes: Array<string | false | null | undefined>) {
