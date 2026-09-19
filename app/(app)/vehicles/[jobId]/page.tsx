@@ -1,15 +1,22 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { archiveServiceJobAction } from "@/app/actions/vehicles";
+import {
+  archiveServiceJobAction,
+  restoreServiceJobAction,
+} from "@/app/actions/vehicles";
 import {
   PageHeader,
   fundingLabels,
   statusLabels,
+  StatusBadge,
 } from "@/components/app-shell";
 import { ActionForm } from "@/components/action-form";
 import { ConfirmButton } from "@/components/confirm-button";
 import { ReportActions } from "@/components/report-actions";
 import { JobFinance, CashHistory } from "@/components/job-finance";
+import { HandoverAction } from "@/components/handover-action";
+import { SubmitButton } from "@/components/submit-button";
+import { Archive, ArchiveRestore } from "lucide-react";
 import { getWorkshop } from "@/lib/supabase/workshop";
 import { formatDate, formatMoney } from "@/lib/format";
 export const dynamic = "force-dynamic";
@@ -70,7 +77,12 @@ export default async function VehicleDetailPage({
         eyebrow={`${v.make} ${v.model}`}
         actions={<ReportActions report={`vehicle/${job.id}`} />}
       />
-      <div className="mb-5 flex flex-wrap gap-3">
+      {job.archived_at ? (
+        <div className="mb-4">
+          <StatusBadge tone="warning">Arxivdə</StatusBadge>
+        </div>
+      ) : null}
+      <div className="mb-5 flex flex-wrap items-start gap-3">
         <Link href={`/kassa?job=${job.id}`} className="btn btn-primary">
           Kassa
         </Link>
@@ -80,11 +92,25 @@ export default async function VehicleDetailPage({
         <Link href={`/work?job=${job.id}`} className="btn btn-secondary">
           İşlər
         </Link>
-        <ActionForm action={archiveServiceJobAction}>
+        <HandoverAction job={job} />
+        <ActionForm
+          action={
+            job.archived_at ? restoreServiceJobAction : archiveServiceJobAction
+          }
+        >
           <input name="id" type="hidden" value={job.id} />
-          <ConfirmButton message="Servis kartı arxivlənsin?" danger>
-            Arxivlə
-          </ConfirmButton>
+          {job.archived_at ? (
+            <SubmitButton variant="secondary" pendingText="Bərpa edilir...">
+              <ArchiveRestore size={16} /> Arxivdən çıxar
+            </SubmitButton>
+          ) : (
+            <ConfirmButton
+              message="Bu servis kartını arxivləmək istəyirsiniz? Məlumatlar silinməyəcək və Arxiv bölməsindən bərpa edilə biləcək."
+              danger
+            >
+              <Archive size={16} /> Arxivlə
+            </ConfirmButton>
+          )}
         </ActionForm>
       </div>
       <dl className="mb-5 grid gap-4 text-sm sm:grid-cols-3">

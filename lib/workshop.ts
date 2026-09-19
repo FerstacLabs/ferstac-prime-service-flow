@@ -42,6 +42,26 @@ export const allocationLabels: Record<AllocationType, string> = {
 };
 export const missingValue = "Məlumat daxil edilməyib";
 
+export function missingCostDescription({
+  missingWork,
+  missingParts,
+}: {
+  missingWork: number;
+  missingParts: number;
+}) {
+  return (
+    [
+      missingWork > 0 ? `${missingWork} iş` : "",
+      missingParts > 0 ? `${missingParts} detal` : "",
+    ]
+      .filter(Boolean)
+      .join(", ") || null
+  );
+}
+
+export const canGenerateHandover = (status: DbServiceJob["status"]) =>
+  status === "READY" || status === "DELIVERED";
+
 // Calculate in integer qəpik; NUMERIC remains the persistence format.
 export const cents = (value: number | string | null | undefined) =>
   Math.round(Number(value ?? 0) * 100);

@@ -12,6 +12,7 @@ import {
   partTitle,
   supplierDisplayName,
   type DbServiceJob,
+  type DbWorkItem,
 } from "@/lib/supabase/queries";
 import type { WorkshopData } from "@/lib/supabase/workshop";
 import {
@@ -22,6 +23,7 @@ import {
   sumMoney,
   subtractMoney,
   missingValue,
+  missingCostDescription,
   allocationLabels,
   type AllocationType,
   type CashTransaction,
@@ -29,6 +31,7 @@ import {
 import { bakuDate } from "@/lib/filters";
 import { formatMoney, formatDate } from "@/lib/format";
 import { statusLabels } from "@/components/app-shell";
+import { workerWorkFinance } from "@/lib/worker-finance";
 export function MoneyGrid({
   items,
 }: {
@@ -55,6 +58,7 @@ export function FinanceSummary({
   data: WorkshopData;
 }) {
   const n = jobFinance(job, data.work, data.parts, data.purchases, data.cash);
+  const missing = missingCostDescription(n);
   return (
     <section className="border-y border-[var(--border)] py-3">
       <h2 className="text-lg font-semibold">Maliyyə yekunu</h2>
@@ -81,32 +85,37 @@ export function FinanceSummary({
           ["Ümumi brüt mənfəət", n.grossProfit],
         ]}
       />
-      {n.grossProfit == null ? (
+      {missing ? (
         <p className="pb-3 text-sm text-[var(--warning)]">
-          Mənfəət tam hesablanmayıb. Maya daxil edilməyən: {n.missingWork} iş,{" "}
-          {n.missingParts} detal.
-          {!n.detailed ? " Əvvəlki kartda sətir qiymətləri yoxdur." : ""}
+          Maya daxil edilməyib: {missing}.
+        </p>
+      ) : null}
+      {!n.detailed ? (
+        <p className="pb-3 text-sm text-[var(--warning)]">
+          Əvvəlki kartda sətir qiymətləri yoxdur; mənfəət hesablanmayıb.
         </p>
       ) : null}
     </section>
   );
 }
-function PaymentForm({
+export function PaymentForm({
   job,
   type,
   target,
   remaining,
+  label,
 }: {
   job: string;
   type: AllocationType;
   target: string;
   remaining: number;
+  label?: string;
 }) {
   if (remaining <= 0) return null;
   return (
     <details className="mt-3">
       <summary className="cursor-pointer text-sm text-[var(--accent)]">
-        {allocationLabels[type]}
+        {label ?? allocationLabels[type]}
       </summary>
       <ActionForm
         action={recordPaymentAction}
@@ -148,6 +157,37 @@ function PaymentForm({
     </details>
   );
 }
+export function WorkerCostForm({
+  work,
+  paid,
+}: {
+  work: DbWorkItem;
+  paid: number;
+}) {
+  return (
+    <ActionForm
+      action={setWorkerCostAction}
+      className="mt-4 flex max-w-lg flex-wrap items-end gap-3"
+    >
+      <input type="hidden" name="id" value={work.id} />
+      <label className="text-xs text-[var(--muted)]">
+        Usta maya dəyəri
+        <input
+          name="labor_cost"
+          type="number"
+          min={paid}
+          step="0.01"
+          required
+          defaultValue={costKnown(work) ? work.labor_cost : ""}
+          className="field mt-1"
+        />
+      </label>
+      <SubmitButton variant="secondary" pendingText="Saxlanır...">
+        Mayanı saxla
+      </SubmitButton>
+    </ActionForm>
+  );
+}
 export function JobFinance({
   job,
   data,
@@ -169,12 +209,6 @@ export function JobFinance({
           <h2 className="mb-2 text-sm font-semibold">Qiymət təklifi</h2>
           <ReportActions report="quotation" query={`job=${job.id}`} />
         </div>
-        {["READY", "DELIVERED"].includes(job.status) ? (
-          <div>
-            <h2 className="mb-2 text-sm font-semibold">Təhvil-təslim aktı</h2>
-            <ReportActions report="handover" query={`job=${job.id}`} />
-          </div>
-        ) : null}
       </div>
       {!n.detailed && editable ? (
         <PaymentForm
@@ -190,11 +224,11 @@ export function JobFinance({
         </h2>
         {work.map((w) => {
           const received = paidFor(data.cash, "CUSTOMER_WORK", w.id),
-            paid = paidFor(data.cash, "WORKER_WORK_ITEM", w.id),
-            earned = w.status === "DONE" && costKnown(w) ? w.labor_cost : 0;
+            { paid, earned } = workerWorkFinance(w, data.cash);
           return (
             <article
               key={w.id}
+              id={`work-${w.id}`}
               className="border-b border-[var(--border)] py-5"
             >
               <h3 className="font-semibold">{workTitle(w)}</h3>
@@ -234,27 +268,7 @@ export function JobFinance({
               ) : null}
               {editable ? (
                 <>
-                  <ActionForm
-                    action={setWorkerCostAction}
-                    className="mt-4 flex max-w-lg items-end gap-3"
-                  >
-                    <input type="hidden" name="id" value={w.id} />
-                    <label className="text-xs text-[var(--muted)]">
-                      Usta maya dəyəri
-                      <input
-                        name="labor_cost"
-                        type="number"
-                        min={paid}
-                        step="0.01"
-                        required
-                        defaultValue={costKnown(w) ? w.labor_cost : ""}
-                        className="field mt-1"
-                      />
-                    </label>
-                    <SubmitButton variant="secondary" pendingText="Saxlanır...">
-                      Mayanı saxla
-                    </SubmitButton>
-                  </ActionForm>
+                  <WorkerCostForm work={w} paid={paid} />
                   {w.quoted_price != null ? (
                     <PaymentForm
                       job={job.id}

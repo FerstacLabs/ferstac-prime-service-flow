@@ -13,7 +13,8 @@ import {
 import { allocationLabels } from "@/lib/workshop";
 type Props = {
   filters: WorkshopFilters;
-  scope: "vehicles" | "work" | "purchases" | "workers" | "kassa";
+  scope:
+    "vehicles" | "work" | "purchases" | "workers" | "kassa" | "worker-cash";
   jobs?: SelectOption[];
   workers?: SelectOption[];
   works?: SelectOption[];
@@ -51,9 +52,23 @@ export function WorkshopFilters({
       {Object.entries(fixed).map(([k, v]) => (
         <input key={k} type="hidden" name={k} value={v} />
       ))}
-      {scope !== "workers" ? <PlateSearch defaultValue={f.plate} /> : null}
+      {scope !== "workers" && scope !== "worker-cash" ? (
+        <PlateSearch defaultValue={f.plate} />
+      ) : null}
       {scope === "vehicles" ? (
         <>
+          <label className="text-xs text-[var(--muted)]">
+            Görünüş
+            <select
+              name="visibility"
+              defaultValue={f.visibility}
+              className="field mt-1"
+            >
+              <option value="active">Aktiv</option>
+              <option value="archived">Arxiv</option>
+              <option value="all">Hamısı</option>
+            </select>
+          </label>
           {select("status", "Status", reportJobStatusLabels)}
           {select("source", "Mənbə", reportFundingLabels)}
           {select("sort", "Sıralama", {
@@ -147,6 +162,12 @@ export function WorkshopFilters({
           })}
         </>
       ) : null}
+      {scope === "worker-cash"
+        ? select("balance", "Ödəniş vəziyyəti", {
+            outstanding: "Borcu olanlar",
+            paid: "Tam ödənilənlər",
+          })
+        : null}
       <div className="flex gap-2">
         <button className="btn btn-primary">
           <Filter size={16} />

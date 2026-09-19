@@ -88,6 +88,15 @@ All normal application access uses the public Supabase key with the user's sessi
 - Suppliers are managed inside Satınalma with clickable history pages. Kassa is the sixth main panel.
 - Worker productivity is derived from `job_work_items`, not duplicated counters.
 
+### Archive and Worker Cash Desk
+
+- Vehicles has a separate visibility filter: Active (default), Archive, or All. Archiving only sets the existing `service_jobs.archived_at`; the archived detail remains readable and its Restore action clears that field. Work, purchases and ledger history are never deleted by these actions.
+- Kassa has Vehicles and Workers views. The Workers view supports worker, period and outstanding/fully-paid filters, with per-work cost entry and payments allocated through the existing `WORKER_WORK_ITEM` ledger. Customer quotes are read-only. These payments remain cash OUT and never change gross profit.
+- Worker Print/PDF uses the same worker/period/debt selection as the screen. The selected work's paid totals and payment history cover all settlement dates; history columns explicitly label current earned/outstanding values rather than implying an immutable historical balance.
+- Missing-cost warnings are omitted when both missing counters are zero. An explicitly known zero labor cost or a customer-provided part does not count as missing.
+- Handover is visible in the vehicle detail's top action area. It is unavailable with an explanation before READY/DELIVERED; eligible archived jobs retain both Print and PDF access.
+- These refinements reuse the existing schema and require no new migration. Migration `0002_workshop_finance.sql` remains a prerequisite on databases that have not yet applied it.
+
 ## Brand Assets
 
 The app uses:

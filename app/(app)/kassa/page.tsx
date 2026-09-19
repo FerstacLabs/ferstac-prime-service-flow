@@ -11,6 +11,7 @@ import { getWorkshop, selectJobs, selectCash } from "@/lib/supabase/workshop";
 import { parseFilters, filterQuery, type SearchParams } from "@/lib/filters";
 import { cashFlow, jobFinance } from "@/lib/workshop";
 import { formatMoney } from "@/lib/format";
+import { CashViews, WorkerCash } from "@/components/worker-cash";
 export const dynamic = "force-dynamic";
 export default async function CashPage({
   searchParams,
@@ -23,6 +24,18 @@ export default async function CashPage({
     cash = selectCash(data, f),
     flow = cashFlow(cash),
     selected = data.jobs.find((j) => j.id === f.job);
+  if (f.view === "workers")
+    return (
+      <>
+        <PageHeader
+          title="Kassa"
+          eyebrow="İşçilərlə hesablaşma"
+          actions={<ReportActions report="kassa" query={filterQuery(f)} />}
+        />
+        <CashViews view={f.view} />
+        <WorkerCash data={data} filters={f} />
+      </>
+    );
   return (
     <>
       <PageHeader
@@ -30,6 +43,7 @@ export default async function CashPage({
         eyebrow="Ödənişlər və borclar"
         actions={<ReportActions report="kassa" query={filterQuery(f)} />}
       />
+      <CashViews view={f.view} />
       <WorkshopFilters
         scope="kassa"
         filters={f}

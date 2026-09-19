@@ -419,4 +419,66 @@ describe.sequential("workshop PostgreSQL workflow", () => {
       ),
     ).toBe("Bakı");
   });
+  it("archives and restores the service card without changing any financial history", async () => {
+    const snapshot = () =>
+      scalar(
+        "select jsonb_build_object('work',(select jsonb_agg(w) from job_work_items w where service_job_id=$1),'parts',(select jsonb_agg(p) from job_required_parts p where service_job_id=$1),'purchases',(select jsonb_agg(p) from purchases p where service_job_id=$1),'cash',(select jsonb_agg(c) from cash_transactions c where service_job_id=$1)) as value",
+        [job],
+      );
+    const before = await snapshot();
+    await db.query("update service_jobs set archived_at=now() where id=$1", [
+      job,
+    ]);
+    expect(
+      await scalar(
+        "select archived_at is not null as value from service_jobs where id=$1",
+        [job],
+      ),
+    ).toBe(true);
+    expect(await snapshot()).toEqual(before);
+    await db.exec(`set app.uid='${other}'`);
+    expect(
+      (
+        await db.query(
+          "update service_jobs set archived_at=null where id=$1 returning id",
+          [job],
+        )
+      ).rows,
+    ).toHaveLength(0);
+    await db.exec(`set app.uid='${owner}'`);
+    await db.query("update service_jobs set archived_at=null where id=$1", [
+      job,
+    ]);
+    expect(
+      await scalar(
+        "select archived_at is null as value from service_jobs where id=$1",
+        [job],
+      ),
+    ).toBe(true);
+    expect(await snapshot()).toEqual(before);
+  });
+  it("enforces per-work worker settlement limits even for the same worker and job", async () => {
+    const second = await scalar(
+      "insert into job_work_items(owner_user_id,service_job_id,assigned_worker_id,custom_title,quoted_price,labor_cost,labor_cost_known,status) values(auth.uid(),$1,$2,'İkinci iş',90,70,true,'DONE') returning id as value",
+      [job, worker],
+    );
+    await pay("WORKER_WORK_ITEM", second, 30);
+    await expect(pay("WORKER_WORK_ITEM", second, 41)).rejects.toThrow();
+    expect(
+      Number(
+        await scalar(
+          "select sum(amount) as value from cash_transactions where allocation_type='WORKER_WORK_ITEM' and work_item_id=$1 and voided_at is null",
+          [second],
+        ),
+      ),
+    ).toBe(30);
+    expect(
+      Number(
+        await scalar(
+          "select sum(amount) as value from cash_transactions where allocation_type='WORKER_WORK_ITEM' and work_item_id=$1 and voided_at is null",
+          [work],
+        ),
+      ),
+    ).toBe(100);
+  });
 });

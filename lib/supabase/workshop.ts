@@ -70,7 +70,9 @@ export function selectJobs(
   return data.jobs
     .filter(
       (j) =>
-        (includeArchived || !j.archived_at) &&
+        (includeArchived ||
+          f.visibility === "all" ||
+          (f.visibility === "archived" ? !!j.archived_at : !j.archived_at)) &&
         (!f.job || j.id === f.job) &&
         (!f.plate || j.vehicles?.plate.includes(f.plate)) &&
         (!f.status || j.status === f.status) &&

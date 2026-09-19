@@ -64,6 +64,9 @@ export default async function VehiclesPage({
                   </p>
                 </Link>
                 <StatusBadge>{fundingLabels[job.funding_source]}</StatusBadge>
+                {job.archived_at ? (
+                  <StatusBadge tone="warning">Arxivdə</StatusBadge>
+                ) : null}
               </div>
               <p className="mt-2 text-sm">{job.customer_name}</p>
               <dl className="my-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">

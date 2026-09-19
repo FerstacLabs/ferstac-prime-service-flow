@@ -108,14 +108,25 @@ export async function createServiceJobAction(formData: FormData) {
 }
 
 export async function archiveServiceJobAction(formData: FormData) {
-  const { supabase } = await getAuthedSupabase();
-  const id = String(formData.get("id") ?? "");
+  await setArchiveState(formData, true);
+}
+
+export async function restoreServiceJobAction(formData: FormData) {
+  await setArchiveState(formData, false);
+}
+
+async function setArchiveState(formData: FormData, archived: boolean) {
+  const { supabase, user } = await getAuthedSupabase();
+  const id = uuidValue(formData, "id");
   const { error } = await supabase
     .from("service_jobs")
-    .update({ archived_at: new Date().toISOString() })
-    .eq("id", id);
-  if (error) throw error;
-  revalidatePath("/vehicles");
-  revalidatePath("/overview");
-  redirect("/vehicles?archived=1");
+    .update({ archived_at: archived ? new Date().toISOString() : null })
+    .eq("id", id)
+    .eq("owner_user_id", user.id)
+    .select("id")
+    .single();
+  if (error)
+    throw new Error("Servis kartının arxiv vəziyyəti dəyişdirilə bilmədi.");
+  revalidatePath("/", "layout");
+  redirect(`/vehicles?visibility=${archived ? "archived" : "active"}`);
 }

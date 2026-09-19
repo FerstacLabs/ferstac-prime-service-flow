@@ -17,6 +17,8 @@ export type WorkshopFilters = {
   balance: string;
   page: number;
   period: string;
+  visibility: "active" | "archived" | "all";
+  view: "vehicles" | "workers";
 };
 export function bakuDate(value: Date | string = new Date()) {
   if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value))
@@ -65,6 +67,13 @@ export function parseFilters(params: SearchParams): WorkshopFilters {
     balance: get("balance"),
     page: Math.max(1, Math.min(100000, Number.parseInt(get("page")) || 1)),
     period,
+    visibility:
+      get("visibility") === "archived"
+        ? "archived"
+        : get("visibility") === "all"
+          ? "all"
+          : "active",
+    view: get("view") === "workers" ? "workers" : "vehicles",
   };
 }
 export const inPeriod = (date: string | null | undefined, f: WorkshopFilters) =>
