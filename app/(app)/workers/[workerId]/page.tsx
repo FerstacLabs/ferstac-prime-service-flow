@@ -11,9 +11,8 @@ import {
 import { getWorkshop } from "@/lib/supabase/workshop";
 import { workerDisplayName, workTitle } from "@/lib/supabase/queries";
 import { parseFilters, filterQuery, type SearchParams } from "@/lib/filters";
-import { workerFinance } from "@/lib/worker-finance";
-import { costKnown, paidFor } from "@/lib/workshop";
-import { formatDate, formatMoney } from "@/lib/format";
+import { workerFinance, workerWorkFinance } from "@/lib/worker-finance";
+import { formatDate } from "@/lib/format";
 export default async function WorkerPage({
   params,
   searchParams,
@@ -65,8 +64,10 @@ export default async function WorkerPage({
         items={[
           ["Qazanılmış əmək məbləği", n.earned],
           ["Seçilən işlərə ödənilib (bütün tarixçə)", n.paid],
-          ["Qalıq alacaq", n.outstanding],
-          ["Aktiv işlərin gözlənilən məbləği", n.expected],
+          ["Avans", n.advance],
+          ["Qazanılmış qalıq alacaq", n.outstanding],
+          ["Qalan razılaşdırılmış usta məbləği", n.remaining],
+          ["Aktiv işlərin razılaşdırılmış usta məbləği", n.expected],
         ]}
       />
       {n.missing ? (
@@ -77,7 +78,8 @@ export default async function WorkerPage({
       <h2 className="my-4 text-lg font-semibold">İş tarixçəsi</h2>
       <div className="divide-y divide-[var(--border)]">
         {pageRows(n.items, f).map((w) => {
-          const j = data.jobs.find((j) => j.id === w.service_job_id);
+          const j = data.jobs.find((j) => j.id === w.service_job_id),
+            finance = workerWorkFinance(w, data.cash);
           return (
             <article key={w.id} className="py-4">
               <Link
@@ -91,14 +93,17 @@ export default async function WorkerPage({
                 {statusLabels[w.status]} · Plan: {formatDate(w.planned_at)} ·
                 Tamamlanma: {w.completed_at ? formatDate(w.completed_at) : "-"}
               </p>
-              <p className="mt-2 text-sm">
-                Usta mayası:{" "}
-                {costKnown(w)
-                  ? formatMoney(w.labor_cost)
-                  : "Maya daxil edilməyib"}{" "}
-                · Ödənilib:{" "}
-                {formatMoney(paidFor(data.cash, "WORKER_WORK_ITEM", w.id))}
-              </p>
+              <MoneyGrid
+                items={[
+                  ["Müştəriyə deyilən qiymət", w.quoted_price],
+                  ["Usta mayası", finance.known ? w.labor_cost : null],
+                  ["Qazanılmış", finance.earned],
+                  ["Ustaya ödənilib", finance.paid],
+                  ["Avans", finance.advance],
+                  ["Qazanılmış qalıq", finance.outstanding],
+                  ["Qalan razılaşdırılmış usta məbləği", finance.remaining],
+                ]}
+              />
               <p className="mt-2 break-words text-sm">{w.notes}</p>
             </article>
           );

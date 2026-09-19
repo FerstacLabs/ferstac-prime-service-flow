@@ -107,7 +107,12 @@ export default async function WorkersPage({
                   ["Tamamlanıb", String(n.done.length)],
                   ["Qazanılmış", formatMoney(n.earned)],
                   ["Ödənilib", formatMoney(n.paid)],
-                  ["Qalıq alacaq", formatMoney(n.outstanding)],
+                  ["Avans", formatMoney(n.advance)],
+                  ["Qazanılmış qalıq alacaq", formatMoney(n.outstanding)],
+                  [
+                    "Qalan razılaşdırılmış usta məbləği",
+                    formatMoney(n.remaining),
+                  ],
                 ].map(([k, v]) => (
                   <div key={k}>
                     <dt className="text-[var(--muted)]">{k}</dt>

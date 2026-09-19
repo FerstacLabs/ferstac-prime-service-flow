@@ -80,7 +80,15 @@ export function WorkerCash({
                 "Seçilən işlərə ödənilib (bütün tarixçə)",
                 sumMoney(workers.map((n) => n.paid)),
               ],
-              ["Qalıq alacaq", sumMoney(workers.map((n) => n.outstanding))],
+              ["Avans", sumMoney(workers.map((n) => n.advance))],
+              [
+                "Qazanılmış qalıq alacaq",
+                sumMoney(workers.map((n) => n.outstanding)),
+              ],
+              [
+                "Qalan razılaşdırılmış usta məbləği",
+                sumMoney(workers.map((n) => n.remaining)),
+              ],
             ]}
           />
           <div className="overflow-x-auto">
@@ -93,7 +101,9 @@ export function WorkerCash({
                     "Tamamlanmış",
                     "Qazanılmış",
                     "Ödənilib",
-                    "Qalıq alacaq",
+                    "Avans",
+                    "Qazanılmış qalıq",
+                    "Qalan usta məbləği",
                   ].map((label) => (
                     <th key={label} className="py-3 pr-4">
                       {label}
@@ -127,9 +137,11 @@ export function WorkerCash({
                     <td>{n.done.length}</td>
                     <td>{formatMoney(n.earned)}</td>
                     <td>{formatMoney(n.paid)}</td>
+                    <td>{formatMoney(n.advance)}</td>
                     <td className="font-semibold">
                       {formatMoney(n.outstanding)}
                     </td>
+                    <td>{formatMoney(n.remaining)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -176,8 +188,10 @@ export function WorkerCash({
             items={[
               ["Qazanılmış", selected.earned],
               ["Seçilən işlərə ödənilib (bütün tarixçə)", selected.paid],
-              ["Qalıq alacaq", selected.outstanding],
-              ["Aktiv işlərin gözlənilən məbləği", selected.expected],
+              ["Avans", selected.advance],
+              ["Qazanılmış qalıq alacaq", selected.outstanding],
+              ["Qalan razılaşdırılmış usta məbləği", selected.remaining],
+              ["Aktiv işlərin razılaşdırılmış usta məbləği", selected.expected],
             ]}
           />
           <section className="mt-5">
@@ -214,22 +228,26 @@ export function WorkerCash({
                       ["Usta mayası", n.known ? work.labor_cost : null],
                       ["Qazanılmış", n.earned],
                       ["Ustaya ödənilib", n.paid],
-                      ["Ustaya qalıq", n.outstanding],
+                      ["Avans", n.advance],
+                      ["Qazanılmış qalıq", n.outstanding],
+                      ["Qalan razılaşdırılmış usta məbləği", n.remaining],
                     ]}
                   />
                   {!n.known ? (
                     <p className="text-sm text-[var(--warning)]">
-                      Maya daxil edilməyib
+                      Usta mayası daxil edilməyib
                     </p>
                   ) : null}
                   <WorkerCostForm work={work} paid={n.paid} />
-                  <PaymentForm
-                    job={work.service_job_id}
-                    type="WORKER_WORK_ITEM"
-                    target={work.id}
-                    remaining={n.outstanding}
-                    label="Ustaya ödəniş et"
-                  />
+                  {n.canPay ? (
+                    <PaymentForm
+                      job={work.service_job_id}
+                      type="WORKER_WORK_ITEM"
+                      target={work.id}
+                      remaining={n.remaining ?? 0}
+                      label="Ustaya ödəniş et"
+                    />
+                  ) : null}
                 </article>
               );
             })}
@@ -243,7 +261,7 @@ export function WorkerCash({
               Seçilmiş işlərin ödəniş tarixçəsi
             </h2>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[950px] text-left text-sm">
+              <table className="w-full min-w-[1100px] text-left text-sm">
                 <thead>
                   <tr className="text-[var(--muted)]">
                     {[
@@ -252,7 +270,9 @@ export function WorkerCash({
                       "İş",
                       "Qazanılmış (cari)",
                       "Ödəniş",
-                      "Qalıq (cari)",
+                      "Avans (cari)",
+                      "Qazanılmış qalıq (cari)",
+                      "Qalan usta məbləği (cari)",
                       "Qeyd",
                     ].map((label) => (
                       <th key={label} className="py-3 pr-4">
@@ -263,7 +283,15 @@ export function WorkerCash({
                 </thead>
                 <tbody>
                   {history.map(
-                    ({ payment: t, item, job, earned, outstanding }) => (
+                    ({
+                      payment: t,
+                      item,
+                      job,
+                      earned,
+                      advance,
+                      outstanding,
+                      remaining,
+                    }) => (
                       <tr
                         key={t.id}
                         className={`border-t border-[var(--border)] ${t.voided_at ? "opacity-60" : ""}`}
@@ -287,14 +315,32 @@ export function WorkerCash({
                             {workTitle(item)}
                           </Link>
                         </td>
-                        <td className="pr-4">{formatMoney(earned)}</td>
-                        <td className="pr-4">
+                        <td className="whitespace-nowrap pr-4">
+                          {formatMoney(earned)}
+                        </td>
+                        <td className="whitespace-nowrap pr-4">
                           {formatMoney(t.amount)}
                           {t.voided_at ? (
                             <p className="text-xs">Ləğv edilib</p>
                           ) : null}
                         </td>
-                        <td className="pr-4">{formatMoney(outstanding)}</td>
+                        <td className="whitespace-nowrap pr-4">
+                          {formatMoney(advance)}
+                        </td>
+                        <td className="whitespace-nowrap pr-4">
+                          {formatMoney(outstanding)}
+                        </td>
+                        <td
+                          className={
+                            remaining == null
+                              ? "pr-4"
+                              : "whitespace-nowrap pr-4"
+                          }
+                        >
+                          {remaining == null
+                            ? "Məlumat daxil edilməyib"
+                            : formatMoney(remaining)}
+                        </td>
                         <td className="max-w-60 break-words">
                           {t.notes || "-"}
                           {t.voided_at ? <p>{t.void_reason}</p> : null}

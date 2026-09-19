@@ -27,8 +27,9 @@ Configure Supabase before using operational pages. The proxy protects the operat
 2. In SQL Editor, run `supabase/migrations/0001_prime_flow_schema.sql`.
 3. Run `supabase/seed.sql` for master data.
 4. Run `supabase/migrations/0002_workshop_finance.sql`.
-5. Create the admin user from Supabase Auth dashboard.
-6. Add these values to `.env.local` and Vercel:
+5. Run `supabase/migrations/0003_worker_advances.sql`.
+6. Create the admin user from Supabase Auth dashboard.
+7. Add these values to `.env.local` and Vercel:
 
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=
@@ -41,9 +42,11 @@ The data model uses UUID primary keys, keeps `vehicles.plate` as the visible uni
 
 ### Existing Production Database
 
-Back up the existing database, then apply **only** `supabase/migrations/0002_workshop_finance.sql` before deploying the updated app. Do not rerun `0001` or reseed production. The new migration is transactional and forward-only, preserving historical rows, costs, budgets and master catalogs. Apply it once using the SQL Editor or your existing migration runner. This repository does not automatically apply remote migrations.
+Back up the existing database, then apply pending migrations in order before deploying the updated app. If `0002_workshop_finance.sql` is already applied, apply **only** `supabase/migrations/0003_worker_advances.sql`. Otherwise apply `0002` followed by `0003`. Do not rerun `0001` or reseed production. Both migrations are transactional and forward-only, preserving historical rows, costs, budgets and master catalogs. Use the SQL Editor or your existing migration runner. This repository does not automatically apply remote migrations.
 
 `0002` adds private custom catalogs, customer quote lines, required parts and an owner-scoped payment ledger. Existing supplier `paid_amount` values are backfilled once into the ledger; the purchase field subsequently becomes a compatibility mirror, never an extra payment. Historical non-supplier paid amounts are retained without inventing cash transactions. Existing `labor_cost` remains actual worker cost; unknown historical zero costs and missing line quotes remain explicitly unknown.
+
+`0003` replaces two financial guard functions to allow worker advances for TODO/IN_PROGRESS work against known agreed cost. It creates no tables and rewrites no transactions. Apply it before using the new payment controls; `0002` alone still rejects active-work payments.
 
 All normal application access uses the public Supabase key with the user's session and RLS. A service-role key is not required for these workflows and must never be exposed in client code.
 
@@ -79,8 +82,8 @@ All normal application access uses the public Supabase key with the user's sessi
 - Intake uses compact searchable work and required-part rows, each with its own customer price and up to 250 characters of notes. New work, part and worker-role entries persist for the owner.
 - Purchases consume required parts without retyping them. Customer price stays separate from actual purchase cost. Additional unquoted purchases remain available for legacy jobs.
 - Work Queue handles assignment, notes and operational status only. All non-cancelled work completed makes a job ready; delivered and paused jobs are not reopened automatically.
-- Kassa records receipts against specific quoted work/part lines, supplier payments against purchases, and worker payments against completed assigned work. Legacy jobs can receive payment against their existing budget.
-- Customer receivable = quote minus customer receipts; supplier payable = supplier purchase cost minus supplier payments; worker payable = earned completed-work cost minus worker payments.
+- Kassa records receipts against specific quoted work/part lines, supplier payments against purchases, and worker payments against assigned TODO/IN_PROGRESS/DONE work with known cost. Legacy jobs can receive payment against their existing budget.
+- Customer receivable = quote minus customer receipts; supplier payable = supplier purchase cost minus supplier payments. For each work item, worker earned = known cost only when DONE, advance = max(paid - earned, 0), earned payable = max(earned - paid, 0), remaining agreed amount = max(cost - paid, 0). Worker/job summaries sum these per-allocation results; advances never offset another work item's earned debt.
 - Gross profit = customer quote minus actual part/worker costs, never cash received. Missing costs suppress a final margin and are explicitly flagged; legacy jobs do not invent per-line margins.
 - Worker period filters select completed work by completion date and other work by planned date. Payments shown for those selected work items are all-time payments, so their remaining balance stays coherent. Kassa cash-period filters use the transaction date.
 - Payments are immutable except for a reasoned audit void. Overpayments, cross-owner relations and duplicate submissions are checked on the server and in PostgreSQL. A settled purchase cannot be reassigned or voided until its payments are voided.
@@ -91,11 +94,13 @@ All normal application access uses the public Supabase key with the user's sessi
 ### Archive and Worker Cash Desk
 
 - Vehicles has a separate visibility filter: Active (default), Archive, or All. Archiving only sets the existing `service_jobs.archived_at`; the archived detail remains readable and its Restore action clears that field. Work, purchases and ledger history are never deleted by these actions.
-- Kassa has Vehicles and Workers views. The Workers view supports worker, period and outstanding/fully-paid filters, with per-work cost entry and payments allocated through the existing `WORKER_WORK_ITEM` ledger. Customer quotes are read-only. These payments remain cash OUT and never change gross profit.
+- Kassa has Vehicles and Workers views. The Workers view supports worker, period and earned-outstanding/fully-paid/advance filters, with per-work cost entry and payments allocated through the existing `WORKER_WORK_ITEM` ledger. Fully prepaid active work counts as fully paid, not as earned. Customer quotes are read-only. Advances are cash OUT on the payment date and never change gross profit.
 - Worker Print/PDF uses the same worker/period/debt selection as the screen. The selected work's paid totals and payment history cover all settlement dates; history columns explicitly label current earned/outstanding values rather than implying an immutable historical balance.
 - Missing-cost warnings are omitted when both missing counters are zero. An explicitly known zero labor cost or a customer-provided part does not count as missing.
 - Handover is visible in the vehicle detail's top action area. It is unavailable with an explanation before READY/DELIVERED; eligible archived jobs retain both Print and PDF access.
-- These refinements reuse the existing schema and require no new migration. Migration `0002_workshop_finance.sql` remains a prerequisite on databases that have not yet applied it.
+- Unknown worker cost blocks payments until saved; explicit zero is a known cost with no payment control. The server serializes payments against the service-job row and rejects amounts above the remaining agreed cost, even for direct ledger inserts. Idempotency and reasoned audit voids are unchanged.
+- Cancelling work with active worker payments remains blocked. Review and explicitly resolve incorrect payments through the audit-void flow; the app never silently reverses cash. Any existing cancelled-work payment history remains visible, with advances separate from earned debt and no new payment control. Completion never changes ledger dates or amounts.
+- Archive/handover refinements need no schema changes; worker advances require the forward migration `0003_worker_advances.sql` after `0002`.
 
 ## Brand Assets
 

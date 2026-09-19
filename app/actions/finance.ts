@@ -28,7 +28,7 @@ export async function createCatalogAction(
 export async function recordPaymentAction(form: FormData) {
   const { supabase } = await getAuthedSupabase();
   const amount = moneySchema.parse(form.get("amount"));
-  if (amount <= 0) throw new Error("Ödəniş sıfırdan böyük olmalıdır.");
+  if (amount <= 0) return { error: "Ödəniş sıfırdan böyük olmalıdır." };
   const { error } = await supabase.rpc("record_cash_payment", {
     p_job: uuidValue(form, "service_job_id"),
     p_type: z
@@ -48,7 +48,8 @@ export async function recordPaymentAction(form: FormData) {
     p_note: noteValue(form),
     p_key: uuidValue(form, "idempotency_key"),
   });
-  if (error) throw new Error(error.message);
+  // Expected payment validation must survive production Server Action error redaction.
+  if (error) return { error: error.message };
   await refreshWorkshop();
 }
 export async function setWorkerCostAction(form: FormData) {

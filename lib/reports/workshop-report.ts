@@ -140,6 +140,7 @@ function filterText(f: WorkshopFilters, data: WorkshopData) {
           supplier: "Təchizatçı borcları",
           worker: "Usta borcları",
           paid: "Tam ödənilənlər",
+          advance: "Avansı olanlar",
         } as Record<string, string>
       )[f.balance],
     ],
@@ -389,7 +390,15 @@ export function buildWorkshopReport(
         "Seçilən işlərə ödənilib (bütün tarixçə)",
         money(sumMoney(workers.map((n) => n.paid))),
       ],
-      ["Qalıq alacaq", money(sumMoney(workers.map((n) => n.outstanding)))],
+      ["Avans", money(sumMoney(workers.map((n) => n.advance)))],
+      [
+        "Qazanılmış qalıq alacaq",
+        money(sumMoney(workers.map((n) => n.outstanding))),
+      ],
+      [
+        "Qalan razılaşdırılmış usta məbləği",
+        money(sumMoney(workers.map((n) => n.remaining))),
+      ],
     ]);
     report.sections = workers.flatMap((n) => {
       const w = n.worker;
@@ -401,9 +410,9 @@ export function buildWorkshopReport(
           "Usta mayası",
           "Qazanılmış",
           "Ödənilib",
-          "Qalıq",
-          "Status",
-          "Plan / tamamlanma",
+          "Avans",
+          "Qazanılmış qalıq",
+          "Qalan razılaşdırılmış usta məbləği",
         ],
         n.items.map((i) => {
           const job = data.jobs.find((j) => j.id === i.service_job_id),
@@ -417,16 +426,23 @@ export function buildWorkshopReport(
               finance.known ? money(i.labor_cost) : missingValue,
               money(finance.earned),
               money(finance.paid),
+              money(finance.advance),
               money(finance.outstanding),
-              reportWorkStatusLabels[i.status],
-              `${date(i.planned_at)} / ${date(i.completed_at) || "-"}`,
+              value(finance.remaining),
             ],
-            details: [["Qeyd", i.notes || "-"] as [string, string]],
+            details: [
+              ["Status", reportWorkStatusLabels[i.status]],
+              [
+                "Plan / tamamlanma",
+                `${date(i.planned_at)} / ${date(i.completed_at) || "-"}`,
+              ],
+              ["Qeyd", i.notes || "-"],
+            ] as Array<[string, string]>,
           };
         }),
       );
       workTable.columns.forEach((column, i) => {
-        column.width = [13, 22, 9, 9, 9, 9, 9, 9, 11][i];
+        column.width = [15, 17, 10, 9, 9, 9, 9, 11, 11][i];
       });
       const sections: ReportSection[] = [
         {
@@ -450,8 +466,10 @@ export function buildWorkshopReport(
             ["Ləğv", String(n.cancelled.length)],
             ["Qazanılmış", money(n.earned)],
             ["Seçilən işlərə ödənilib (bütün tarixçə)", money(n.paid)],
-            ["Qalıq alacaq", money(n.outstanding)],
-            ["Gözlənilən", money(n.expected)],
+            ["Avans", money(n.advance)],
+            ["Qazanılmış qalıq alacaq", money(n.outstanding)],
+            ["Qalan razılaşdırılmış usta məbləği", money(n.remaining)],
+            ["Aktiv işlərin razılaşdırılmış usta məbləği", money(n.expected)],
             ...(n.missing
               ? [
                   ["Maya daxil edilməyib", `${n.missing} iş`] as [
@@ -465,33 +483,52 @@ export function buildWorkshopReport(
         },
       ];
       const history = workerPaymentHistory(data, n.items);
-      if (history.length)
-        sections.push({
-          title: `${workerDisplayName(w)}: seçilmiş işlərin ödəniş tarixçəsi`,
-          table: table(
-            [
-              "Tarix",
-              "Avtomobil / iş",
-              "Qazanılmış (cari)",
-              "Ödəniş",
-              "Qalıq (cari)",
-              "Qeyd / vəziyyət",
-            ],
-            history.map(({ payment: t, item, job, earned, outstanding }) => ({
+      if (history.length) {
+        const historyTable = table(
+          [
+            "Tarix",
+            "Avtomobil / iş",
+            "Qazanılmış (cari)",
+            "Ödəniş",
+            "Avans (cari)",
+            "Qazanılmış qalıq (cari)",
+            "Qalan usta məbləği (cari)",
+            "Qeyd / vəziyyət",
+          ],
+          history.map(
+            ({
+              payment: t,
+              item,
+              job,
+              earned,
+              advance,
+              outstanding,
+              remaining,
+            }) => ({
               id: t.id,
               values: [
                 date(t.transaction_date),
                 `${job?.vehicles?.plate || "-"} · ${job?.job_no || "-"} · ${workTitle(item)}`,
                 money(earned),
                 money(t.amount),
+                money(advance),
                 money(outstanding),
+                value(remaining),
                 [t.notes, t.voided_at ? `Ləğv: ${t.void_reason}` : ""]
                   .filter(Boolean)
                   .join(" · ") || "-",
               ],
-            })),
+            }),
           ),
+        );
+        historyTable.columns.forEach((column, i) => {
+          column.width = [9, 23, 11, 9, 10, 12, 12, 14][i];
         });
+        sections.push({
+          title: `${workerDisplayName(w)}: seçilmiş işlərin ödəniş tarixçəsi`,
+          table: historyTable,
+        });
+      }
       return sections;
     });
     return report;
@@ -512,6 +549,7 @@ export function buildWorkshopReport(
     ["Müştəri borcu", money(sumMoney(totals.map((n) => n.customerReceivable)))],
     ["Təchizatçı borcu", money(sumMoney(totals.map((n) => n.supplierPayable)))],
     ["Usta borcu", money(sumMoney(totals.map((n) => n.workerPayable)))],
+    ["Usta avansı", money(sumMoney(totals.map((n) => n.workerAdvance)))],
     [
       "Brüt mənfəət",
       totals.some((n) => n.grossProfit == null)
@@ -541,7 +579,10 @@ export function buildWorkshopReport(
               `${money(n.supplierPayable)} / ${money(n.workerPayable)}`,
               value(n.grossProfit),
             ],
-            details: missingCostFields(n),
+            details: [
+              ...missingCostFields(n),
+              ["Usta avansı", money(n.workerAdvance)],
+            ],
           };
         }),
       ),
@@ -621,7 +662,9 @@ function vehicleSections(
         ["Təchizatçıya ödənilib", money(n.supplierPaid)],
         ["Təchizatçıya borc", money(n.supplierPayable)],
         ["Ustaya ödənilib", money(n.workerPaid)],
-        ["Ustaya borc", money(n.workerPayable)],
+        ["Ustaya qazanılmış borc", money(n.workerPayable)],
+        ["Usta avansı", money(n.workerAdvance)],
+        ["Qalan razılaşdırılmış usta məbləği", money(n.workerRemaining)],
         ["İş mənfəəti", value(n.workProfit)],
         ["Detal mənfəəti", value(n.partProfit)],
         ["Brüt mənfəət", value(n.grossProfit)],
@@ -636,11 +679,11 @@ function vehicleSections(
           "Müştəri qiyməti",
           "Usta mayası",
           "Müştəri: alınıb / qalıq",
-          "Usta: ödənilib / qalıq",
+          "Usta: ödənilib / qazanılmış qalıq",
         ],
         work.map((w) => {
           const received = paidFor(data.cash, "CUSTOMER_WORK", w.id),
-            paid = paidFor(data.cash, "WORKER_WORK_ITEM", w.id);
+            finance = workerWorkFinance(w, data.cash);
           return {
             id: w.id,
             values: [
@@ -648,9 +691,12 @@ function vehicleSections(
               value(w.quoted_price),
               costKnown(w) ? money(w.labor_cost) : missingValue,
               `${money(received)} / ${w.quoted_price == null ? missingValue : money(subtractMoney(w.quoted_price, received))}`,
-              `${money(paid)} / ${money(subtractMoney(w.status === "DONE" && costKnown(w) ? w.labor_cost : 0, paid))}`,
+              `${money(finance.paid)} / ${money(finance.outstanding)}`,
             ],
             details: [
+              ["Qazanılmış", money(finance.earned)],
+              ["Avans", money(finance.advance)],
+              ["Qalan razılaşdırılmış usta məbləği", value(finance.remaining)],
               ["Qeyd", w.notes || "-"],
               [
                 "Plan / tamamlanma",

@@ -1,15 +1,9 @@
 import type { WorkshopData } from "@/lib/supabase/workshop";
 import { inPeriod, type WorkshopFilters } from "@/lib/filters";
-import { costKnown, paidFor, sumMoney, subtractMoney } from "@/lib/workshop";
-import type { CashTransaction } from "@/lib/workshop";
+import { costKnown, sumMoney, workerWorkFinance } from "@/lib/workshop";
 import type { DbWorkItem } from "@/lib/supabase/queries";
 
-export function workerWorkFinance(work: DbWorkItem, cash: CashTransaction[]) {
-  const known = costKnown(work);
-  const earned = work.status === "DONE" && known ? Number(work.labor_cost) : 0;
-  const paid = paidFor(cash, "WORKER_WORK_ITEM", work.id);
-  return { known, earned, paid, outstanding: subtractMoney(earned, paid) };
-}
+export { workerWorkFinance } from "@/lib/workshop";
 export function workerFinance(
   data: WorkshopData,
   workerId: string,
@@ -35,9 +29,16 @@ export function workerFinance(
     cancelled,
     earned,
     paid,
-    outstanding: subtractMoney(earned, paid),
+    advance: sumMoney(lines.map((w) => w.advance)),
+    outstanding: sumMoney(lines.map((w) => w.outstanding)),
+    remaining: sumMoney(
+      items
+        .filter((w) => w.status !== "CANCELLED")
+        .map((w) => workerWorkFinance(w, data.cash).remaining),
+    ),
     expected: sumMoney(active.filter(costKnown).map((w) => w.labor_cost)),
-    missing: done.filter((w) => !costKnown(w)).length,
+    missing: items.filter((w) => w.status !== "CANCELLED" && !costKnown(w))
+      .length,
   };
 }
 
@@ -49,8 +50,14 @@ export function selectWorkerFinances(data: WorkshopData, f: WorkshopFilters) {
       f.balance === "outstanding"
         ? n.outstanding > 0
         : f.balance === "paid"
-          ? n.earned > 0 && n.outstanding === 0 && !n.missing
-          : true,
+          ? n.paid > 0 &&
+            n.remaining === 0 &&
+            n.outstanding === 0 &&
+            !n.missing &&
+            n.cancelled.every((w) => workerWorkFinance(w, data.cash).paid === 0)
+          : f.balance === "advance"
+            ? n.advance > 0
+            : true,
     );
 }
 

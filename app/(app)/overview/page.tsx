@@ -41,6 +41,7 @@ export default async function OverviewPage() {
           ["Müştəri borcu", sumMoney(totals.map((n) => n.customerReceivable))],
           ["Təchizatçı borcu", sumMoney(totals.map((n) => n.supplierPayable))],
           ["Usta borcu", sumMoney(totals.map((n) => n.workerPayable))],
+          ["Usta avansı", sumMoney(totals.map((n) => n.workerAdvance))],
           [
             "Ümumi brüt mənfəət",
             missing ? null : sumMoney(totals.map((n) => n.grossProfit)),

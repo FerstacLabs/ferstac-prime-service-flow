@@ -47,6 +47,9 @@ beforeAll(async () => {
     readFileSync("supabase/migrations/0002_workshop_finance.sql", "utf8"),
   );
   await db.exec(
+    readFileSync("supabase/migrations/0003_worker_advances.sql", "utf8"),
+  );
+  await db.exec(
     "create role authenticated; grant usage on schema public,auth to authenticated; grant select,insert,update,delete on all tables in schema public to authenticated; grant select on auth.users to authenticated; grant execute on all functions in schema public,auth to authenticated; set role authenticated;",
   );
 }, 60000);
@@ -221,7 +224,7 @@ describe.sequential("workshop PostgreSQL workflow", () => {
       ]),
     ).toBe("Plastik təmiri");
   });
-  it("derives operational status and only permits earned worker settlements", async () => {
+  it("derives operational status independently of worker settlements", async () => {
     const role = await scalar<{ id: string }>(
       "select create_catalog_entry('role','Dəmirçi') as value",
     );
@@ -238,7 +241,6 @@ describe.sequential("workshop PostgreSQL workflow", () => {
         job,
       ]),
     ).toBe("IN_PROGRESS");
-    await expect(pay("WORKER_WORK_ITEM", work, 100)).rejects.toThrow();
     await db.query("update job_work_items set status='DONE' where id=$1", [
       work,
     ]);
@@ -480,5 +482,143 @@ describe.sequential("workshop PostgreSQL workflow", () => {
         ),
       ),
     ).toBe(100);
+  });
+  it("allows TODO and active advances, rejects overpayment and keeps immutable history after DONE", async () => {
+    const id = await scalar(
+      "insert into job_work_items(owner_user_id,service_job_id,assigned_worker_id,custom_title,quoted_price,labor_cost,labor_cost_known,status) values(auth.uid(),$1,$2,'Avans işi',600,500,true,'TODO') returning id as value",
+      [job, worker],
+    );
+    const key = randomUUID();
+    const first = await pay("WORKER_WORK_ITEM", id, 200, key);
+    expect(await pay("WORKER_WORK_ITEM", id, 200, key)).toBe(first);
+    await db.query(
+      "update job_work_items set status='IN_PROGRESS' where id=$1",
+      [id],
+    );
+    await pay("WORKER_WORK_ITEM", id, 100);
+    await expect(pay("WORKER_WORK_ITEM", id, 250)).rejects.toThrow(
+      "Bu iş üzrə ustaya maksimum 200,00 AZN əlavə ödəniş edilə bilər.",
+    );
+    // Direct inserts must obey the same cap, even if a client bypasses the RPC.
+    await expect(
+      db.query(
+        "insert into cash_transactions(owner_user_id,service_job_id,allocation_type,work_item_id,amount,transaction_date,idempotency_key) values(auth.uid(),$1,'WORKER_WORK_ITEM',$2,250,'2026-09-18',$3)",
+        [job, id, randomUUID()],
+      ),
+    ).rejects.toThrow("maksimum 200,00 AZN");
+    await expect(
+      db.query("update job_work_items set labor_cost=299 where id=$1", [id]),
+    ).rejects.toThrow();
+    await expect(
+      db.query("update job_work_items set labor_cost_known=false where id=$1", [
+        id,
+      ]),
+    ).rejects.toThrow();
+    await expect(
+      db.query(
+        "update job_work_items set assigned_worker_id=null where id=$1",
+        [id],
+      ),
+    ).rejects.toThrow();
+    await expect(
+      db.query("update job_work_items set status='CANCELLED' where id=$1", [
+        id,
+      ]),
+    ).rejects.toThrow("Ödənişi olan iş ləğv edilə bilməz");
+    await pay("WORKER_WORK_ITEM", id, 200);
+    await expect(pay("WORKER_WORK_ITEM", id, 0.01)).rejects.toThrow(
+      "maksimum 0,00 AZN",
+    );
+    const history = () =>
+      scalar(
+        "select jsonb_agg(c order by id) as value from cash_transactions c where work_item_id=$1",
+        [id],
+      );
+    const before = await history();
+    await db.query(
+      "update job_work_items set status='DONE',completed_at='2026-09-21' where id=$1",
+      [id],
+    );
+    expect(await history()).toEqual(before);
+    expect(
+      Number(
+        await scalar(
+          "select sum(amount) as value from cash_transactions where work_item_id=$1 and direction='OUT'",
+          [id],
+        ),
+      ),
+    ).toBe(500);
+    await expect(
+      db.query(
+        "update cash_transactions set transaction_date='2026-09-21' where id=$1",
+        [first],
+      ),
+    ).rejects.toThrow();
+    await db.query(
+      "update cash_transactions set voided_at=now(),void_reason='Səhv qeyd' where id=$1",
+      [first],
+    );
+    await pay("WORKER_WORK_ITEM", id, 200);
+    expect(
+      Number(
+        await scalar(
+          "select sum(amount) as value from cash_transactions where work_item_id=$1 and voided_at is null",
+          [id],
+        ),
+      ),
+    ).toBe(500);
+    expect(
+      Number(
+        await scalar(
+          "select count(*) as value from cash_transactions where work_item_id=$1",
+          [id],
+        ),
+      ),
+    ).toBe(4);
+  });
+  it("blocks unknown/zero cost, unassigned and cancelled payments at the database boundary", async () => {
+    const id = await scalar(
+      "insert into job_work_items(owner_user_id,service_job_id,assigned_worker_id,custom_title,quoted_price) values(auth.uid(),$1,$2,'Naməlum maya',600) returning id as value",
+      [job, worker],
+    );
+    await expect(pay("WORKER_WORK_ITEM", id, 1)).rejects.toThrow(
+      "Usta mayası daxil edilməyib",
+    );
+    await db.query(
+      "update job_work_items set labor_cost_known=true where id=$1",
+      [id],
+    );
+    await expect(pay("WORKER_WORK_ITEM", id, 1)).rejects.toThrow(
+      "maksimum 0,00 AZN",
+    );
+    await db.query(
+      "update job_work_items set labor_cost=500,assigned_worker_id=null where id=$1",
+      [id],
+    );
+    await expect(pay("WORKER_WORK_ITEM", id, 1)).rejects.toThrow(
+      "Əvvəlcə işə usta təyin edin",
+    );
+    await db.query(
+      "update job_work_items set assigned_worker_id=$2,status='CANCELLED' where id=$1",
+      [id, worker],
+    );
+    await expect(pay("WORKER_WORK_ITEM", id, 1)).rejects.toThrow(
+      "Ləğv edilmiş iş",
+    );
+  });
+  it("replacing advance guards never rewrites existing ledger rows", async () => {
+    const before = await scalar(
+      "select jsonb_agg(c order by id) as value from cash_transactions c",
+    );
+    await db.exec("reset role");
+    await db.exec(
+      readFileSync("supabase/migrations/0003_worker_advances.sql", "utf8"),
+    );
+    await db.exec("set role authenticated");
+    expect(
+      await scalar(
+        "select jsonb_agg(c order by id) as value from cash_transactions c",
+      ),
+    ).toEqual(before);
   });
 });

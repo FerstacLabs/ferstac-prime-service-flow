@@ -94,6 +94,26 @@ export function paidFor(
       .map((t) => t.amount),
   );
 }
+export function workerWorkFinance(work: DbWorkItem, cash: CashTransaction[]) {
+  const known = costKnown(work);
+  const earned = work.status === "DONE" && known ? Number(work.labor_cost) : 0;
+  const paid = paidFor(cash, "WORKER_WORK_ITEM", work.id);
+  const remaining = known
+    ? Math.max(subtractMoney(work.labor_cost, paid), 0)
+    : null;
+  return {
+    known,
+    earned,
+    paid,
+    advance: Math.max(subtractMoney(paid, earned), 0),
+    outstanding: Math.max(subtractMoney(earned, paid), 0),
+    remaining,
+    canPay:
+      !!work.assigned_worker_id &&
+      work.status !== "CANCELLED" &&
+      (remaining ?? 0) > 0,
+  };
+}
 export function jobFinance(
   job: DbServiceJob,
   work: DbWorkItem[],
@@ -137,11 +157,9 @@ export function jobFinance(
       .filter((t) => t.allocation_type === "WORKER_WORK_ITEM")
       .map((t) => t.amount),
   );
-  const workerEarned = sumMoney(
-    activeWork
-      .filter((w) => w.status === "DONE" && costKnown(w))
-      .map((w) => w.labor_cost),
-  );
+  // An advance on one allocation must never offset earned debt on another.
+  const workerLines = work.map((w) => workerWorkFinance(w, cash));
+  const workerEarned = sumMoney(workerLines.map((n) => n.earned));
   const workerExpected = sumMoney(
     activeWork
       .filter((w) => w.status !== "DONE" && costKnown(w))
@@ -167,7 +185,11 @@ export function jobFinance(
     workerEarned,
     workerExpected,
     supplierPayable: subtractMoney(supplierCost, supplierPaid),
-    workerPayable: subtractMoney(workerEarned, workerPaid),
+    workerPayable: sumMoney(workerLines.map((n) => n.outstanding)),
+    workerAdvance: sumMoney(workerLines.map((n) => n.advance)),
+    workerRemaining: sumMoney(
+      activeWork.map((w) => workerWorkFinance(w, cash).remaining),
+    ),
     workProfit:
       detailed && !missingWork ? subtractMoney(quotedWork, workCost) : null,
     partProfit:

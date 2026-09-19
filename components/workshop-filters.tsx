@@ -164,7 +164,8 @@ export function WorkshopFilters({
       ) : null}
       {scope === "worker-cash"
         ? select("balance", "Ödəniş vəziyyəti", {
-            outstanding: "Borcu olanlar",
+            outstanding: "Qazanılmış borcu olanlar",
+            advance: "Avansı olanlar",
             paid: "Tam ödənilənlər",
           })
         : null}

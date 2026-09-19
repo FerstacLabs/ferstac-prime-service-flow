@@ -7,7 +7,7 @@ export function ActionForm({
   className,
   reset = false,
 }: {
-  action: (form: FormData) => Promise<void>;
+  action: (form: FormData) => Promise<void | { error: string }>;
   children: React.ReactNode;
   className?: string;
   reset?: boolean;
@@ -29,7 +29,11 @@ export function ActionForm({
         key.current ??= crypto.randomUUID();
         form.set("idempotency_key", key.current);
         try {
-          await action(form);
+          const result = await action(form);
+          if (result?.error) {
+            setError(result.error);
+            return;
+          }
           key.current = null;
           if (reset) {
             allowReset.current = true;

@@ -75,11 +75,13 @@ export function FinanceSummary({
           ["Müştərinin qalıq borcu", n.customerReceivable],
           ["Təchizatçıya borc", n.supplierPayable],
           ["Ustaya qazanılmış borc", n.workerPayable],
+          ["Usta avansı", n.workerAdvance],
+          ["Qalan razılaşdırılmış usta məbləği", n.workerRemaining],
           [
             "Ümumi ödəniləcək borc",
             sumMoney([n.supplierPayable, n.workerPayable]),
           ],
-          ["Aktiv işlərin gözlənilən usta ödənişi", n.workerExpected],
+          ["Aktiv işlərin razılaşdırılmış usta məbləği", n.workerExpected],
           ["İşçilik mənfəəti", n.workProfit],
           ["Detal mənfəəti", n.partProfit],
           ["Ümumi brüt mənfəət", n.grossProfit],
@@ -125,7 +127,7 @@ export function PaymentForm({
         <input name="allocation_type" type="hidden" value={type} />
         <input name="target_id" type="hidden" value={target} />
         <label className="text-xs text-[var(--muted)]">
-          Məbləğ (AZN)
+          Ödəniş məbləği (AZN)
           <input
             name="amount"
             type="number"
@@ -151,7 +153,9 @@ export function PaymentForm({
           <input name="notes" maxLength={250} className="field mt-1" />
         </label>
         <SubmitButton pendingText="Qeydə alınır...">
-          Ödənişi qeydə al
+          {type === "WORKER_WORK_ITEM"
+            ? "Ustaya ödəniş et"
+            : "Ödənişi qeydə al"}
         </SubmitButton>
       </ActionForm>
     </details>
@@ -224,7 +228,7 @@ export function JobFinance({
         </h2>
         {work.map((w) => {
           const received = paidFor(data.cash, "CUSTOMER_WORK", w.id),
-            { paid, earned } = workerWorkFinance(w, data.cash);
+            worker = workerWorkFinance(w, data.cash);
           return (
             <article
               key={w.id}
@@ -247,9 +251,11 @@ export function JobFinance({
                       : null,
                   ],
                   ["Usta mayası", costKnown(w) ? w.labor_cost : null],
-                  ["Qazanılmış", earned],
-                  ["Ustaya ödənilib", paid],
-                  ["Ustaya qalıq", subtractMoney(earned, paid)],
+                  ["Qazanılmış", worker.earned],
+                  ["Ustaya ödənilib", worker.paid],
+                  ["Avans", worker.advance],
+                  ["Qazanılmış qalıq", worker.outstanding],
+                  ["Qalan razılaşdırılmış usta məbləği", worker.remaining],
                   [
                     "İş mənfəəti",
                     w.quoted_price != null && costKnown(w)
@@ -261,6 +267,11 @@ export function JobFinance({
                   ],
                 ]}
               />
+              {!worker.known ? (
+                <p className="text-sm text-[var(--warning)]">
+                  Usta mayası daxil edilməyib
+                </p>
+              ) : null}
               {w.notes ? (
                 <p className="break-words text-sm text-[var(--muted)]">
                   {w.notes}
@@ -268,7 +279,7 @@ export function JobFinance({
               ) : null}
               {editable ? (
                 <>
-                  <WorkerCostForm work={w} paid={paid} />
+                  <WorkerCostForm work={w} paid={worker.paid} />
                   {w.quoted_price != null ? (
                     <PaymentForm
                       job={job.id}
@@ -277,12 +288,12 @@ export function JobFinance({
                       remaining={subtractMoney(w.quoted_price, received)}
                     />
                   ) : null}
-                  {w.assigned_worker_id ? (
+                  {worker.canPay ? (
                     <PaymentForm
                       job={job.id}
                       type="WORKER_WORK_ITEM"
                       target={w.id}
-                      remaining={subtractMoney(earned, paid)}
+                      remaining={worker.remaining ?? 0}
                     />
                   ) : null}
                 </>
