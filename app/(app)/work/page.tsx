@@ -23,6 +23,7 @@ import {
   workTitle,
 } from "@/lib/supabase/queries";
 import { formatDate } from "@/lib/format";
+import { EmptyState } from "@/components/empty-state";
 export const dynamic = "force-dynamic";
 export default async function WorkPage({
   searchParams,
@@ -54,7 +55,7 @@ export default async function WorkPage({
         {pageRows(items, f).map((item) => {
           const job = data.jobs.find((j) => j.id === item.service_job_id);
           return (
-            <Panel key={item.id}>
+            <Panel key={item.id} className="work-card">
               <div className="flex flex-wrap justify-between gap-2">
                 <Link
                   href={`/vehicles/${item.service_job_id}`}
@@ -98,8 +99,9 @@ export default async function WorkPage({
                 </label>
                 <label className="text-xs text-[var(--muted)]">
                   Qeyd
-                  <input
+                  <textarea
                     name="notes"
+                    rows={3}
                     maxLength={250}
                     defaultValue={item.notes ?? ""}
                     className="field mt-1"
@@ -113,9 +115,7 @@ export default async function WorkPage({
           );
         })}
       </div>
-      {!items.length ? (
-        <p className="text-[var(--muted)]">İş tapılmadı.</p>
-      ) : null}
+      {!items.length ? <EmptyState>İş tapılmadı.</EmptyState> : null}
       <Pagination filters={f} total={items.length} />
     </>
   );

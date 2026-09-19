@@ -46,7 +46,9 @@ export function PrintReport({ report }: { report: PrimeReport }) {
       </main>
     );
   return (
-    <main className="print-report">
+    <main
+      className={`print-report ${report.orientation === "landscape" ? "print-landscape" : ""}`}
+    >
       <PrintTrigger />
       <header className="print-report-header">
         <div>
@@ -60,6 +62,9 @@ export function PrintReport({ report }: { report: PrimeReport }) {
       </header>
 
       <Summary items={report.summary} />
+      {!report.sections.length ? (
+        <p className="print-empty">Məlumat yoxdur.</p>
+      ) : null}
       {report.sections.map((section) => (
         <Section key={section.title} section={section} />
       ))}
@@ -94,7 +99,9 @@ function Section({ section }: { section: ReportSection }) {
       <h2>{section.title}</h2>
       <Summary items={section.summary} />
       {section.fields?.length ? <Fields fields={section.fields} /> : null}
-      {section.table ? <Table table={section.table} /> : null}
+      {section.table ? (
+        <Table table={section.table} label={section.title} />
+      ) : null}
     </section>
   );
 }
@@ -103,7 +110,10 @@ function Fields({ fields }: { fields: ReportField[] }) {
   return (
     <dl className="print-fields">
       {fields.map((field) => (
-        <div key={field.label}>
+        <div
+          key={field.label}
+          className={field.value.length > 140 ? "print-wide-field" : undefined}
+        >
           <dt>{field.label}</dt>
           <dd>{field.value}</dd>
         </div>
@@ -112,31 +122,46 @@ function Fields({ fields }: { fields: ReportField[] }) {
   );
 }
 
-function Table({ table }: { table: ReportTable }) {
+function Table({ table, label }: { table: ReportTable; label: string }) {
   if (!table.rows.length)
     return <div className="print-empty">Məlumat yoxdur.</div>;
   return (
-    <table className="print-table">
-      <thead>
-        <tr>
-          {table.columns.map((column) => (
-            <th key={column.key} style={{ width: `${column.width ?? 10}%` }}>
-              {column.label}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {table.rows.map((row) => (
-          <tr key={row.id}>
-            {table.columns.map((column, index) => (
-              <td
+    <div
+      className="print-table-scroll"
+      role="region"
+      aria-label={label}
+      tabIndex={0}
+    >
+      <table className="print-table">
+        <thead>
+          <tr>
+            {table.columns.map((column) => (
+              <th
+                scope="col"
                 key={column.key}
-                data-label={column.label}
-                className={index === 0 ? "print-primary-cell" : undefined}
+                style={{ width: `${column.width ?? 10}%` }}
               >
-                {row.cells[column.key] || "-"}
-                {index === 0 && row.details?.length ? (
+                {column.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        {table.rows.map((row) => (
+          <tbody key={row.id}>
+            <tr>
+              {table.columns.map((column, index) => (
+                <td
+                  key={column.key}
+                  data-label={column.label}
+                  className={index === 0 ? "print-primary-cell" : undefined}
+                >
+                  {row.cells[column.key] || "-"}
+                </td>
+              ))}
+            </tr>
+            {row.details?.length ? (
+              <tr className="print-details-row">
+                <td colSpan={table.columns.length}>
                   <div className="print-row-details">
                     {row.details.map((detail) => (
                       <span key={detail.label}>
@@ -144,12 +169,12 @@ function Table({ table }: { table: ReportTable }) {
                       </span>
                     ))}
                   </div>
-                ) : null}
-              </td>
-            ))}
-          </tr>
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
         ))}
-      </tbody>
-    </table>
+      </table>
+    </div>
   );
 }

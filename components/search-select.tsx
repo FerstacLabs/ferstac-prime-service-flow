@@ -74,11 +74,15 @@ export function SearchSelect({
             aria-expanded={open}
             aria-controls={`${id}-list`}
             aria-autocomplete="list"
+            aria-activedescendant={
+              open && filtered[active] ? `${id}-option-${active}` : undefined
+            }
             autoComplete="off"
             required={required}
             className="field pr-8"
             value={query ?? all.find((o) => o.id === selected)?.name ?? ""}
             placeholder={label}
+            title={all.find((o) => o.id === selected)?.name}
             onFocus={() => {
               setQuery("");
               setOpen(true);
@@ -117,7 +121,7 @@ export function SearchSelect({
             }}
           />
           <ChevronDown
-            className="pointer-events-none absolute right-2 top-3"
+            className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2"
             size={16}
           />
         </div>
@@ -126,7 +130,7 @@ export function SearchSelect({
             type="button"
             title={`Yeni ${label.toLocaleLowerCase("az")}`}
             aria-label={`Yeni ${label.toLocaleLowerCase("az")}`}
-            className="btn btn-secondary px-3"
+            className="btn btn-secondary btn-icon"
             onClick={() => {
               setCreating(true);
               setNewName(query ?? "");
@@ -158,12 +162,13 @@ export function SearchSelect({
               key={o.id}
               type="button"
               role="option"
+              id={`${id}-option-${i}`}
               aria-selected={selected === o.id}
               className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-white/10 ${i === active ? "bg-white/10" : ""}`}
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => choose(o)}
             >
-              {o.name}
+              <span className="min-w-0 break-words">{o.name}</span>
               {selected === o.id ? <Check size={14} /> : null}
             </button>
           ))}
@@ -187,6 +192,8 @@ export function SearchSelect({
               <button
                 type="button"
                 title="Bağla"
+                aria-label="Bağla"
+                className="btn btn-secondary btn-icon"
                 onClick={() => setCreating(false)}
               >
                 <X size={20} />

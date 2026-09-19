@@ -12,6 +12,7 @@ import { parseFilters, filterQuery, type SearchParams } from "@/lib/filters";
 import { cashFlow, jobFinance } from "@/lib/workshop";
 import { formatMoney } from "@/lib/format";
 import { CashViews, WorkerCash } from "@/components/worker-cash";
+import { EmptyState } from "@/components/empty-state";
 export const dynamic = "force-dynamic";
 export default async function CashPage({
   searchParams,
@@ -75,8 +76,13 @@ export default async function CashPage({
         </>
       ) : (
         <>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[800px] text-left text-sm">
+          <div
+            className="table-scroll"
+            role="region"
+            aria-label="Avtomobil balansları"
+            tabIndex={0}
+          >
+            <table className="data-table vehicle-cash-table w-full min-w-[1000px] text-left text-sm">
               <thead>
                 <tr className="text-[var(--muted)]">
                   {[
@@ -88,7 +94,7 @@ export default async function CashPage({
                     "Təchizatçı borcu",
                     "Usta borcu",
                   ].map((s) => (
-                    <th key={s} className="py-3">
+                    <th scope="col" key={s} className="py-3">
                       {s}
                     </th>
                   ))}
@@ -132,6 +138,11 @@ export default async function CashPage({
               </tbody>
             </table>
           </div>
+          {!jobs.length ? (
+            <EmptyState>
+              Seçilmiş filtrlərə uyğun servis kartı yoxdur.
+            </EmptyState>
+          ) : null}
           <Pagination filters={f} total={jobs.length} />
         </>
       )}

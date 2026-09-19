@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { saveWorkerAction } from "@/app/actions/workers";
-import { PageHeader } from "@/components/app-shell";
+import { PageHeader, StatusBadge } from "@/components/app-shell";
+import { EmptyState } from "@/components/empty-state";
 import { ActionForm } from "@/components/action-form";
 import { SearchSelect } from "@/components/search-select";
 import { SubmitButton } from "@/components/submit-button";
@@ -74,7 +75,12 @@ export default async function WorkersPage({
           </label>
           <label className="text-xs text-[var(--muted)]">
             Qeyd
-            <input name="notes" maxLength={250} className="field mt-1" />
+            <textarea
+              name="notes"
+              maxLength={250}
+              rows={2}
+              className="field mt-1"
+            />
           </label>
           <SubmitButton pendingText="Saxlanır...">İşçini saxla</SubmitButton>
         </ActionForm>
@@ -94,13 +100,18 @@ export default async function WorkersPage({
             <Link
               key={w.id}
               href={`/workers/${w.id}?${filterQuery(f)}`}
-              className="rounded-lg border border-[var(--border)] p-4 hover:border-[var(--accent)]"
+              className="interactive-card"
             >
               <h2 className="font-semibold">{workerDisplayName(w)}</h2>
               <p className="mt-1 text-sm text-[var(--muted)]">
-                {w.worker_roles?.name} · {w.active ? "Aktiv" : "Deaktiv"}
+                {w.worker_roles?.name}
               </p>
-              <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+              <div className="mt-3">
+                <StatusBadge tone={w.active ? "success" : "neutral"}>
+                  {w.active ? "Aktiv" : "Deaktiv"}
+                </StatusBadge>
+              </div>
+              <dl className="metric-grid mt-4 grid grid-cols-2 gap-4 text-sm">
                 {[
                   ["Tapşırıq", String(n.items.length)],
                   ["Aktiv", String(n.active.length)],
@@ -129,6 +140,9 @@ export default async function WorkersPage({
           );
         })}
       </div>
+      {!workers.length ? (
+        <EmptyState>Seçilmiş filtrlərə uyğun işçi yoxdur.</EmptyState>
+      ) : null}
       <Pagination filters={f} total={workers.length} />
     </>
   );

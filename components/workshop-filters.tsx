@@ -176,8 +176,9 @@ export function WorkshopFilters({
         </button>
         <Link
           href={`?${new URLSearchParams(fixed)}`}
-          className="btn btn-secondary"
+          className="btn btn-secondary btn-icon"
           title="Filtrləri sıfırla"
+          aria-label="Filtrləri sıfırla"
         >
           <RotateCcw size={16} />
         </Link>
@@ -197,7 +198,7 @@ export function Pagination({
   return (
     <nav
       aria-label="Səhifələr"
-      className="my-5 flex items-center justify-end gap-3 text-sm text-[var(--muted)]"
+      className="my-5 flex flex-wrap items-center justify-end gap-3 text-sm text-[var(--muted)]"
     >
       <span>
         {total} nəticə · {filters.page} / {pages}
@@ -206,6 +207,7 @@ export function Pagination({
         <Link
           className="btn btn-secondary"
           title="Əvvəlki"
+          aria-label="Əvvəlki səhifə"
           href={`?${filterQuery(filters)}&page=${filters.page - 1}`}
         >
           <ChevronLeft size={16} />
@@ -215,6 +217,7 @@ export function Pagination({
         <Link
           className="btn btn-secondary"
           title="Növbəti"
+          aria-label="Növbəti səhifə"
           href={`?${filterQuery(filters)}&page=${filters.page + 1}`}
         >
           <ChevronRight size={16} />

@@ -5,6 +5,7 @@ import { MoneyGrid } from "@/components/job-finance";
 import { getWorkshop, selectJobs } from "@/lib/supabase/workshop";
 import { jobFinance, sumMoney } from "@/lib/workshop";
 import { formatMoney } from "@/lib/format";
+import { EmptyState } from "@/components/empty-state";
 export const dynamic = "force-dynamic";
 export default async function OverviewPage() {
   const data = await getWorkshop(),
@@ -75,7 +76,7 @@ export default async function OverviewPage() {
                   Aç
                 </Link>
               </div>
-              <div className="mt-3 grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
+              <div className="metric-grid mt-4 grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
                 {[
                   ["Təklif", formatMoney(n.quotedTotal)],
                   ["Məlum maya", formatMoney(n.totalCost)],
@@ -97,6 +98,9 @@ export default async function OverviewPage() {
           );
         })}
       </div>
+      {!jobs.length ? (
+        <EmptyState>Aktiv servis kartı yoxdur.</EmptyState>
+      ) : null}
     </>
   );
 }

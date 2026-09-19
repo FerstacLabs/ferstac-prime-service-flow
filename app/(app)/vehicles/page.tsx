@@ -17,6 +17,7 @@ import { parseFilters, type SearchParams } from "@/lib/filters";
 import { getWorkshop, selectJobs } from "@/lib/supabase/workshop";
 import { jobFinance } from "@/lib/workshop";
 import { formatDate, formatMoney } from "@/lib/format";
+import { EmptyState } from "@/components/empty-state";
 export const dynamic = "force-dynamic";
 export default async function VehiclesPage({
   searchParams,
@@ -40,9 +41,7 @@ export default async function VehiclesPage({
       />
       <WorkshopFilters scope="vehicles" filters={f} />
       <div className="grid gap-4 lg:grid-cols-2">
-        {!jobs.length ? (
-          <p className="text-[var(--muted)]">Servis kartı tapılmadı.</p>
-        ) : null}
+        {!jobs.length ? <EmptyState>Servis kartı tapılmadı.</EmptyState> : null}
         {pageRows(jobs, f).map((job) => {
           const n = jobFinance(
             job,
@@ -53,8 +52,8 @@ export default async function VehiclesPage({
           );
           const work = data.work.filter((w) => w.service_job_id === job.id);
           return (
-            <Panel key={job.id}>
-              <div className="flex flex-wrap justify-between gap-3">
+            <Panel key={job.id} className="vehicle-card">
+              <div className="vehicle-card-head">
                 <Link href={`/vehicles/${job.id}`}>
                   <h2 className="font-mono text-2xl font-bold">
                     {job.vehicles?.plate}
@@ -69,7 +68,7 @@ export default async function VehiclesPage({
                 ) : null}
               </div>
               <p className="mt-2 text-sm">{job.customer_name}</p>
-              <dl className="my-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+              <dl className="metric-grid my-5 grid grid-cols-2 gap-4 text-sm 2xl:grid-cols-4">
                 {[
                   [
                     n.detailed ? "Təklif" : "Əvvəlki büdcə",
@@ -88,7 +87,7 @@ export default async function VehiclesPage({
                   </div>
                 ))}
               </dl>
-              <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="vehicle-card-actions flex flex-wrap items-center justify-between gap-3">
                 <StatusBadge
                   tone={job.status === "READY" ? "success" : "neutral"}
                 >

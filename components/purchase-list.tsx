@@ -13,6 +13,8 @@ import type { WorkshopData } from "@/lib/supabase/workshop";
 import { paidFor, purchaseCost, subtractMoney } from "@/lib/workshop";
 import { formatMoney, formatDate } from "@/lib/format";
 import { reportPaymentLabels } from "@/lib/reports/report-format";
+import { StatusBadge } from "@/components/app-shell";
+import { EmptyState } from "@/components/empty-state";
 export function PurchaseList({
   data,
   items,
@@ -24,9 +26,7 @@ export function PurchaseList({
 }) {
   return (
     <div className="divide-y divide-[var(--border)]">
-      {!items.length ? (
-        <p className="py-6 text-[var(--muted)]">Alış tapılmadı.</p>
-      ) : null}
+      {!items.length ? <EmptyState>Alış tapılmadı.</EmptyState> : null}
       {items.map((p) => {
         const job = data.jobs.find((j) => j.id === p.service_job_id),
           part = data.parts.find((r) => r.id === p.required_part_id),
@@ -44,7 +44,7 @@ export function PurchaseList({
                 {job?.vehicles?.model}
               </Link>
             </div>
-            <dl className="my-3 grid grid-cols-2 gap-3 text-sm md:grid-cols-4 xl:grid-cols-6">
+            <dl className="metric-grid my-4 grid grid-cols-2 gap-4 text-sm md:grid-cols-3 xl:grid-cols-4">
               {[
                 ["Tarix", formatDate(p.purchase_date)],
                 [
@@ -87,7 +87,19 @@ export function PurchaseList({
               ].map(([k, v]) => (
                 <div key={k}>
                   <dt className="text-[var(--muted)]">{k}</dt>
-                  <dd className="mt-1 break-words">{v}</dd>
+                  <dd className="mt-1 break-words">
+                    {k === "Ödəniş" ? (
+                      <StatusBadge
+                        tone={
+                          p.payment_status === "PAID" ? "success" : "warning"
+                        }
+                      >
+                        {v}
+                      </StatusBadge>
+                    ) : (
+                      v
+                    )}
+                  </dd>
                 </div>
               ))}
             </dl>
@@ -119,9 +131,7 @@ export function PurchaseList({
                 {paid === 0 ? (
                   <ActionForm action={deletePurchaseAction} className="mt-3">
                     <input name="id" type="hidden" value={p.id} />
-                    <SubmitButton variant="secondary">
-                      Alışı ləğv et
-                    </SubmitButton>
+                    <SubmitButton variant="danger">Alışı ləğv et</SubmitButton>
                   </ActionForm>
                 ) : null}
               </details>

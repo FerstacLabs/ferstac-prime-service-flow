@@ -21,6 +21,7 @@ import type { WorkshopData } from "@/lib/supabase/workshop";
 import { workerDisplayName, workTitle } from "@/lib/supabase/queries";
 import { formatDate, formatMoney } from "@/lib/format";
 import { sumMoney } from "@/lib/workshop";
+import { EmptyState } from "@/components/empty-state";
 
 export function CashViews({ view }: { view: Filters["view"] }) {
   return (
@@ -91,8 +92,13 @@ export function WorkerCash({
               ],
             ]}
           />
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[850px] text-left text-sm">
+          <div
+            className="table-scroll"
+            role="region"
+            aria-label="İşçi balansları"
+            tabIndex={0}
+          >
+            <table className="data-table worker-balance-table w-full min-w-[1100px] text-left text-sm">
               <thead>
                 <tr className="text-[var(--muted)]">
                   {[
@@ -105,7 +111,7 @@ export function WorkerCash({
                     "Qazanılmış qalıq",
                     "Qalan usta məbləği",
                   ].map((label) => (
-                    <th key={label} className="py-3 pr-4">
+                    <th scope="col" key={label} className="py-3 pr-4">
                       {label}
                     </th>
                   ))}
@@ -148,9 +154,7 @@ export function WorkerCash({
             </table>
           </div>
           {!workers.length ? (
-            <p className="py-5 text-[var(--muted)]">
-              Seçilmiş filtrlərə uyğun işçi yoxdur.
-            </p>
+            <EmptyState>Seçilmiş filtrlərə uyğun işçi yoxdur.</EmptyState>
           ) : null}
           <Pagination filters={f} total={workers.length} />
         </>
@@ -205,7 +209,7 @@ export function WorkerCash({
                 <article
                   key={work.id}
                   id={`work-${work.id}`}
-                  className="scroll-mt-5 border-b border-[var(--border)] py-5"
+                  className="cash-work-item border-b border-[var(--border)] py-6"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <Link
@@ -252,7 +256,7 @@ export function WorkerCash({
               );
             })}
             {!selected.items.length ? (
-              <p className="py-5 text-[var(--muted)]">Bu dövrdə iş yoxdur.</p>
+              <EmptyState>Bu dövrdə iş yoxdur.</EmptyState>
             ) : null}
             <Pagination filters={f} total={selected.items.length} />
           </section>
@@ -260,8 +264,13 @@ export function WorkerCash({
             <h2 className="mb-3 text-lg font-semibold">
               Seçilmiş işlərin ödəniş tarixçəsi
             </h2>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1100px] text-left text-sm">
+            <div
+              className="table-scroll"
+              role="region"
+              aria-label="İşçi ödəniş tarixçəsi"
+              tabIndex={0}
+            >
+              <table className="data-table worker-history-table w-full min-w-[1200px] text-left text-sm">
                 <thead>
                   <tr className="text-[var(--muted)]">
                     {[
@@ -275,7 +284,7 @@ export function WorkerCash({
                       "Qalan usta məbləği (cari)",
                       "Qeyd",
                     ].map((label) => (
-                      <th key={label} className="py-3 pr-4">
+                      <th scope="col" key={label} className="py-3 pr-4">
                         {label}
                       </th>
                     ))}
@@ -296,7 +305,7 @@ export function WorkerCash({
                         key={t.id}
                         className={`border-t border-[var(--border)] ${t.voided_at ? "opacity-60" : ""}`}
                       >
-                        <td className="py-4 pr-4">
+                        <td className="date-cell">
                           {formatDate(t.transaction_date)}
                         </td>
                         <td className="pr-4">
@@ -341,7 +350,7 @@ export function WorkerCash({
                             ? "Məlumat daxil edilməyib"
                             : formatMoney(remaining)}
                         </td>
-                        <td className="max-w-60 break-words">
+                        <td className="note-cell">
                           {t.notes || "-"}
                           {t.voided_at ? <p>{t.void_reason}</p> : null}
                         </td>
@@ -351,9 +360,7 @@ export function WorkerCash({
                 </tbody>
               </table>
             </div>
-            {!history.length ? (
-              <p className="py-5 text-[var(--muted)]">Ödəniş yoxdur.</p>
-            ) : null}
+            {!history.length ? <EmptyState>Ödəniş yoxdur.</EmptyState> : null}
           </section>
         </>
       )}

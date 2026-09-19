@@ -1,6 +1,6 @@
 import { Save } from "lucide-react";
 import { createServiceJobAction } from "@/app/actions/vehicles";
-import { PageHeader, Panel } from "@/components/app-shell";
+import { PageHeader } from "@/components/app-shell";
 import { PlateInput } from "@/components/plate-input";
 import { SubmitButton } from "@/components/submit-button";
 import { QuoteEditor } from "@/components/quote-editor";
@@ -18,7 +18,7 @@ export default async function NewVehiclePage() {
         title="Yeni avtomobil / servis kartı"
         eyebrow="Sürətli qəbul"
       />
-      <Panel>
+      <div>
         <ActionForm action={createServiceJobAction} className="grid gap-6">
           <section className="grid gap-4 md:grid-cols-2">
             <Field label="Dövlət qeydiyyat nişanı">
@@ -40,7 +40,7 @@ export default async function NewVehiclePage() {
             </Field>
           </section>
 
-          <details className="rounded-lg border border-[var(--border)] p-4">
+          <details className="border-y border-[var(--border)] py-4">
             <summary className="cursor-pointer font-semibold">
               Qeydiyyat məlumatları
             </summary>
@@ -114,7 +114,7 @@ export default async function NewVehiclePage() {
             </div>
           </details>
 
-          <section className="grid gap-4 md:grid-cols-4">
+          <section className="grid items-end gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <Field label="Mənbə">
               <select name="funding_source" className="field">
                 <option value="CUSTOMER_FUNDED">Müştəri hesabına</option>
@@ -141,7 +141,7 @@ export default async function NewVehiclePage() {
                 type="number"
                 min="0"
                 defaultValue="0"
-                className="field text-xl font-semibold"
+                className="field font-semibold"
               />
             </Field>
             <Field label="Qəbul tarixi">
@@ -159,7 +159,12 @@ export default async function NewVehiclePage() {
               />
             </Field>
             <Field label="Qeyd">
-              <input name="notes" maxLength={250} className="field" />
+              <textarea
+                name="notes"
+                maxLength={250}
+                rows={2}
+                className="field"
+              />
             </Field>
           </section>
 
@@ -171,7 +176,7 @@ export default async function NewVehiclePage() {
             Servis kartını saxla
           </SubmitButton>
         </ActionForm>
-      </Panel>
+      </div>
     </>
   );
 }

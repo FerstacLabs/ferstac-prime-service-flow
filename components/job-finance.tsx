@@ -32,13 +32,14 @@ import { bakuDate } from "@/lib/filters";
 import { formatMoney, formatDate } from "@/lib/format";
 import { statusLabels } from "@/components/app-shell";
 import { workerWorkFinance } from "@/lib/worker-finance";
+import { EmptyState } from "@/components/empty-state";
 export function MoneyGrid({
   items,
 }: {
   items: Array<[string, number | null | undefined]>;
 }) {
   return (
-    <dl className="grid grid-cols-2 gap-x-5 gap-y-4 py-4 text-sm md:grid-cols-3 xl:grid-cols-4">
+    <dl className="metric-grid money-grid grid grid-cols-2 gap-x-5 py-4 text-sm md:grid-cols-3 xl:grid-cols-4">
       {items.map(([label, value]) => (
         <div key={label}>
           <dt className="text-[var(--muted)]">{label}</dt>
@@ -115,7 +116,7 @@ export function PaymentForm({
 }) {
   if (remaining <= 0) return null;
   return (
-    <details className="mt-3">
+    <details className="payment-details mt-3">
       <summary className="cursor-pointer text-sm text-[var(--accent)]">
         {label ?? allocationLabels[type]}
       </summary>
@@ -150,7 +151,12 @@ export function PaymentForm({
         </label>
         <label className="text-xs text-[var(--muted)]">
           Qeyd
-          <input name="notes" maxLength={250} className="field mt-1" />
+          <textarea
+            name="notes"
+            rows={2}
+            maxLength={250}
+            className="field mt-1"
+          />
         </label>
         <SubmitButton pendingText="Qeydə alınır...">
           {type === "WORKER_WORK_ITEM"
@@ -174,7 +180,7 @@ export function WorkerCostForm({
       className="mt-4 flex max-w-lg flex-wrap items-end gap-3"
     >
       <input type="hidden" name="id" value={work.id} />
-      <label className="text-xs text-[var(--muted)]">
+      <label className="min-w-0 flex-[1_1_12rem] text-xs text-[var(--muted)]">
         Usta maya dəyəri
         <input
           name="labor_cost"
@@ -233,7 +239,7 @@ export function JobFinance({
             <article
               key={w.id}
               id={`work-${w.id}`}
-              className="border-b border-[var(--border)] py-5"
+              className="cash-work-item border-b border-[var(--border)] py-5"
             >
               <h3 className="font-semibold">{workTitle(w)}</h3>
               <p className="mt-1 text-sm text-[var(--muted)]">
@@ -423,9 +429,15 @@ export function CashHistory({
   data: WorkshopData;
   editable?: boolean;
 }) {
+  if (!cash.length) return <EmptyState>Ödəniş yoxdur.</EmptyState>;
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[720px] text-left text-sm">
+    <div
+      className="table-scroll"
+      role="region"
+      aria-label="Kassa ödəniş tarixçəsi"
+      tabIndex={0}
+    >
+      <table className="data-table w-full min-w-[960px] text-left text-sm">
         <thead>
           <tr className="text-[var(--muted)]">
             {[
@@ -436,7 +448,7 @@ export function CashHistory({
               "Qeyd",
               "",
             ].map((s, i) => (
-              <th className="py-3" key={i}>
+              <th scope="col" className={i === 3 ? "numeric" : ""} key={i}>
                 {s}
               </th>
             ))}
@@ -453,8 +465,10 @@ export function CashHistory({
                 key={t.id}
                 className={`border-t border-[var(--border)] ${t.voided_at ? "opacity-60" : ""}`}
               >
-                <td className="py-3">{formatDate(t.transaction_date)}</td>
-                <td className="font-mono">{job?.vehicles?.plate}</td>
+                <td className="date-cell">{formatDate(t.transaction_date)}</td>
+                <td className="whitespace-nowrap font-mono">
+                  {job?.vehicles?.plate}
+                </td>
                 <td>
                   {allocationLabels[t.allocation_type]}
                   <div className="text-xs text-[var(--muted)]">
@@ -467,21 +481,23 @@ export function CashHistory({
                 <td
                   className={
                     t.direction === "IN"
-                      ? "text-[var(--success)]"
-                      : "text-[var(--warning)]"
+                      ? "numeric text-[var(--success)]"
+                      : "numeric text-[var(--warning)]"
                   }
                 >
                   {t.direction === "IN" ? "+" : "-"}
                   {formatMoney(t.amount)}
                 </td>
-                <td className="max-w-60 break-words">
+                <td className="note-cell">
                   {t.notes}
                   {t.voided_at ? <p>Ləğv: {t.void_reason}</p> : null}
                 </td>
                 <td>
                   {editable && !t.voided_at ? (
                     <details>
-                      <summary className="cursor-pointer">Ləğv et</summary>
+                      <summary className="cursor-pointer whitespace-nowrap text-[var(--danger)]">
+                        Ləğv et
+                      </summary>
                       <ActionForm
                         action={voidPaymentAction}
                         className="mt-2 grid gap-2"
@@ -496,7 +512,7 @@ export function CashHistory({
                           className="field"
                         />
                         <SubmitButton
-                          variant="secondary"
+                          variant="danger"
                           pendingText="Ləğv edilir..."
                         >
                           Ləğvi təsdiqlə
@@ -510,9 +526,6 @@ export function CashHistory({
           })}
         </tbody>
       </table>
-      {!cash.length ? (
-        <p className="py-5 text-[var(--muted)]">Ödəniş yoxdur.</p>
-      ) : null}
     </div>
   );
 }

@@ -1,32 +1,15 @@
 import Image from "next/image";
 import Link from "next/link";
-import {
-  CarFront,
-  ClipboardList,
-  LayoutDashboard,
-  LogOut,
-  Search,
-  ShoppingCart,
-  Users,
-  Wallet,
-} from "lucide-react";
+import { LogOut, Search } from "lucide-react";
 import { QuickActions } from "@/components/quick-actions";
+import { SidebarNav } from "@/components/sidebar-nav";
 import { signOutAction } from "@/app/actions/auth";
-
-const navItems = [
-  { href: "/vehicles", label: "Avtomobillər", icon: CarFront },
-  { href: "/purchases", label: "Satınalma", icon: ShoppingCart },
-  { href: "/workers", label: "İşçilər", icon: Users },
-  { href: "/work", label: "Görüləcək işlər", icon: ClipboardList },
-  { href: "/overview", label: "İcmal", icon: LayoutDashboard },
-  { href: "/kassa", label: "Kassa", icon: Wallet },
-];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[17rem_1fr]">
-      <aside className="no-print border-b border-[var(--border)] bg-[rgba(17,19,24,0.92)] lg:sticky lg:top-0 lg:h-screen lg:border-b-0 lg:border-r">
-        <div className="flex items-center justify-between gap-4 px-4 py-4 lg:block lg:px-5 lg:pb-3">
+    <div className="app-shell min-h-screen lg:grid lg:grid-cols-[17rem_minmax(0,1fr)]">
+      <aside className="app-sidebar no-print border-b border-[var(--border)] bg-[rgba(17,19,24,0.92)] lg:sticky lg:top-0 lg:flex lg:h-dvh lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-r">
+        <div className="flex shrink-0 items-center justify-between gap-4 px-4 py-4 lg:block lg:px-5 lg:pb-3">
           <Link href="/overview" className="flex items-center gap-3 lg:block">
             <Image
               src="/brand/prime-logo.png"
@@ -38,25 +21,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             />
             <span className="sr-only">PRIME Flow</span>
           </Link>
-          <div className="rounded-full border border-[var(--border)] px-3 py-1 text-sm text-[var(--muted)] lg:mt-4 lg:inline-flex">
+          <div className="status-badge border-[var(--border)] text-[var(--muted)] lg:mt-4">
             PRIME Flow
           </div>
         </div>
 
-        <nav className="flex gap-2 overflow-x-auto px-4 pb-4 lg:block lg:px-3">
-          {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="flex min-w-max items-center gap-3 rounded-lg px-3 py-3 text-sm text-[var(--muted)] transition duration-150 hover:bg-[var(--elevated)] hover:text-white active:scale-[0.985] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] lg:mb-1"
-            >
-              <item.icon size={18} />
-              {item.label}
-            </Link>
-          ))}
-        </nav>
+        <SidebarNav />
 
-        <div className="pointer-events-none hidden w-full px-2 pb-5 lg:absolute lg:bottom-0 lg:left-0 lg:block">
+        <div
+          className="pointer-events-none mt-auto hidden w-full shrink-0 px-2 pb-5 pt-4 lg:block"
+          aria-hidden="true"
+        >
           <div className="flex justify-center">
             <Image
               src="/brand/prime-bot-icon.png"
@@ -64,17 +39,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               width={256}
               height={256}
               className="sidebar-bot"
+              loading="eager"
             />
           </div>
         </div>
       </aside>
 
       <main className="min-w-0">
-        <header className="no-print sticky top-0 z-20 border-b border-[var(--border)] bg-[rgba(7,8,10,0.88)] px-4 py-3 backdrop-blur lg:px-8">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        <header className="app-toolbar no-print sticky top-0 z-20 border-b border-[var(--border)] bg-[rgba(7,8,10,0.88)] px-4 py-3 backdrop-blur lg:px-8">
+          <div className="toolbar-content">
             <form
               action="/vehicles"
-              className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--muted)]"
+              className="toolbar-search flex min-w-0 items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-sm text-[var(--muted)]"
             >
               <Search size={16} />
               <input
@@ -93,7 +69,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </form>
           </div>
         </header>
-        <div className="px-4 py-6 lg:px-8">{children}</div>
+        <div className="app-content px-4 py-6 lg:px-8">{children}</div>
       </main>
     </div>
   );
@@ -109,8 +85,8 @@ export function PageHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-      <div>
+    <div className="page-header mb-6 flex flex-wrap items-end justify-between gap-4">
+      <div className="min-w-0 flex-[1_1_20rem]">
         {eyebrow ? (
           <p className="mb-2 text-sm font-medium text-[var(--accent)]">
             {eyebrow}
@@ -120,7 +96,7 @@ export function PageHeader({
           {title}
         </h1>
       </div>
-      {actions}
+      {actions ? <div className="page-actions">{actions}</div> : null}
     </div>
   );
 }
@@ -138,13 +114,7 @@ export function StatusBadge({
     warning: "border-[rgba(232,169,59,0.45)] text-[var(--warning)]",
     danger: "border-[rgba(232,91,91,0.45)] text-[var(--danger)]",
   };
-  return (
-    <span
-      className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${colors[tone]}`}
-    >
-      {children}
-    </span>
-  );
+  return <span className={`status-badge ${colors[tone]}`}>{children}</span>;
 }
 
 export function Panel({
@@ -156,7 +126,7 @@ export function Panel({
 }) {
   return (
     <section
-      className={`print-surface rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 shadow-2xl shadow-black/20 ${className}`}
+      className={`print-surface min-w-0 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-5 ${className}`}
     >
       {children}
     </section>

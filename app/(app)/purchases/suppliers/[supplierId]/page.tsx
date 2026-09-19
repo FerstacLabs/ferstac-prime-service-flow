@@ -36,7 +36,7 @@ export default async function SupplierPage({
         eyebrow="Təchizatçı"
         actions={<ReportActions report="purchases" query={filterQuery(f)} />}
       />
-      <dl className="grid gap-3 border-b border-[var(--border)] pb-5 text-sm sm:grid-cols-3">
+      <dl className="identity-grid grid gap-4 border-b border-[var(--border)] pb-5 text-sm sm:grid-cols-3">
         {[
           [
             "Növ",
@@ -56,7 +56,7 @@ export default async function SupplierPage({
           ["Ünvan", supplier.address],
           ["Qeyd", supplier.notes],
         ].map(([k, v]) => (
-          <div key={k}>
+          <div key={k} className={k === "Qeyd" ? "wide-detail" : undefined}>
             <dt className="text-[var(--muted)]">{k}</dt>
             <dd>{v || "-"}</dd>
           </div>
@@ -71,7 +71,7 @@ export default async function SupplierPage({
           name: j.vehicles?.plate ?? j.job_no,
         }))}
       />
-      <dl className="grid grid-cols-2 gap-4 border-b border-[var(--border)] pb-5 md:grid-cols-6">
+      <dl className="metric-grid grid grid-cols-2 gap-4 border-b border-[var(--border)] pb-5 md:grid-cols-3 2xl:grid-cols-6">
         {[
           ["Alış sayı", String(items.length)],
           ["Maya", formatMoney(cost)],

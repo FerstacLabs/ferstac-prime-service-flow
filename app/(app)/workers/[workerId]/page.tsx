@@ -13,6 +13,7 @@ import { workerDisplayName, workTitle } from "@/lib/supabase/queries";
 import { parseFilters, filterQuery, type SearchParams } from "@/lib/filters";
 import { workerFinance, workerWorkFinance } from "@/lib/worker-finance";
 import { formatDate } from "@/lib/format";
+import { EmptyState } from "@/components/empty-state";
 export default async function WorkerPage({
   params,
   searchParams,
@@ -33,7 +34,7 @@ export default async function WorkerPage({
         eyebrow={worker.worker_roles?.name}
         actions={<ReportActions report="workers" query={filterQuery(f)} />}
       />
-      <dl className="grid gap-4 text-sm sm:grid-cols-3">
+      <dl className="identity-grid grid gap-4 text-sm sm:grid-cols-3">
         {[
           ["Ata adı", worker.father_name],
           ["Telefon", worker.phone],
@@ -44,7 +45,7 @@ export default async function WorkerPage({
           ["Status", worker.active ? "Aktiv" : "Deaktiv"],
           ["Qeyd", worker.notes],
         ].map(([k, v]) => (
-          <div key={k}>
+          <div key={k} className={k === "Qeyd" ? "wide-detail" : undefined}>
             <dt className="text-[var(--muted)]">{k}</dt>
             <dd>{v || "-"}</dd>
           </div>
@@ -81,7 +82,7 @@ export default async function WorkerPage({
           const j = data.jobs.find((j) => j.id === w.service_job_id),
             finance = workerWorkFinance(w, data.cash);
           return (
-            <article key={w.id} className="py-4">
+            <article key={w.id} className="cash-work-item py-5">
               <Link
                 href={`/vehicles/${w.service_job_id}`}
                 className="font-mono text-[var(--accent)]"
@@ -109,6 +110,7 @@ export default async function WorkerPage({
           );
         })}
       </div>
+      {!n.items.length ? <EmptyState>Bu dövrdə iş yoxdur.</EmptyState> : null}
       <Pagination filters={f} total={n.items.length} />
     </>
   );

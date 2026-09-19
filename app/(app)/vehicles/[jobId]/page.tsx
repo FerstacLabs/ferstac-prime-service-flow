@@ -113,9 +113,9 @@ export default async function VehicleDetailPage({
           )}
         </ActionForm>
       </div>
-      <dl className="mb-5 grid gap-4 text-sm sm:grid-cols-3">
+      <dl className="identity-grid mb-5 grid gap-4 text-sm sm:grid-cols-3">
         {info.map(([k, value]) => (
-          <div key={k}>
+          <div key={k} className={k === "Qeyd" ? "wide-detail" : undefined}>
             <dt className="text-[var(--muted)]">{k}</dt>
             <dd className="mt-1 break-words">{value ?? "-"}</dd>
           </div>

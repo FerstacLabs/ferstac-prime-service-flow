@@ -48,7 +48,7 @@ export function QuoteEditor({
         {lines.map((line) => (
           <div
             key={line.key}
-            className="grid items-start gap-3 border-b border-[var(--border)] pb-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,2fr)_auto]"
+            className="quote-row border-b border-[var(--border)] pb-4"
           >
             <SearchSelect
               label={kind === "work" ? "İş / xidmət" : "Detal"}
@@ -76,9 +76,12 @@ export function QuoteEditor({
                 }
               />
             </label>
-            <label className="text-xs text-[var(--muted)]">
-              Qeyd <span className="float-right">{line.note.length}/250</span>
-              <input
+            <label className="quote-note text-xs text-[var(--muted)]">
+              <span className="flex justify-between gap-2">
+                Qeyd <span>{line.note.length}/250</span>
+              </span>
+              <textarea
+                rows={2}
                 maxLength={250}
                 className="field mt-1"
                 value={line.note}
@@ -87,8 +90,9 @@ export function QuoteEditor({
             </label>
             <button
               type="button"
-              className="btn btn-secondary mt-5"
+              className="quote-remove btn btn-danger btn-icon"
               title="Sətri sil"
+              aria-label="Sətri sil"
               onClick={() =>
                 setLines((l) => l.filter((r) => r.key !== line.key))
               }

@@ -29,7 +29,7 @@ export function PurchaseEntry({
   return (
     <ActionForm
       action={savePurchaseAction}
-      className="grid items-end gap-3 md:grid-cols-3 xl:grid-cols-4"
+      className="grid items-end gap-4 sm:grid-cols-2 xl:grid-cols-4"
     >
       <input type="hidden" name="service_job_id" value={jobId} />
       <input
@@ -175,8 +175,9 @@ export function PurchaseEntry({
       ))}
       <label className="text-xs text-[var(--muted)] md:col-span-2">
         Qeyd
-        <input
+        <textarea
           name="notes"
+          rows={3}
           maxLength={250}
           defaultValue={purchase?.notes ?? ""}
           className="field mt-1"

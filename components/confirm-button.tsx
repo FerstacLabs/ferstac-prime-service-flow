@@ -7,7 +7,7 @@ import { WorkshopLoader } from "@/components/workshop-loader";
 export function ConfirmButton({
   message,
   children,
-  danger = false
+  danger = false,
 }: {
   message: string;
   children?: React.ReactNode;
@@ -21,10 +21,19 @@ export function ConfirmButton({
       }}
       disabled={pending}
       aria-disabled={pending}
-      className={danger ? "btn btn-danger" : "btn btn-danger !min-h-0 !p-2"}
+      aria-busy={pending}
+      aria-label={children ? undefined : pending ? "Gözləyin..." : "Sil"}
+      className={
+        danger || children ? "btn btn-danger" : "btn btn-danger btn-icon"
+      }
       title={typeof children === "string" ? children : undefined}
     >
-      {pending ? <WorkshopLoader label="Gözləyin..." compact /> : children ?? <Trash2 size={16} />}
+      <span className="button-state">
+        <span aria-hidden={pending}>{children ?? <Trash2 size={16} />}</span>
+        <span aria-hidden={!pending}>
+          <WorkshopLoader label={children ? "Gözləyin..." : ""} compact />
+        </span>
+      </span>
     </button>
   );
 }

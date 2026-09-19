@@ -51,7 +51,7 @@ export default async function PurchasesPage({
       />
       <section className="mb-6">
         <h2 className="mb-3 text-lg font-semibold">Yeni alış</h2>
-        <form className="mb-4 flex items-end gap-3">
+        <form className="mb-4 grid max-w-3xl grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
           <SearchSelect
             name="job"
             label="Avtomobil / servis kartı"
@@ -112,17 +112,20 @@ export default async function PurchasesPage({
         </summary>
         <ActionForm
           action={saveSupplierAction}
-          className="mt-4 grid gap-3 md:grid-cols-3"
+          className="mt-4 grid items-end gap-4 sm:grid-cols-2 xl:grid-cols-3"
           reset
         >
-          <select
-            name="entity_type"
-            aria-label="Təchizatçı növü"
-            className="field"
-          >
-            <option value="LEGAL_ENTITY">Hüquqi şəxs</option>
-            <option value="INDIVIDUAL">Fiziki şəxs</option>
-          </select>
+          <label className="text-xs text-[var(--muted)]">
+            Təchizatçı növü
+            <select
+              name="entity_type"
+              aria-label="Təchizatçı növü"
+              className="field mt-1"
+            >
+              <option value="LEGAL_ENTITY">Hüquqi şəxs</option>
+              <option value="INDIVIDUAL">Fiziki şəxs</option>
+            </select>
+          </label>
           {[
             ["company_name", "Firma adı"],
             ["shop_name", "Mağaza adı"],
@@ -133,21 +136,21 @@ export default async function PurchasesPage({
             ["phone", "Telefon"],
             ["address", "Ünvan"],
           ].map(([name, label]) => (
-            <input
-              key={name}
-              name={name}
-              aria-label={label}
-              placeholder={label}
-              className="field"
-            />
+            <label key={name} className="text-xs text-[var(--muted)]">
+              {label}
+              <input name={name} aria-label={label} className="field mt-1" />
+            </label>
           ))}
-          <input
-            name="notes"
-            maxLength={250}
-            aria-label="Qeyd"
-            placeholder="Qeyd"
-            className="field"
-          />
+          <label className="text-xs text-[var(--muted)] sm:col-span-2">
+            Qeyd
+            <textarea
+              name="notes"
+              maxLength={250}
+              aria-label="Qeyd"
+              rows={3}
+              className="field mt-1"
+            />
+          </label>
           <SubmitButton pendingText="Saxlanır...">
             Təchizatçını saxla
           </SubmitButton>
@@ -158,7 +161,7 @@ export default async function PurchasesPage({
           <Link
             key={s.id}
             href={`/purchases/suppliers/${s.id}`}
-            className="rounded-lg border border-[var(--border)] p-3 hover:border-[var(--accent)]"
+            className="interactive-card"
           >
             <strong>{supplierDisplayName(s)}</strong>
             <p className="mt-1 text-sm text-[var(--muted)]">
