@@ -43,6 +43,8 @@ import {
   reportPurchaseSourceLabels,
 } from "@/lib/reports/report-format";
 import { handoverReport } from "@/lib/reports/handover";
+import { requireAccess } from "@/lib/supabase/auth";
+import { appRoles, canReport } from "@/lib/security";
 import type {
   PrimeReport,
   ReportScope,
@@ -83,6 +85,7 @@ export async function loadWorkshopReport(
   scope: ReportScope,
   f = parseFilters({}),
 ) {
+  await requireAccess(appRoles.filter((role) => canReport(role, scope)));
   const data = await getWorkshop(f.job || undefined);
   if (
     (scope === "quotation" || scope === "handover" || scope === "vehicle") &&
@@ -158,6 +161,7 @@ export function buildWorkshopReport(
   f = parseFilters({}),
 ): PrimeReport {
   const title = {
+    audit: "Audit jurnalı",
     overview: "İcmal hesabatı",
     purchases: "Satınalma hesabatı",
     workers: "İşçilər hesabatı",

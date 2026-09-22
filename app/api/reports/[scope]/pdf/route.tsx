@@ -4,15 +4,28 @@ import { ReportDocument } from "@/lib/report-pdf";
 import { loadWorkshopReport } from "@/lib/reports/workshop-report";
 import { parseFilters } from "@/lib/filters";
 import type { ReportScope } from "@/lib/reports/report-types";
-import { getCurrentUser } from "@/lib/supabase/auth";
+import { getCurrentAccess } from "@/lib/supabase/auth";
+import { canReport } from "@/lib/security";
+import { loadAuditReport } from "@/lib/audit";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ scope: string }> },
 ) {
-  if (!(await getCurrentUser()))
+  const access = await getCurrentAccess();
+  if (!access)
     return NextResponse.json({ error: "Giriş tələb olunur." }, { status: 401 });
   const { scope } = await params;
+  if (
+    !access.profile.is_active ||
+    !access.profile.session_valid ||
+    access.profile.must_change_password ||
+    !canReport(access.profile.role, scope)
+  )
+    return NextResponse.json(
+      { error: "Giriş icazəsi yoxdur." },
+      { status: 403 },
+    );
   if (
     ![
       "overview",
@@ -22,6 +35,7 @@ export async function GET(
       "quotation",
       "handover",
       "kassa",
+      "audit",
     ].includes(scope)
   ) {
     return NextResponse.json(
@@ -29,10 +43,15 @@ export async function GET(
       { status: 404 },
     );
   }
-  const report = await loadWorkshopReport(
-    scope as ReportScope,
-    parseFilters(Object.fromEntries(new URL(_request.url).searchParams)),
-  );
+  const report =
+    scope === "audit"
+      ? await loadAuditReport(
+          Object.fromEntries(new URL(_request.url).searchParams),
+        )
+      : await loadWorkshopReport(
+          scope as ReportScope,
+          parseFilters(Object.fromEntries(new URL(_request.url).searchParams)),
+        );
   if (!report)
     return NextResponse.json(
       { error: "Hesabat tapılmadı və ya servis hazır deyil." },

@@ -933,6 +933,34 @@ select.field {
     page: wide-report;
   }
 
+  @page audit-report {
+    size: A4 landscape;
+    margin: 12mm 12mm 18mm;
+    background: #fff;
+    @bottom-left {
+      content: "PRIME Tuning & Detailing | PRIME Flow";
+      font-family: Arial, sans-serif;
+      font-size: 8pt;
+      color: #606060;
+    }
+    @bottom-right {
+      content: "Səhifə " counter(page) " / " counter(pages);
+      font-family: Arial, sans-serif;
+      font-size: 8pt;
+      color: #606060;
+    }
+  }
+  html:has(.print-audit) {
+    background: #fff;
+    color-scheme: light;
+  }
+  .print-audit {
+    page: audit-report;
+  }
+  .print-audit .print-report-footer {
+    display: none;
+  }
+
   body {
     background: #fff;
     color: #111;

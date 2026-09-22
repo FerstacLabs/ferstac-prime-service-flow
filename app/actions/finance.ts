@@ -10,13 +10,18 @@ import {
 } from "@/lib/workshop-validation";
 
 export async function refreshWorkshop() {
+  await getAuthedSupabase();
   revalidatePath("/", "layout");
 }
 export async function createCatalogAction(
   kind: "work" | "part" | "role",
   name: string,
 ) {
-  const { supabase } = await getAuthedSupabase();
+  const { supabase } = await getAuthedSupabase(
+    ...(kind === "role"
+      ? (["ADMIN"] as const)
+      : (["ADMIN", "INTAKE"] as const)),
+  );
   const { data, error } = await supabase.rpc("create_catalog_entry", {
     p_kind: z.enum(["work", "part", "role"]).parse(kind),
     p_name: name,
@@ -26,7 +31,7 @@ export async function createCatalogAction(
   return { item: data as { id: string; name: string } };
 }
 export async function recordPaymentAction(form: FormData) {
-  const { supabase } = await getAuthedSupabase();
+  const { supabase } = await getAuthedSupabase("ADMIN", "CASHIER");
   const amount = moneySchema.parse(form.get("amount"));
   if (amount <= 0) return { error: "Ödəniş sıfırdan böyük olmalıdır." };
   const { error } = await supabase.rpc("record_cash_payment", {
@@ -53,26 +58,22 @@ export async function recordPaymentAction(form: FormData) {
   await refreshWorkshop();
 }
 export async function setWorkerCostAction(form: FormData) {
-  const { supabase } = await getAuthedSupabase();
-  const { error } = await supabase
-    .from("job_work_items")
-    .update({
-      labor_cost: moneySchema.parse(form.get("labor_cost")),
-      labor_cost_known: true,
-    })
-    .eq("id", uuidValue(form, "id"));
+  const { supabase } = await getAuthedSupabase("ADMIN", "CASHIER");
+  const { error } = await supabase.rpc("set_worker_cost", {
+    p_cost: moneySchema.parse(form.get("labor_cost")),
+    p_id: uuidValue(form, "id"),
+  });
   if (error) throw new Error(error.message);
   await refreshWorkshop();
 }
 export async function voidPaymentAction(form: FormData) {
-  const { supabase } = await getAuthedSupabase();
+  const { supabase } = await getAuthedSupabase("ADMIN");
   const reason = noteValue(form, "void_reason");
   if (!reason) throw new Error("Ləğv səbəbi tələb olunur.");
-  const { error } = await supabase
-    .from("cash_transactions")
-    .update({ voided_at: new Date().toISOString(), void_reason: reason })
-    .eq("id", uuidValue(form, "id"))
-    .is("voided_at", null);
+  const { error } = await supabase.rpc("void_cash_payment", {
+    p_id: uuidValue(form, "id"),
+    p_reason: reason,
+  });
   if (error) throw new Error(error.message);
   await refreshWorkshop();
 }

@@ -33,6 +33,31 @@ async function rows<T>(table: string, select: string, jobId?: string) {
   return result;
 }
 export async function getWorkshop(jobId?: string) {
+  const { supabase, profile } = await getAuthedSupabase();
+  if (profile.role === "INTAKE") {
+    const [jobs, parts] = await Promise.all([
+      rows<DbServiceJob>("service_jobs", "*,vehicles(*)", jobId),
+      rows<RequiredPart>("job_required_parts", "*,part_catalog(name)", jobId),
+    ]);
+    const work: DbWorkItem[] = [];
+    for (let offset = 0; ; offset += 500) {
+      const { data, error } = await supabase
+        .rpc("intake_work_items", { p_job: jobId ?? null })
+        .range(offset, offset + 499);
+      if (error) throw error;
+      work.push(...((data ?? []) as DbWorkItem[]));
+      if (!data || data.length < 500) break;
+    }
+    return {
+      jobs,
+      parts,
+      work,
+      purchases: [] as DbPurchase[],
+      cash: [] as CashTransaction[],
+      workers: [] as DbWorker[],
+      suppliers: [] as DbSupplier[],
+    };
+  }
   const [jobs, work, parts, purchases, cash, workers, suppliers] =
     await Promise.all([
       rows<DbServiceJob>("service_jobs", "*,vehicles(*)", jobId),

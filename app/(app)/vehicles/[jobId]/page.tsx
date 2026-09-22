@@ -1,3 +1,4 @@
+import { requireAccess } from "@/lib/supabase/auth";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
@@ -19,16 +20,19 @@ import { SubmitButton } from "@/components/submit-button";
 import { Archive, ArchiveRestore } from "lucide-react";
 import { getWorkshop } from "@/lib/supabase/workshop";
 import { formatDate, formatMoney } from "@/lib/format";
+import { IntakeDetail } from "@/components/intake-detail";
 export const dynamic = "force-dynamic";
 export default async function VehicleDetailPage({
   params,
 }: {
   params: Promise<{ jobId: string }>;
 }) {
+  const { profile } = await requireAccess(["ADMIN", "INTAKE"]);
   const { jobId } = await params,
     data = await getWorkshop(jobId),
     job = data.jobs[0];
   if (!job) notFound();
+  if (profile.role === "INTAKE") return <IntakeDetail data={data} />;
   const v = job.vehicles!;
   const info: Array<[string, string | number | null | undefined]> = [
     ["Müştəri", job.customer_name],
@@ -83,6 +87,11 @@ export default async function VehicleDetailPage({
         </div>
       ) : null}
       <div className="mb-5 flex flex-wrap items-start gap-3">
+        {!job.archived_at ? (
+          <Link href={`/vehicles/${job.id}/edit`} className="btn btn-secondary">
+            Qeydiyyatı redaktə et
+          </Link>
+        ) : null}
         <Link href={`/kassa?job=${job.id}`} className="btn btn-primary">
           Kassa
         </Link>

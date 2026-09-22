@@ -1,3 +1,4 @@
+import { requireAccess } from "@/lib/supabase/auth";
 import { Save } from "lucide-react";
 import { createServiceJobAction } from "@/app/actions/vehicles";
 import { PageHeader } from "@/components/app-shell";
@@ -10,6 +11,7 @@ import { getMasterData } from "@/lib/supabase/queries";
 export const dynamic = "force-dynamic";
 
 export default async function NewVehiclePage() {
+  await requireAccess(["ADMIN", "INTAKE"]);
   const { workCatalog, partCatalog } = await getMasterData();
 
   return (

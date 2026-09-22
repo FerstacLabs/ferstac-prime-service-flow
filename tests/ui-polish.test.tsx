@@ -34,7 +34,7 @@ describe("shared UI states", () => {
     ["/kassa", "Kassa"],
   ])("marks only the matching sidebar route for %s", (pathname, label) => {
     state.pathname = pathname;
-    const { container } = render(<SidebarNav />);
+    const { container } = render(<SidebarNav role="ADMIN" />);
     expect(container.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
     expect(
       screen.getByRole("link", { name: label }).getAttribute("aria-current"),
@@ -108,6 +108,28 @@ describe("quote row interaction", () => {
 });
 
 describe("print presentation", () => {
+  it("scopes audit print pagination without application navigation", () => {
+    const { container } = render(
+      <PrintReport
+        report={{
+          scope: "audit",
+          title: "Audit jurnalı",
+          generatedAt: "22.09.2026",
+          orientation: "landscape",
+          filters: "Dövr: 01.09.2026 - 22.09.2026",
+          summary: [],
+          sections: [],
+        }}
+      />,
+    );
+    expect(
+      container.querySelector("main.print-audit.print-landscape"),
+    ).not.toBeNull();
+    expect(screen.getByAltText("PRIME")).not.toBeNull();
+    expect(screen.getByText("Dövr: 01.09.2026 - 22.09.2026")).not.toBeNull();
+    expect(container.querySelector("nav")).toBeNull();
+  });
+
   it("keeps report values and long details intact in full-width companion rows", () => {
     const report: PrimeReport = {
       scope: "kassa",

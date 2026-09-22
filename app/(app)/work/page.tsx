@@ -1,3 +1,4 @@
+import { requireAccess } from "@/lib/supabase/auth";
 import Link from "next/link";
 import { updateWorkItemAction } from "@/app/actions/workers";
 import {
@@ -30,6 +31,7 @@ export default async function WorkPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
+  await requireAccess(["ADMIN"]);
   const f = parseFilters(await searchParams),
     data = await getWorkshop(),
     master = await getMasterData(),

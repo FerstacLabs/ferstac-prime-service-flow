@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { normalizeAzPlate, isValidAzPlate } from "@/lib/plate";
 import { getAuthedSupabase } from "@/lib/supabase/queries";
+import { vehicleIntakeFields, jobIntakeFields } from "@/lib/intake-fields";
+import { z } from "zod";
 import {
   moneySchema,
   noteValue,
@@ -22,7 +24,7 @@ function numberOrNull(value: FormDataEntryValue | null) {
 }
 
 export async function createServiceJobAction(formData: FormData) {
-  const { supabase, user } = await getAuthedSupabase();
+  const { supabase, user } = await getAuthedSupabase("ADMIN", "INTAKE");
   const plate = normalizeAzPlate(String(formData.get("plate") ?? ""));
   if (!isValidAzPlate(plate))
     throw new Error("Dövlət qeydiyyat nişanı 99-AA-999 formatında olmalıdır.");
@@ -116,17 +118,77 @@ export async function restoreServiceJobAction(formData: FormData) {
 }
 
 async function setArchiveState(formData: FormData, archived: boolean) {
-  const { supabase, user } = await getAuthedSupabase();
+  const { supabase, profile } = await getAuthedSupabase("ADMIN");
   const id = uuidValue(formData, "id");
   const { error } = await supabase
     .from("service_jobs")
     .update({ archived_at: archived ? new Date().toISOString() : null })
     .eq("id", id)
-    .eq("owner_user_id", user.id)
+    .eq("organization_id", profile.organization_id)
     .select("id")
     .single();
   if (error)
     throw new Error("Servis kartının arxiv vəziyyəti dəyişdirilə bilmədi.");
   revalidatePath("/", "layout");
   redirect(`/vehicles?visibility=${archived ? "archived" : "active"}`);
+}
+
+export async function updateVehicleIntakeAction(form: FormData) {
+  const { supabase } = await getAuthedSupabase("ADMIN", "INTAKE");
+  const readFields = (fields: typeof vehicleIntakeFields) =>
+    Object.fromEntries(
+      fields.map(({ name, type, required }) => {
+        const raw = String(form.get(name) ?? "").trim();
+        if (required && !raw)
+          throw new Error("Tələb olunan sahələri doldurun.");
+        return [
+          name,
+          !raw
+            ? null
+            : type === "number"
+              ? z.coerce.number().finite().nonnegative().parse(raw)
+              : type === "date"
+                ? z.iso.date().parse(raw)
+                : z.string().max(500).parse(raw),
+        ];
+      }),
+    );
+  const vehicle = readFields(vehicleIntakeFields);
+  vehicle.plate = normalizeAzPlate(String(vehicle.plate));
+  if (!isValidAzPlate(String(vehicle.plate)))
+    return { error: "Dövlət qeydiyyat nişanı 99-AA-999 formatında olmalıdır." };
+  const received = String(form.get("received_at") ?? "");
+  const { error } = await supabase.rpc("update_vehicle_intake", {
+    p_job: uuidValue(form, "service_job_id"),
+    p_vehicle: vehicle,
+    p_details: {
+      ...readFields(jobIntakeFields),
+      agreed_budget: moneySchema.parse(form.get("agreed_budget")),
+      funding_source: z
+        .enum(["CUSTOMER_FUNDED", "INSURANCE_CLAIM"])
+        .parse(form.get("funding_source")),
+      received_at: received
+        ? new Date(`${received}+04:00`).toISOString()
+        : undefined,
+      notes: noteValue(form),
+    },
+  });
+  if (error) return { error: "Qeydiyyat saxlanmadı. Məlumatları yoxlayın." };
+  revalidatePath("/", "layout");
+}
+
+export async function saveQuoteLineAction(form: FormData) {
+  const { supabase } = await getAuthedSupabase("ADMIN", "INTAKE");
+  const { error } = await supabase.rpc("save_quote_line", {
+    p_job: uuidValue(form, "service_job_id"),
+    p_kind: z.enum(["work", "part"]).parse(form.get("kind")),
+    p_catalog: uuidValue(form, "catalog_id"),
+    p_price: moneySchema.parse(form.get("quoted_price")),
+    p_note: noteValue(form),
+  });
+  if (error)
+    return {
+      error: "Təklif saxlanmadı. Qiyməti və bağlı əməliyyatları yoxlayın.",
+    };
+  revalidatePath("/", "layout");
 }

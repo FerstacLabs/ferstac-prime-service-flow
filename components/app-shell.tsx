@@ -1,16 +1,26 @@
 import Image from "next/image";
 import Link from "next/link";
-import { LogOut, Search } from "lucide-react";
+import { LogOut, Search, KeyRound } from "lucide-react";
 import { QuickActions } from "@/components/quick-actions";
 import { SidebarNav } from "@/components/sidebar-nav";
 import { signOutAction } from "@/app/actions/auth";
+import { roleHome, type AppRole } from "@/lib/security";
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({
+  children,
+  role,
+}: {
+  children: React.ReactNode;
+  role: AppRole;
+}) {
   return (
     <div className="app-shell min-h-screen lg:grid lg:grid-cols-[17rem_minmax(0,1fr)]">
       <aside className="app-sidebar no-print border-b border-[var(--border)] bg-[rgba(17,19,24,0.92)] lg:sticky lg:top-0 lg:flex lg:h-dvh lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-r">
         <div className="flex shrink-0 items-center justify-between gap-4 px-4 py-4 lg:block lg:px-5 lg:pb-3">
-          <Link href="/overview" className="flex items-center gap-3 lg:block">
+          <Link
+            href={roleHome(role)}
+            className="flex items-center gap-3 lg:block"
+          >
             <Image
               src="/brand/prime-logo.png"
               alt="PRIME"
@@ -26,7 +36,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
 
-        <SidebarNav />
+        <SidebarNav role={role} />
 
         <div
           className="pointer-events-none mt-auto hidden w-full shrink-0 px-2 pb-5 pt-4 lg:block"
@@ -49,7 +59,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <header className="app-toolbar no-print sticky top-0 z-20 border-b border-[var(--border)] bg-[rgba(7,8,10,0.88)] px-4 py-3 backdrop-blur lg:px-8">
           <div className="toolbar-content">
             <form
-              action="/vehicles"
+              action={role === "CASHIER" ? "/kassa" : "/vehicles"}
               className="toolbar-search flex min-w-0 items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-sm text-[var(--muted)]"
             >
               <Search size={16} />
@@ -60,7 +70,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 placeholder="Nömrə ilə axtar: 10-PR-030"
               />
             </form>
-            <QuickActions />
+            <QuickActions role={role} />
+            <Link
+              href="/change-password"
+              className="btn btn-secondary btn-icon"
+              title="Şifrəni dəyiş"
+              aria-label="Şifrəni dəyiş"
+            >
+              <KeyRound size={16} />
+            </Link>
             <form action={signOutAction}>
               <button className="btn btn-secondary text-[var(--muted)]">
                 <LogOut size={16} />

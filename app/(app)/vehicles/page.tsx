@@ -1,3 +1,4 @@
+import { requireAccess } from "@/lib/supabase/auth";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import {
@@ -24,6 +25,7 @@ export default async function VehiclesPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
+  const { profile } = await requireAccess(["ADMIN", "INTAKE"]);
   const f = parseFilters(await searchParams),
     data = await getWorkshop(),
     jobs = selectJobs(data, f);
@@ -74,7 +76,9 @@ export default async function VehiclesPage({
                     n.detailed ? "Təklif" : "Əvvəlki büdcə",
                     formatMoney(n.quotedTotal),
                   ],
-                  ["Məlum maya", formatMoney(n.totalCost)],
+                  ...(profile.role === "ADMIN"
+                    ? [["Məlum maya", formatMoney(n.totalCost)]]
+                    : []),
                   [
                     "İş",
                     `${work.filter((w) => w.status === "DONE").length}/${work.length}`,

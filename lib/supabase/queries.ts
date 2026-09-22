@@ -1,4 +1,5 @@
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { requireAccess } from "@/lib/supabase/auth";
+import type { AppRole } from "@/lib/security";
 import type {
   FundingSource,
   JobStatus,
@@ -161,12 +162,8 @@ export type DbWorkerRole = {
   sort_order: number;
 };
 
-export async function getAuthedSupabase() {
-  const supabase = await createSupabaseServerClient();
-  if (!supabase) throw new Error("Supabase env dəyişənləri yoxdur.");
-  const { data, error } = await supabase.auth.getUser();
-  if (error || !data.user) throw new Error("Sessiya tapılmadı.");
-  return { supabase, user: data.user };
+export async function getAuthedSupabase(...roles: AppRole[]) {
+  return requireAccess(roles.length ? roles : undefined);
 }
 
 export async function getJobs() {

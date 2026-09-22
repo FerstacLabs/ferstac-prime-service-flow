@@ -11,13 +11,25 @@ export async function createSupabaseServerClient() {
   }
 
   return createServerClient(url, anonKey, {
+    cookieOptions: {
+      sameSite: "lax",
+      secure:
+        process.env.NEXT_PUBLIC_APP_URL?.startsWith("https://") ??
+        process.env.NODE_ENV === "production",
+    },
     cookies: {
       getAll() {
         return cookieStore.getAll();
       },
       setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
-      }
-    }
+        try {
+          cookiesToSet.forEach(({ name, value, options }) =>
+            cookieStore.set(name, value, options),
+          );
+        } catch {
+          // Server Components cannot write cookies; the proxy persists refreshed sessions.
+        }
+      },
+    },
   });
 }

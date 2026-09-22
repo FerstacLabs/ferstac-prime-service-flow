@@ -1,4 +1,5 @@
 export type ReportScope =
+  | "audit"
   | "overview"
   | "purchases"
   | "workers"

@@ -47,7 +47,7 @@ export function PrintReport({ report }: { report: PrimeReport }) {
     );
   return (
     <main
-      className={`print-report ${report.orientation === "landscape" ? "print-landscape" : ""}`}
+      className={`print-report ${report.orientation === "landscape" ? "print-landscape" : ""} ${report.scope === "audit" ? "print-audit" : ""}`}
     >
       <PrintTrigger />
       <header className="print-report-header">

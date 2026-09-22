@@ -12,7 +12,7 @@ const text = (value: FormDataEntryValue | null) => {
 };
 
 export async function saveSupplierAction(formData: FormData) {
-  const { supabase, user } = await getAuthedSupabase();
+  const { supabase, user } = await getAuthedSupabase("ADMIN");
   const id = text(formData.get("id"));
   const payload = {
     owner_user_id: user.id,
@@ -34,7 +34,10 @@ export async function saveSupplierAction(formData: FormData) {
   if (!payload.company_name && !payload.shop_name && !payload.first_name)
     throw new Error("Firma, mağaza və ya şəxsin adı tələb olunur.");
   const query = id
-    ? supabase.from("suppliers").update(payload).eq("id", id)
+    ? supabase
+        .from("suppliers")
+        .update({ ...payload, owner_user_id: undefined })
+        .eq("id", id)
     : supabase.from("suppliers").insert(payload);
   const { error } = await query;
   if (error) throw error;
@@ -42,7 +45,7 @@ export async function saveSupplierAction(formData: FormData) {
 }
 
 export async function archiveSupplierAction(formData: FormData) {
-  const { supabase } = await getAuthedSupabase();
+  const { supabase } = await getAuthedSupabase("ADMIN");
   const { error } = await supabase
     .from("suppliers")
     .update({ active: false })
@@ -52,7 +55,7 @@ export async function archiveSupplierAction(formData: FormData) {
 }
 
 export async function savePurchaseAction(formData: FormData) {
-  const { supabase, user } = await getAuthedSupabase();
+  const { supabase, user } = await getAuthedSupabase("ADMIN");
   const quantity = z.coerce
     .number()
     .positive()
@@ -120,7 +123,7 @@ export async function savePurchaseAction(formData: FormData) {
 }
 
 export async function deletePurchaseAction(formData: FormData) {
-  const { supabase } = await getAuthedSupabase();
+  const { supabase } = await getAuthedSupabase("ADMIN");
   const { error } = await supabase
     .from("purchases")
     .update({ voided_at: new Date().toISOString() })

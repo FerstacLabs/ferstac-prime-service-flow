@@ -1,3 +1,4 @@
+import { requireAccess } from "@/lib/supabase/auth";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader, statusLabels } from "@/components/app-shell";
@@ -21,6 +22,7 @@ export default async function WorkerPage({
   params: Promise<{ workerId: string }>;
   searchParams: Promise<SearchParams>;
 }) {
+  await requireAccess(["ADMIN"]);
   const { workerId } = await params,
     f = parseFilters({ ...(await searchParams), worker: workerId }),
     data = await getWorkshop(),

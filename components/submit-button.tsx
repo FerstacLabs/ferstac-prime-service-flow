@@ -9,18 +9,26 @@ export function SubmitButton({
   pendingText = "Saxlanır...",
   variant = "primary",
   className,
+  name,
+  value,
+  disabled = false,
 }: {
   children: React.ReactNode;
   pendingText?: string;
   variant?: "primary" | "secondary" | "danger";
   className?: string;
+  name?: string;
+  value?: string;
+  disabled?: boolean;
 }) {
   const { pending } = useFormStatus();
   return (
     <button
       className={cn("btn", `btn-${variant}`, className)}
-      disabled={pending}
-      aria-disabled={pending}
+      name={name}
+      value={value}
+      disabled={pending || disabled}
+      aria-disabled={pending || disabled}
       aria-busy={pending}
     >
       <span className="button-state">

@@ -202,10 +202,12 @@ export function JobFinance({
   job,
   data,
   editable = false,
+  showQuotation = true,
 }: {
   job: DbServiceJob;
   data: WorkshopData;
   editable?: boolean;
+  showQuotation?: boolean;
 }) {
   const work = data.work.filter((w) => w.service_job_id === job.id),
     parts = data.parts.filter((p) => p.service_job_id === job.id),
@@ -214,12 +216,14 @@ export function JobFinance({
   return (
     <>
       <FinanceSummary job={job} data={data} />
-      <div className="my-5 flex flex-wrap gap-6">
-        <div>
-          <h2 className="mb-2 text-sm font-semibold">Qiymət təklifi</h2>
-          <ReportActions report="quotation" query={`job=${job.id}`} />
+      {showQuotation ? (
+        <div className="my-5 flex flex-wrap gap-6">
+          <div>
+            <h2 className="mb-2 text-sm font-semibold">Qiymət təklifi</h2>
+            <ReportActions report="quotation" query={`job=${job.id}`} />
+          </div>
         </div>
-      </div>
+      ) : null}
       {!n.detailed && editable ? (
         <PaymentForm
           job={job.id}

@@ -1,3 +1,4 @@
+import { requireAccess } from "@/lib/supabase/auth";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/app-shell";
 import { ReportActions } from "@/components/report-actions";
@@ -19,6 +20,7 @@ export default async function SupplierPage({
   params: Promise<{ supplierId: string }>;
   searchParams: Promise<SearchParams>;
 }) {
+  await requireAccess(["ADMIN"]);
   const { supplierId } = await params,
     f = parseFilters({ ...(await searchParams), supplier: supplierId }),
     data = await getWorkshop(),

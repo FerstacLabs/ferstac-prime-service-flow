@@ -52,9 +52,11 @@ export function CashViews({ view }: { view: Filters["view"] }) {
 export function WorkerCash({
   data,
   filters: f,
+  admin = false,
 }: {
   data: WorkshopData;
   filters: Filters;
+  admin?: boolean;
 }) {
   const workers = selectWorkerFinances(data, f),
     selected = f.worker
@@ -175,12 +177,14 @@ export function WorkerCash({
                 {selected.worker.worker_roles?.name || "-"}
               </p>
             </div>
-            <Link
-              href={`/workers/${selected.worker.id}`}
-              className="btn btn-secondary"
-            >
-              İşçi kartı
-            </Link>
+            {admin ? (
+              <Link
+                href={`/workers/${selected.worker.id}`}
+                className="btn btn-secondary"
+              >
+                İşçi kartı
+              </Link>
+            ) : null}
           </div>
           <p className="mt-4 text-sm text-[var(--muted)]">
             Servis kartı:{" "}
@@ -213,7 +217,11 @@ export function WorkerCash({
                 >
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <Link
-                      href={`/vehicles/${work.service_job_id}`}
+                      href={
+                        admin
+                          ? `/vehicles/${work.service_job_id}`
+                          : `/kassa?job=${work.service_job_id}`
+                      }
                       className="font-mono font-semibold text-[var(--accent)]"
                     >
                       {job?.vehicles?.plate} · {job?.vehicles?.make}{" "}
@@ -311,14 +319,22 @@ export function WorkerCash({
                         <td className="pr-4">
                           <Link
                             className="text-[var(--accent)]"
-                            href={`/vehicles/${item.service_job_id}`}
+                            href={
+                              admin
+                                ? `/vehicles/${item.service_job_id}`
+                                : `/kassa?job=${item.service_job_id}`
+                            }
                           >
                             {job?.vehicles?.plate}
                           </Link>
                         </td>
                         <td className="max-w-60 pr-4">
                           <Link
-                            href={`/vehicles/${item.service_job_id}#work-${item.id}`}
+                            href={
+                              admin
+                                ? `/vehicles/${item.service_job_id}#work-${item.id}`
+                                : `/kassa?job=${item.service_job_id}#work-${item.id}`
+                            }
                             className="hover:underline"
                           >
                             {workTitle(item)}

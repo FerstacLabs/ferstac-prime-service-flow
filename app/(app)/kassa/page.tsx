@@ -1,3 +1,4 @@
+import { requireAccess } from "@/lib/supabase/auth";
 import Link from "next/link";
 import { PageHeader } from "@/components/app-shell";
 import { ReportActions } from "@/components/report-actions";
@@ -19,6 +20,7 @@ export default async function CashPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
+  const { profile } = await requireAccess(["ADMIN", "CASHIER"]);
   const f = parseFilters(await searchParams),
     data = await getWorkshop(),
     jobs = selectJobs(data, f, true),
@@ -34,7 +36,7 @@ export default async function CashPage({
           actions={<ReportActions report="kassa" query={filterQuery(f)} />}
         />
         <CashViews view={f.view} />
-        <WorkerCash data={data} filters={f} />
+        <WorkerCash data={data} filters={f} admin={profile.role === "ADMIN"} />
       </>
     );
   return (
@@ -64,15 +66,26 @@ export default async function CashPage({
         <>
           <div className="my-4 flex flex-wrap items-center justify-between gap-3">
             <Link
-              href={`/vehicles/${selected.id}`}
+              href={
+                profile.role === "ADMIN"
+                  ? `/vehicles/${selected.id}`
+                  : `/kassa?job=${selected.id}`
+              }
               className="font-mono text-xl font-semibold"
             >
               {selected.vehicles?.plate} · {selected.vehicles?.make}{" "}
               {selected.vehicles?.model}
             </Link>
-            <ReportActions report={`vehicle/${selected.id}`} />
+            {profile.role === "ADMIN" ? (
+              <ReportActions report={`vehicle/${selected.id}`} />
+            ) : null}
           </div>
-          <JobFinance job={selected} data={data} editable />
+          <JobFinance
+            job={selected}
+            data={data}
+            editable
+            showQuotation={profile.role === "ADMIN"}
+          />
         </>
       ) : (
         <>
@@ -148,7 +161,11 @@ export default async function CashPage({
       )}
       <section className="mt-8">
         <h2 className="mb-3 text-lg font-semibold">Kassa jurnalı</h2>
-        <CashHistory cash={pageRows(cash, f)} data={data} editable />
+        <CashHistory
+          cash={pageRows(cash, f)}
+          data={data}
+          editable={profile.role === "ADMIN"}
+        />
         <Pagination filters={f} total={cash.length} />
       </section>
     </>

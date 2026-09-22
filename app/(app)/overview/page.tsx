@@ -1,3 +1,4 @@
+import { requireAccess } from "@/lib/supabase/auth";
 import Link from "next/link";
 import { PageHeader, statusLabels } from "@/components/app-shell";
 import { ReportActions } from "@/components/report-actions";
@@ -8,6 +9,7 @@ import { formatMoney } from "@/lib/format";
 import { EmptyState } from "@/components/empty-state";
 export const dynamic = "force-dynamic";
 export default async function OverviewPage() {
+  await requireAccess(["ADMIN"]);
   const data = await getWorkshop(),
     jobs = selectJobs(data).filter((j) => j.status !== "DELIVERED"),
     totals = jobs.map((j) =>

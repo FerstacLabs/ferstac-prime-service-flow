@@ -1,3 +1,4 @@
+import { requireAccess } from "@/lib/supabase/auth";
 import Link from "next/link";
 import { saveSupplierAction } from "@/app/actions/purchases";
 import { PageHeader } from "@/components/app-shell";
@@ -25,6 +26,7 @@ export default async function PurchasesPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
+  await requireAccess(["ADMIN"]);
   const f = parseFilters(await searchParams),
     data = await getWorkshop(),
     items = selectPurchases(data, f),

@@ -11,7 +11,7 @@ const nullable = (value: FormDataEntryValue | null) => {
 };
 
 export async function saveWorkerAction(formData: FormData) {
-  const { supabase, user } = await getAuthedSupabase();
+  const { supabase, user } = await getAuthedSupabase("ADMIN");
   const id = nullable(formData.get("id"));
   const payload = {
     owner_user_id: user.id,
@@ -35,7 +35,10 @@ export async function saveWorkerAction(formData: FormData) {
     notes: noteValue(formData),
   };
   const query = id
-    ? supabase.from("workers").update(payload).eq("id", id)
+    ? supabase
+        .from("workers")
+        .update({ ...payload, owner_user_id: undefined })
+        .eq("id", id)
     : supabase.from("workers").insert(payload);
   const { error } = await query;
   if (error) throw error;
@@ -44,7 +47,7 @@ export async function saveWorkerAction(formData: FormData) {
 }
 
 export async function updateWorkItemAction(formData: FormData) {
-  const { supabase } = await getAuthedSupabase();
+  const { supabase } = await getAuthedSupabase("ADMIN");
   const status = z
     .enum(["TODO", "IN_PROGRESS", "DONE", "CANCELLED"])
     .parse(formData.get("status"));

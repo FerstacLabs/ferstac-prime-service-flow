@@ -1,6 +1,6 @@
 # PRIME Flow
 
-PRIME Flow is a single-user workshop management app for PRIME Tuning & Detailing. It covers vehicle intake, service cards, planned work, purchases, suppliers, workers, financial summaries, printable reports and downloadable PDFs.
+PRIME Flow is a shared-workspace workshop management app for PRIME Tuning & Detailing, with ADMIN, CASHIER and INTAKE staff roles. It covers vehicle intake, service cards, planned work, purchases, suppliers, workers, financial summaries, printable reports and downloadable PDFs.
 
 ## Stack
 
@@ -28,8 +28,8 @@ Configure Supabase before using operational pages. The proxy protects the operat
 3. Run `supabase/seed.sql` for master data.
 4. Run `supabase/migrations/0002_workshop_finance.sql`.
 5. Run `supabase/migrations/0003_worker_advances.sql`.
-6. Create the admin user from Supabase Auth dashboard.
-7. Add these values to `.env.local` and Vercel:
+6. Run `supabase/migrations/0004_rbac_audit_security.sql`.
+7. Add these values to `.env.local` and Vercel (the service-role key is server-only):
 
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=
@@ -38,17 +38,19 @@ SUPABASE_SERVICE_ROLE_KEY=
 NEXT_PUBLIC_APP_URL=
 ```
 
-The data model uses UUID primary keys, keeps `vehicles.plate` as the visible unique business identifier per owner, and uses UUID foreign keys for jobs, purchases, suppliers, workers and work items. Private tables have RLS policies scoped to `auth.uid()`.
+8. Run `node scripts/provision-prime-users.mjs` in a trusted operator environment; transfer the one-time temporary passwords securely. Disable public signup in Supabase Auth. Complete first-login password changes.
+
+The data model uses UUID primary keys and organization-scoped RLS. The three staff users share the same records; historical `owner_user_id` values remain creator metadata. Plates are unique within the organization. See [Production Security](docs/PRODUCTION_SECURITY.md) for the role matrix, provisioning, migration safety, backups and production checklist.
 
 ### Existing Production Database
 
-Back up the existing database, then apply pending migrations in order before deploying the updated app. If `0002_workshop_finance.sql` is already applied, apply **only** `supabase/migrations/0003_worker_advances.sql`. Otherwise apply `0002` followed by `0003`. Do not rerun `0001` or reseed production. Both migrations are transactional and forward-only, preserving historical rows, costs, budgets and master catalogs. Use the SQL Editor or your existing migration runner. This repository does not automatically apply remote migrations.
+Back up the existing database, then apply only pending migrations in order through `supabase/migrations/0004_rbac_audit_security.sql` before deploying this version. If 0001-0003 are already applied, apply only 0004. Do not rerun 0001-0003 or reseed production. Use the SQL Editor or your existing migration runner. This repository does not automatically apply remote migrations. 0004 preserves original creator IDs, historical rows and balances, bootstraps the original owner as admin, and aborts rather than silently merging ambiguous legacy owners.
 
 `0002` adds private custom catalogs, customer quote lines, required parts and an owner-scoped payment ledger. Existing supplier `paid_amount` values are backfilled once into the ledger; the purchase field subsequently becomes a compatibility mirror, never an extra payment. Historical non-supplier paid amounts are retained without inventing cash transactions. Existing `labor_cost` remains actual worker cost; unknown historical zero costs and missing line quotes remain explicitly unknown.
 
 `0003` replaces two financial guard functions to allow worker advances for TODO/IN_PROGRESS work against known agreed cost. It creates no tables and rewrites no transactions. Apply it before using the new payment controls; `0002` alone still rejects active-work payments.
 
-All normal application access uses the public Supabase key with the user's session and RLS. A service-role key is not required for these workflows and must never be exposed in client code.
+Normal workshop reads and writes use the public Supabase key with the user's session and RLS. The server-only service-role key is required for protected username lookup, password/security operations and operator provisioning; it must never be exposed in client code. Audit is append-only; only ADMIN can void payments, retaining the original and an immutable reversal reference.
 
 ## Vercel Deployment
 
