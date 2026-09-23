@@ -2,6 +2,8 @@
 import { describe, expect, it } from "vitest";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { cloneElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { PrintReport } from "@/components/reports/print-report";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { workerCashFixture } from "./fixtures/worker-cash";
@@ -53,7 +55,183 @@ function fixture() {
 }
 const reportFor = (data = fixture()) =>
   buildWorkshopReport("quotation", data, parseFilters({ job: "job" }));
+
+function sevenLineFixture() {
+  const data = fixture();
+  data.jobs[0] = {
+    ...data.jobs[0],
+    job_no: "PR-2026-D7AD48712DEE",
+    received_at: "2026-09-20T00:00:00+04:00",
+    customer_name: "Elvin Məmmədov",
+    customer_phone: "+994 50 555 12 34",
+    vehicles: {
+      plate: "99-BZ-312",
+      make: "BMW",
+      model: "F30 328i",
+      vin_body_number: "WBA3A5C50DF000321",
+    } as (typeof data.jobs)[0]["vehicles"],
+  };
+  data.parts = [
+    [
+      "Sağ ön qanad",
+      950,
+      "BMW F30 uyğun sağ ön qanad. Rənglənməyə hazır vəziyyətdə alınacaq.",
+    ],
+    [
+      "Ön bamper sağ kronşteyn",
+      220,
+      "Ön bamperin sağ tərəf bərkidici kronşteyni.",
+    ],
+    [
+      "Sağ ön fara",
+      780,
+      "BMW F30 üçün sağ ön fara. Alınmazdan əvvəl işlək vəziyyəti yoxlanılacaq.",
+    ],
+  ].map(([name, price, notes], i) => ({
+    ...data.parts[0],
+    id: `part-${i}`,
+    part_catalog: { name: String(name) },
+    customer_unit_price: Number(price),
+    quoted_price: Number(price),
+    notes: String(notes),
+  }));
+  data.work = [
+    [
+      "Ban/kuzov geometriyasının ölçülməsi",
+      450,
+      "Sağ ön hissədə geometriya və zavod ölçüləri yoxlanılacaq.",
+    ],
+    [
+      "Sağ ön qanadın düzəldilməsi və hazırlanması",
+      650,
+      "Qanad düzəldiləcək, səth boya üçün hazırlanacaq.",
+    ],
+    [
+      "Ön bamperin sökülməsi/quraşdırılması",
+      300,
+      "Bamper söküləcək, dayaqlar yoxlanılacaq və təmirdən sonra yenidən quraşdırılacaq.",
+    ],
+    [
+      "Boya sonrası cilalama",
+      250,
+      "Təmir olunan hissələr son mərhələdə cilalanacaq və səth yoxlanılacaq.",
+    ],
+  ].map(([name, price, notes], i) => ({
+    ...data.work[0],
+    id: `work-${i}`,
+    custom_title: String(name),
+    customer_unit_price: Number(price),
+    quoted_price: Number(price),
+    notes: String(notes),
+  }));
+  return data;
+}
 describe("customer quotation whitelist and totals", () => {
+  it("keeps the seven-line reference, confirmation, total and signatures on one A4 page", async () => {
+    const report = reportFor(sevenLineFixture());
+    const ending = report.sections[3];
+    expect(ending.summary).toContainEqual({
+      label: "Yekun məbləğ",
+      value: "3 600,00 AZN",
+    });
+    expect(ending.paragraphs?.[0]).toContain(
+      "dəymiş zərərin həcmi 3 600,00 AZN təşkil edir.",
+    );
+    expect(ending.bullets).toHaveLength(2);
+    const html = renderToStaticMarkup(<PrintReport report={report} />);
+    expect(html.indexOf("Yekun məbləğ")).toBeLessThan(
+      html.indexOf("Zərər dəymiş"),
+    );
+    expect(html.indexOf("qiymətləndirmə tarixinə")).toBeLessThan(
+      html.indexOf("Ad/Soyad:"),
+    );
+    for (const value of [
+      reportBrand.company,
+      reportBrand.address,
+      "Servis nümayəndəsi",
+      "İmza:",
+      "3 600,00 AZN",
+      "öz imzalarımızla təsdiq edirik",
+    ])
+      expect(html).toContain(value.replaceAll("&", "&amp;"));
+    for (const value of [
+      "INTERNAL",
+      "Maya qeydi",
+      "labor_cost",
+      "supplier debt",
+      "Kassa",
+      "PAŞA",
+      "worker-",
+      "part-",
+    ])
+      expect(html).not.toContain(value);
+    const pdf = await renderToBuffer(<ReportDocument report={report} />);
+    expect(pdf.toString("latin1").match(/\/Type \/Page\b/g)).toHaveLength(1);
+    if (process.env.PRIME_REPORT_QA_DIR) {
+      mkdirSync(process.env.PRIME_REPORT_QA_DIR, { recursive: true });
+      writeFileSync(
+        path.join(process.env.PRIME_REPORT_QA_DIR, "quotation-seven-lines.pdf"),
+        pdf,
+      );
+      writeFileSync(
+        path.join(
+          process.env.PRIME_REPORT_QA_DIR,
+          "quotation-seven-lines.html",
+        ),
+        html,
+      );
+    }
+  }, 20000);
+
+  it("does not invent a confirmation amount for unknown legacy quotes", () => {
+    const data = sevenLineFixture();
+    data.jobs[0].has_line_quotes = false;
+    const report = reportFor(data);
+    expect(report.sections[3].paragraphs?.[0]).toContain(
+      "__________________ AZN",
+    );
+    expect(report.sections[3].paragraphs?.[0]).not.toContain("3 600,00");
+  });
+
+  it("paginates a larger quotation without dropping rows or the confirmation", async () => {
+    const data = sevenLineFixture();
+    data.work = Array.from({ length: 40 }, (_, i) => ({
+      ...data.work[i % 4],
+      id: `long-${i}`,
+      custom_title: `İş ${i + 1}: ${data.work[i % 4].custom_title}`,
+    }));
+    const report = reportFor(data);
+    type Node = { value?: string; children?: Node[] };
+    let text = "";
+    const walk = (node: Node) => {
+      if (node.value) text += node.value + " ";
+      node.children?.forEach(walk);
+    };
+    const pdf = await renderToBuffer(
+      cloneElement(ReportDocument({ report }), {
+        onRender: (data: { _INTERNAL__LAYOUT__DATA_: Node }) =>
+          walk(data._INTERNAL__LAYOUT__DATA_),
+      }),
+    );
+    expect(
+      pdf.toString("latin1").match(/\/Type \/Page\b/g)!.length,
+    ).toBeGreaterThan(1);
+    for (let i = 1; i <= 40; i++) expect(text).toContain(`İş ${i}:`);
+    expect(text).toContain("dəymiş zərərin həcmi 18 450,00 AZN təşkil edir.");
+    expect(text).toContain("Servis nümayəndəsi");
+    expect(text).not.toContain("INTERNAL");
+    if (process.env.PRIME_REPORT_QA_DIR) {
+      mkdirSync(process.env.PRIME_REPORT_QA_DIR, { recursive: true });
+      writeFileSync(
+        path.join(process.env.PRIME_REPORT_QA_DIR, "quotation-long.pdf"),
+        pdf,
+      );
+      writeFileSync(
+        path.join(process.env.PRIME_REPORT_QA_DIR, "quotation-long.html"),
+        renderToStaticMarkup(<PrintReport report={report} />),
+      );
+    }
+  }, 20000);
   it("does not represent missing legacy quotes as zero or substitute the old budget", () => {
     const data = fixture();
     data.jobs[0].has_line_quotes = false;

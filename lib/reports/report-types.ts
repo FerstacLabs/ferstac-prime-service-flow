@@ -40,6 +40,7 @@ export type ReportTable = {
 export type ReportSection = {
   keepTogether?: boolean;
   paragraphs?: string[];
+  bullets?: string[];
   signatures?: string[];
   title: string;
   summary?: ReportSummaryItem[];

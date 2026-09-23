@@ -37,6 +37,7 @@ export function customerQuotation(
     job.has_line_quotes && rows.every((row) => row.quoted_price != null)
       ? money(sumMoney(rows.map((row) => row.quoted_price)))
       : missingValue;
+  const quotationTotal = total([...parts, ...works]);
   // Explicit customer-only projection: never spread source records into a document.
   const lines = (
     rows: (DbWorkItem | RequiredPart)[],
@@ -55,7 +56,7 @@ export function customerQuotation(
     ].map((label, i) => ({
       key: String(i),
       label,
-      width: [4, 27, 10, 8, 14, 14, 23][i],
+      width: [4, 27, 10, 7, 12, 12, 28][i],
       align: i >= 3 && i <= 5 ? "right" : "left",
     })),
     rows: rows.map((row, i) => ({
@@ -107,7 +108,7 @@ export function customerQuotation(
           },
           {
             label: "Yekun məbləğ",
-            value: total([...parts, ...works]),
+            value: quotationTotal,
           },
           ...(insurance && job.insurance_approved_amount != null
             ? [
@@ -117,6 +118,14 @@ export function customerQuotation(
                 },
               ]
             : []),
+        ],
+        paragraphs: [
+          `Zərər dəymiş avtonəqliyyat vasitəsinə baxış keçirdikdən və apardığımız təhlil və hesablamalardan sonra məlum oldu ki, ____________________________ nəticəsində ____________________________ dəymiş zərərin həcmi ${quotationTotal === missingValue ? "__________________ AZN" : quotationTotal} təşkil edir.`,
+          "Biz, aşağıda imza edənlər, öz imzalarımızla təsdiq edirik ki:",
+        ],
+        bullets: [
+          "Aparılan tədqiqatlar, deyilən fikirlər və alınan nəticələr hesabatda ehtimal və məhdudiyyət şərtləri çərçivəsində etibarlıdır və bizim şəxsi, peşəkar tədqiqatlarımızın, fikirlərimizin və gəldiyimiz nəticələrin məhsuludur.",
+          "Hesabatda göstərilən əmlak növlərinin dəyəri qiymətləndirmə tarixinə etibarlı hesab olunur.",
         ],
         signatures: ["Müştəri", "Servis nümayəndəsi", "Tarix"],
       },

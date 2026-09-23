@@ -111,10 +111,27 @@ function Section({ section }: { section: ReportSection }) {
       {section.table ? (
         <Table table={section.table} label={section.title} />
       ) : null}
+      {section.paragraphs?.length ? (
+        <div className="print-confirmation">
+          {section.paragraphs.map((paragraph) => (
+            <p key={paragraph}>{paragraph}</p>
+          ))}
+          {section.bullets?.length ? (
+            <ul>
+              {section.bullets.map((bullet) => (
+                <li key={bullet}>{bullet}</li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
       {section.signatures ? (
         <div className="print-signatures">
           {section.signatures.map((label) => (
-            <div key={label} className="print-signature">
+            <div
+              key={label}
+              className={`print-signature ${label === "Tarix" ? "print-signature-date" : ""}`}
+            >
               <strong>{label}</strong>
               {label === "Tarix" ? (
                 ": ____________________"

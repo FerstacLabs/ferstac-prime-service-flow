@@ -251,7 +251,10 @@ export function ReportDocument({ report }: { report: PrimeReport }) {
       <Page
         size="A4"
         orientation={report.orientation ?? "portrait"}
-        style={styles.page}
+        style={[
+          styles.page,
+          report.scope === "quotation" ? { paddingTop: 22 } : {},
+        ]}
         wrap
       >
         <ReportHeader report={report} />
@@ -261,6 +264,7 @@ export function ReportDocument({ report }: { report: PrimeReport }) {
             key={section.title}
             section={section}
             landscape={report.orientation === "landscape"}
+            compact={report.scope === "quotation"}
           />
         ))}
         <View style={styles.footer} fixed>
@@ -288,20 +292,30 @@ export function ReportDocument({ report }: { report: PrimeReport }) {
 }
 
 function ReportHeader({ report }: { report: PrimeReport }) {
+  const compact = report.scope === "quotation";
   return (
-    <View style={styles.header}>
+    <View
+      style={[
+        styles.header,
+        compact ? { paddingBottom: 5, marginBottom: 3 } : {},
+      ]}
+    >
       <View
-        style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          marginBottom: compact ? 3 : 8,
+        }}
       >
         <Image
           src={readFileSync(
             path.join(process.cwd(), "public/brand/prime-logo.png"),
           )}
           style={{
-            width: 140,
-            height: 42,
+            width: compact ? 125 : 140,
+            height: compact ? 34 : 42,
             objectFit: "contain",
-            marginBottom: 6,
+            marginBottom: compact ? 0 : 6,
           }}
         />
         <View style={{ flex: 1, marginLeft: 12 }}>
@@ -313,8 +327,12 @@ function ReportHeader({ report }: { report: PrimeReport }) {
           </Text>
         </View>
       </View>
-      <Text style={styles.title}>{report.title}</Text>
-      <Text style={styles.meta}>
+      <Text
+        style={[styles.title, compact ? { fontSize: 12, marginBottom: 2 } : {}]}
+      >
+        {report.title}
+      </Text>
+      <Text style={[styles.meta, compact ? { marginTop: 2, fontSize: 8 } : {}]}>
         Yaradılma tarixi: {report.generatedAt} | Valyuta: AZN
       </Text>
       {report.filters ? (
@@ -327,13 +345,15 @@ function ReportHeader({ report }: { report: PrimeReport }) {
 function SummaryGrid({
   items = [],
   stacked = false,
+  compact = false,
 }: {
   items?: Array<{ label: string; value: string }>;
   stacked?: boolean;
+  compact?: boolean;
 }) {
   if (!items.length) return null;
   return (
-    <View style={styles.summaryGrid}>
+    <View style={[styles.summaryGrid, compact ? { marginBottom: 4 } : {}]}>
       {items.map((item) => (
         <View
           key={`${item.label}-${item.value}`}
@@ -350,8 +370,8 @@ function SummaryGrid({
                     flexDirection: "row",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    minHeight: 20,
-                    paddingVertical: 3,
+                    minHeight: compact ? 17 : 20,
+                    paddingVertical: compact ? 2 : 3,
                   }
                 : {},
             ]}
@@ -368,28 +388,78 @@ function SummaryGrid({
 function ReportSectionView({
   section,
   landscape,
+  compact = false,
 }: {
   section: ReportSection;
   landscape: boolean;
+  compact?: boolean;
 }) {
   return (
-    <View style={styles.section} wrap={!section.keepTogether}>
-      <View style={styles.sectionHead} wrap={false} minPresenceAhead={45}>
-        <Text style={styles.heading}>{section.title}</Text>
+    <View
+      style={[styles.section, compact ? { marginTop: 5, flexShrink: 0 } : {}]}
+      wrap={!section.keepTogether}
+    >
+      <View
+        style={[
+          styles.sectionHead,
+          compact ? { marginBottom: 3, paddingBottom: 2 } : {},
+        ]}
+        wrap={false}
+        minPresenceAhead={45}
+      >
+        <Text style={[styles.heading, compact ? { fontSize: 10 } : {}]}>
+          {section.title}
+        </Text>
       </View>
-      <SummaryGrid items={section.summary} stacked={section.keepTogether} />
-      {section.fields?.length ? <FieldGrid fields={section.fields} /> : null}
+      <SummaryGrid
+        items={section.summary}
+        stacked={section.keepTogether}
+        compact={compact}
+      />
+      {section.fields?.length ? (
+        <FieldGrid fields={section.fields} compact={compact} />
+      ) : null}
       {section.table ? (
-        <ReportTableView table={section.table} landscape={landscape} />
+        <ReportTableView
+          table={section.table}
+          landscape={landscape}
+          compact={compact}
+        />
+      ) : null}
+      {section.paragraphs?.length ? (
+        <View style={{ fontSize: 8, lineHeight: 1.2, marginTop: 3 }}>
+          {section.paragraphs.map((paragraph) => (
+            <Text key={paragraph} style={{ marginBottom: 3 }}>
+              {paragraph}
+            </Text>
+          ))}
+          {section.bullets?.map((bullet) => (
+            <View
+              key={bullet}
+              style={{ flexDirection: "row", marginBottom: 2 }}
+              wrap={false}
+            >
+              <Text style={{ width: 9 }}>•</Text>
+              <Text style={{ flex: 1 }}>{bullet}</Text>
+            </View>
+          ))}
+        </View>
       ) : null}
       {section.signatures ? (
-        <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 6 }}>
+        <View
+          wrap={false}
+          style={{
+            flexDirection: "row",
+            flexWrap: "wrap",
+            marginTop: compact ? 3 : 6,
+          }}
+        >
           {section.signatures.map((label) => (
             <View
               key={label}
               style={{
                 width: label === "Tarix" ? "100%" : "50%",
-                marginTop: 7,
+                marginTop: compact ? 4 : 7,
               }}
             >
               <Text style={{ fontSize: 9 }}>
@@ -398,10 +468,10 @@ function ReportSectionView({
               </Text>
               {label !== "Tarix" ? (
                 <>
-                  <Text style={{ marginTop: 5, fontSize: 8 }}>
+                  <Text style={{ marginTop: compact ? 3 : 5, fontSize: 8 }}>
                     Ad/Soyad: ____________________
                   </Text>
-                  <Text style={{ marginTop: 5, fontSize: 8 }}>
+                  <Text style={{ marginTop: compact ? 3 : 5, fontSize: 8 }}>
                     İmza: ____________________
                   </Text>
                 </>
@@ -414,12 +484,23 @@ function ReportSectionView({
   );
 }
 
-function FieldGrid({ fields }: { fields: ReportField[] }) {
+function FieldGrid({
+  fields,
+  compact = false,
+}: {
+  fields: ReportField[];
+  compact?: boolean;
+}) {
   return (
     <View style={styles.fields}>
       {fields.map((field) => (
         <View key={field.label} style={styles.field} wrap={false}>
-          <View style={styles.fieldInner}>
+          <View
+            style={[
+              styles.fieldInner,
+              compact ? { paddingVertical: 3, minHeight: 20 } : {},
+            ]}
+          >
             <Text style={[styles.label, { width: "37%", marginBottom: 0 }]}>
               {field.label}
             </Text>
@@ -436,9 +517,11 @@ function FieldGrid({ fields }: { fields: ReportField[] }) {
 function ReportTableView({
   table,
   landscape,
+  compact = false,
 }: {
   table: ReportTable;
   landscape: boolean;
+  compact?: boolean;
 }) {
   if (!table.rows.length) {
     return (
@@ -454,7 +537,11 @@ function ReportTableView({
         <View
           key={index}
           wrap={false}
-          style={[styles.table, index > 0 ? { marginTop: 8 } : undefined]}
+          style={[
+            styles.table,
+            compact ? { flexShrink: 0 } : {},
+            index > 0 ? { marginTop: 8 } : {},
+          ]}
         >
           <View style={styles.tableHeader} wrap={false}>
             {table.columns.map((column) => (
@@ -463,6 +550,7 @@ function ReportTableView({
                 style={[
                   styles.cell,
                   styles.th,
+                  compact ? { padding: 3, fontSize: 8, lineHeight: 1.2 } : {},
                   {
                     flexBasis: `${column.width ?? 10}%`,
                     flexGrow: column.width ?? 10,
@@ -479,12 +567,15 @@ function ReportTableView({
           </View>
           {rows.map((row) => (
             <View key={row.id} wrap={false}>
-              <View style={styles.row}>
+              <View style={[styles.row, compact ? { minHeight: 19 } : {}]}>
                 {table.columns.map((column) => (
                   <Text
                     key={column.key}
                     style={[
                       styles.cell,
+                      compact
+                        ? { padding: 3, fontSize: 9, lineHeight: 1.2 }
+                        : {},
                       {
                         flexBasis: `${column.width ?? 10}%`,
                         flexGrow: column.width ?? 10,
