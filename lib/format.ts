@@ -1,14 +1,8 @@
 import { bakuDate } from "@/lib/filters";
-
-export const moneyFormatter = new Intl.NumberFormat("az-AZ", {
-  style: "currency",
-  currency: "AZN",
-  maximumFractionDigits: 2,
-});
+import { formatMoneyAZN } from "@/lib/decimal";
 
 export function formatMoney(value: number) {
-  const [whole, fraction] = Math.abs(Number(value)).toFixed(2).split(".");
-  return `${value < 0 ? "-" : ""}${whole.replace(/\B(?=(\d{3})+(?!\d))/g, " ")},${fraction} ₼`;
+  return formatMoneyAZN(value);
 }
 
 export function formatDate(value: string) {

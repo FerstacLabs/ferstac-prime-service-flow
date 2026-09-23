@@ -5,6 +5,7 @@ import type {
   ReportTable,
 } from "@/lib/reports/report-types";
 import { PrintButton, PrintTrigger } from "@/components/reports/print-trigger";
+import { reportBrand, numericReportColumn } from "@/lib/reports/brand";
 
 export function PrintReport({ report }: { report: PrimeReport }) {
   if (report.scope === "handover")
@@ -20,6 +21,8 @@ export function PrintReport({ report }: { report: PrimeReport }) {
           alt="PRIME"
           className="handover-logo"
         />
+        <p className="print-company">{reportBrand.company}</p>
+        <p className="print-address">{reportBrand.address}</p>
         <h1>{report.title}</h1>
         <p className="handover-subtitle">{report.subtitle}</p>
         {report.sections.map((section) => (
@@ -47,13 +50,19 @@ export function PrintReport({ report }: { report: PrimeReport }) {
     );
   return (
     <main
-      className={`print-report ${report.orientation === "landscape" ? "print-landscape" : ""} ${report.scope === "audit" ? "print-audit" : ""}`}
+      className={`print-report ${report.orientation === "landscape" ? "print-landscape" : ""} ${report.scope === "audit" ? "print-audit" : ""} ${report.scope === "quotation" ? "print-quotation" : ""}`}
     >
       <PrintTrigger />
       <header className="print-report-header">
         <div>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/prime-logo.png" alt="PRIME" className="print-logo" />
+          <div className="print-identity">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={reportBrand.logo} alt="PRIME" className="print-logo" />
+            <div>
+              <p className="print-company">{reportBrand.company}</p>
+              <p className="print-address">{reportBrand.address}</p>
+            </div>
+          </div>
           <h1>{report.title}</h1>
           <p>Yaradılma tarixi: {report.generatedAt} | Valyuta: AZN</p>
           {report.filters ? <p>{report.filters}</p> : null}
@@ -68,9 +77,7 @@ export function PrintReport({ report }: { report: PrimeReport }) {
       {report.sections.map((section) => (
         <Section key={section.title} section={section} />
       ))}
-      <footer className="print-report-footer">
-        PRIME Tuning & Detailing | PRIME Flow
-      </footer>
+      <footer className="print-report-footer">{reportBrand.company}</footer>
     </main>
   );
 }
@@ -95,12 +102,31 @@ function Summary({
 
 function Section({ section }: { section: ReportSection }) {
   return (
-    <section className="print-section">
+    <section
+      className={`print-section ${section.keepTogether ? "print-keep-together" : ""}`}
+    >
       <h2>{section.title}</h2>
       <Summary items={section.summary} />
       {section.fields?.length ? <Fields fields={section.fields} /> : null}
       {section.table ? (
         <Table table={section.table} label={section.title} />
+      ) : null}
+      {section.signatures ? (
+        <div className="print-signatures">
+          {section.signatures.map((label) => (
+            <div key={label} className="print-signature">
+              <strong>{label}</strong>
+              {label === "Tarix" ? (
+                ": ____________________"
+              ) : (
+                <>
+                  <p>Ad/Soyad: ____________________</p>
+                  <p>İmza: ____________________</p>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
       ) : null}
     </section>
   );
@@ -139,7 +165,12 @@ function Table({ table, label }: { table: ReportTable; label: string }) {
               <th
                 scope="col"
                 key={column.key}
-                style={{ width: `${column.width ?? 10}%` }}
+                style={{
+                  width: `${column.width ?? 10}%`,
+                  textAlign:
+                    column.align ??
+                    (numericReportColumn(column.label) ? "right" : "left"),
+                }}
               >
                 {column.label}
               </th>
@@ -153,6 +184,11 @@ function Table({ table, label }: { table: ReportTable; label: string }) {
                 <td
                   key={column.key}
                   data-label={column.label}
+                  style={{
+                    textAlign:
+                      column.align ??
+                      (numericReportColumn(column.label) ? "right" : "left"),
+                  }}
                   className={index === 0 ? "print-primary-cell" : undefined}
                 >
                   {row.cells[column.key] || "-"}

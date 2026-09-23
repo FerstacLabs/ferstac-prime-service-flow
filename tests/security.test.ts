@@ -14,6 +14,7 @@ import {
   restoreServiceJobAction,
   updateVehicleIntakeAction,
   saveQuoteLineAction,
+  deleteServiceJobAction,
 } from "@/app/actions/vehicles";
 import { saveWorkerAction, updateWorkItemAction } from "@/app/actions/workers";
 import {
@@ -26,6 +27,7 @@ import {
   setWorkerCostAction,
   voidPaymentAction,
   createCatalogAction,
+  manageUnitAction,
 } from "@/app/actions/finance";
 import { requireAccess } from "@/lib/supabase/auth";
 import { manageAccountAction } from "@/app/actions/security";
@@ -147,6 +149,8 @@ describe("real server-action guards execute BEFORE mutation", () => {
     },
   );
   const forbiddenCashier = [
+    deleteServiceJobAction,
+    manageUnitAction,
     createServiceJobAction,
     archiveServiceJobAction,
     restoreServiceJobAction,
@@ -166,6 +170,8 @@ describe("real server-action guards execute BEFORE mutation", () => {
     expect(state.rpc).not.toHaveBeenCalled();
   });
   it.each([
+    deleteServiceJobAction,
+    manageUnitAction,
     recordPaymentAction,
     setWorkerCostAction,
     voidPaymentAction,
@@ -210,7 +216,7 @@ describe("real server-action guards execute BEFORE mutation", () => {
       await setWorkerCostAction(form);
       expect(state.rpc).toHaveBeenCalledWith("set_worker_cost", {
         p_id: form.get("id"),
-        p_cost: 123.45,
+        p_cost: "123.45",
       });
       expect(state.from).not.toHaveBeenCalled();
     },

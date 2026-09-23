@@ -31,10 +31,12 @@ export default async function PurchasesPage({
     data = await getWorkshop(),
     items = selectPurchases(data, f),
     master = await getMasterData();
-  const jobs = data.jobs.map((j) => ({
-      id: j.id,
-      name: `${j.vehicles?.plate} · ${j.vehicles?.make} ${j.vehicles?.model} · ${j.job_no}`,
-    })),
+  const jobs = data.jobs
+      .filter((j) => !j.deleted_at)
+      .map((j) => ({
+        id: j.id,
+        name: `${j.vehicles?.plate} · ${j.vehicles?.make} ${j.vehicles?.model} · ${j.job_no}`,
+      })),
     suppliers = data.suppliers.map((s) => ({
       id: s.id,
       name: supplierDisplayName(s),
@@ -43,7 +45,10 @@ export default async function PurchasesPage({
       id: w.id,
       name: workerDisplayName(w),
     }));
-  const requirements = data.parts.filter((p) => p.service_job_id === f.job);
+  const selectedJob = data.jobs.find((j) => j.id === f.job && !j.deleted_at);
+  const requirements = data.parts.filter(
+    (p) => p.service_job_id === selectedJob?.id,
+  );
   return (
     <>
       <PageHeader
@@ -87,12 +92,12 @@ export default async function PurchasesPage({
             </div>
           );
         })}
-        {f.job && !requirements.length ? (
+        {selectedJob && !requirements.length ? (
           <p className="text-sm text-[var(--muted)]">
             Bu servis kartında tələb olunan detal yoxdur.
           </p>
         ) : null}
-        {f.job ? (
+        {selectedJob ? (
           <details className="mt-4 border-t border-[var(--border)] pt-4">
             <summary className="cursor-pointer text-sm text-[var(--muted)]">
               Təklifdən kənar əlavə alış

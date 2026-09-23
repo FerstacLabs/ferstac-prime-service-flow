@@ -4,7 +4,10 @@ import { createServiceJobAction } from "@/app/actions/vehicles";
 import { PageHeader } from "@/components/app-shell";
 import { PlateInput } from "@/components/plate-input";
 import { SubmitButton } from "@/components/submit-button";
-import { QuoteEditor } from "@/components/quote-editor";
+import { IntakeQuotes } from "@/components/quote-editor";
+import { FundingFields } from "@/components/funding-fields";
+import { IntakeDateInput } from "@/components/intake-date-input";
+import { bakuDate } from "@/lib/filters";
 import { ActionForm } from "@/components/action-form";
 import { getMasterData } from "@/lib/supabase/queries";
 
@@ -12,7 +15,7 @@ export const dynamic = "force-dynamic";
 
 export default async function NewVehiclePage() {
   await requireAccess(["ADMIN", "INTAKE"]);
-  const { workCatalog, partCatalog } = await getMasterData();
+  const { workCatalog, partCatalog, units } = await getMasterData();
 
   return (
     <>
@@ -117,48 +120,16 @@ export default async function NewVehiclePage() {
           </details>
 
           <section className="grid items-end gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <Field label="Mənbə">
-              <select name="funding_source" className="field">
-                <option value="CUSTOMER_FUNDED">Müştəri hesabına</option>
-                <option value="INSURANCE_CLAIM">Sığorta hadisəsi üzrə</option>
-              </select>
-            </Field>
-            <Field label="Sığorta şirkəti">
-              <input name="insurance_company" className="field" />
-            </Field>
-            <Field label="Sığorta işi / claim nömrəsi">
-              <input name="insurance_claim_no" className="field" />
-            </Field>
-            <Field label="Sığorta təsdiq məbləği">
-              <input
-                name="insurance_approved_amount"
-                type="number"
-                min="0"
-                className="field"
-              />
-            </Field>
-            <Field label="Razılaşdırılmış büdcə (AZN)">
-              <input
-                name="agreed_budget"
-                type="number"
-                min="0"
-                defaultValue="0"
-                className="field font-semibold"
-              />
-            </Field>
+            <FundingFields />
             <Field label="Qəbul tarixi">
-              <input
+              <IntakeDateInput
                 name="received_at"
-                type="datetime-local"
-                className="field"
+                defaultValue={bakuDate()}
+                required
               />
             </Field>
             <Field label="Hədəf təhvil tarixi">
-              <input
-                name="target_delivery_date"
-                type="date"
-                className="field"
-              />
+              <IntakeDateInput name="target_delivery_date" />
             </Field>
             <Field label="Qeyd">
               <textarea
@@ -170,8 +141,7 @@ export default async function NewVehiclePage() {
             </Field>
           </section>
 
-          <QuoteEditor kind="work" options={workCatalog} />
-          <QuoteEditor kind="part" options={partCatalog} />
+          <IntakeQuotes work={workCatalog} parts={partCatalog} units={units} />
 
           <SubmitButton className="w-fit px-5 py-3" pendingText="Saxlanır...">
             <Save size={18} />

@@ -43,6 +43,7 @@ import {
   reportPurchaseSourceLabels,
 } from "@/lib/reports/report-format";
 import { handoverReport } from "@/lib/reports/handover";
+import { customerQuotation } from "@/lib/reports/customer-quotation";
 import { requireAccess } from "@/lib/supabase/auth";
 import { appRoles, canReport } from "@/lib/security";
 import type {
@@ -190,73 +191,7 @@ export function buildWorkshopReport(
       parts = data.parts
         .filter((p) => p.service_job_id === job.id)
         .sort((a, b) => a.display_order - b.display_order);
-    // Customer document whitelist. No accounting objects or cost fields enter this model.
-    report.filters = undefined;
-    report.summary = pairs([
-      [
-        "Avtomobil",
-        `${job.vehicles?.plate} · ${job.vehicles?.make} ${job.vehicles?.model}`,
-      ],
-      ["Müştəri", job.customer_name || "-"],
-      ["Tarix", date(new Date().toISOString())],
-      ["Servis kartı", job.job_no],
-    ]);
-    report.sections = [
-      {
-        title: "Planlaşdırılan işlər",
-        table: table(
-          ["İş / xidmət", "Müştəri qiyməti", "Qeyd"],
-          works.map((w) => ({
-            id: w.id,
-            values: [workTitle(w), value(w.quoted_price), w.notes || "-"],
-          })),
-        ),
-      },
-      {
-        title: "Alınacaq detallar",
-        table: table(
-          ["Detal", "Müştəri qiyməti", "Qeyd"],
-          parts.map((p) => ({
-            id: p.id,
-            values: [
-              p.part_catalog?.name || "Detal",
-              money(p.quoted_price),
-              p.notes || "-",
-            ],
-          })),
-        ),
-      },
-      {
-        title: "Təklifin yekunu",
-        summary: pairs([
-          [
-            "İşlərin cəmi",
-            job.has_line_quotes
-              ? money(sumMoney(works.map((w) => w.quoted_price)))
-              : missingValue,
-          ],
-          [
-            "Detalların cəmi",
-            job.has_line_quotes
-              ? money(sumMoney(parts.map((p) => p.quoted_price)))
-              : missingValue,
-          ],
-          [
-            "Ümumi təklif məbləği",
-            job.has_line_quotes
-              ? money(
-                  sumMoney([
-                    ...works.map((w) => w.quoted_price),
-                    ...parts.map((p) => p.quoted_price),
-                  ]),
-                )
-              : missingValue,
-          ],
-          ["Razılaşdırılmış ümumi büdcə", money(job.agreed_budget)],
-        ]),
-      },
-    ];
-    return report;
+    return customerQuotation(job, works, parts);
   }
   if (scope === "vehicle") {
     if (job) {

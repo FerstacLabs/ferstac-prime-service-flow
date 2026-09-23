@@ -12,6 +12,7 @@ import { sumMoney } from "@/lib/workshop";
 import { workTitle } from "@/lib/supabase/queries";
 import type { WorkshopData } from "@/lib/supabase/workshop";
 import { vehicleIntakeFields } from "@/lib/intake-fields";
+import { formatQuantity } from "@/lib/decimal";
 
 export function IntakeDetail({ data }: { data: WorkshopData }) {
   const job = data.jobs[0],
@@ -41,7 +42,9 @@ export function IntakeDetail({ data }: { data: WorkshopData }) {
           ["Mənbə", fundingLabels[job.funding_source]],
           ["Qəbul", formatDate(job.received_at)],
           ["Hədəf təhvil", job.target_delivery_date],
-          ["Razılaşdırılmış büdcə", formatMoney(job.agreed_budget)],
+          ...(!job.has_line_quotes
+            ? [["Əvvəlki büdcə", formatMoney(job.agreed_budget)]]
+            : []),
           ["Qeyd", job.notes],
         ].map(([label, value]) => (
           <div key={label}>
@@ -73,6 +76,7 @@ export function IntakeDetail({ data }: { data: WorkshopData }) {
             name: workTitle(w),
             price: w.quoted_price,
             note: w.notes,
+            measure: `${formatQuantity(w.quantity ?? 1)} ${w.unit_catalog?.name ?? "Xidmət"} × ${formatMoney(w.customer_unit_price ?? w.quoted_price ?? 0)}`,
             status: statusLabels[w.status],
           })),
         },
@@ -83,6 +87,7 @@ export function IntakeDetail({ data }: { data: WorkshopData }) {
             name: p.part_catalog?.name,
             price: p.quoted_price,
             note: p.notes,
+            measure: `${formatQuantity(p.quantity ?? 1)} ${p.unit_catalog?.name ?? "Ədəd"} × ${formatMoney(p.customer_unit_price ?? p.quoted_price)}`,
             status: "",
           })),
         },
@@ -97,6 +102,7 @@ export function IntakeDetail({ data }: { data: WorkshopData }) {
               >
                 <div className="min-w-0">
                   <h3>{row.name}</h3>
+                  <p className="text-sm text-[var(--muted)]">{row.measure}</p>
                   <p className="whitespace-pre-wrap break-words text-sm text-[var(--muted)]">
                     {row.note}
                   </p>

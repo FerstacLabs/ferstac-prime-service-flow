@@ -9,6 +9,10 @@ import type { PrimeReport } from "@/lib/reports/report-types";
 import type { SearchParams } from "@/lib/filters";
 
 export const auditActions = [
+  "UNIT_CREATED",
+  "UNIT_UPDATED",
+  "SERVICE_JOB_SOFT_DELETED",
+  "SERVICE_JOB_SOFT_RESTORED",
   "LOGIN_SUCCESS",
   "LOGOUT",
   "PASSWORD_CHANGED",
@@ -42,6 +46,7 @@ export const auditActions = [
   "PAYMENT_REVERSED",
 ] as const;
 export const auditEntities = [
+  "unit_catalog",
   "vehicles",
   "service_jobs",
   "job_work_items",
@@ -73,6 +78,10 @@ export type AuditLog = {
   created_at: string;
 };
 const auditDescriptions: Record<(typeof auditActions)[number], string> = {
+  UNIT_CREATED: "ölçü vahidi yaratdı",
+  UNIT_UPDATED: "ölçü vahidini yenilədi",
+  SERVICE_JOB_SOFT_DELETED: "servis kartını təhlükəsiz sildi",
+  SERVICE_JOB_SOFT_RESTORED: "silinmiş servis kartını bərpa etdi",
   LOGIN_SUCCESS: "sistemə daxil oldu",
   LOGOUT: "sistemdən çıxdı",
   PASSWORD_CHANGED: "şifrəsini dəyişdi",

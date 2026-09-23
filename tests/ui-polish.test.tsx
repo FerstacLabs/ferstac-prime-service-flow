@@ -76,13 +76,14 @@ describe("quote row interaction", () => {
       <QuoteEditor
         kind="work"
         options={[{ id: "work-one", name: "Diaqnostika" }]}
+        units={[{ id: "unit-one", name: "Xidmət" }]}
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: "İş əlavə et" }));
     const select = screen.getByRole("combobox", { name: "İş / xidmət" });
     fireEvent.focus(select);
     fireEvent.keyDown(select, { key: "Enter" });
-    fireEvent.change(screen.getByLabelText("Müştəriyə deyilən qiymət"), {
+    fireEvent.change(screen.getByLabelText("Vahid qiyməti (AZN)"), {
       target: { value: "123.45" },
     });
     const note = screen.getByLabelText(/Qeyd/) as HTMLTextAreaElement;
@@ -96,7 +97,14 @@ describe("quote row interaction", () => {
           .value,
       );
     expect(payload()).toEqual([
-      { catalogId: "work-one", quotedPrice: "123.45", note: "A".repeat(250) },
+      {
+        catalogId: "work-one",
+        quotedPrice: "123.45",
+        note: "A".repeat(250),
+        quantity: "1",
+        unitId: "unit-one",
+        costNote: "",
+      },
     ]);
     fireEvent.click(screen.getByRole("button", { name: "İş əlavə et" }));
     expect(payload()).toHaveLength(2);

@@ -1,6 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { decimalMinor } from "@/lib/decimal";
 import { getAuthedSupabase } from "@/lib/supabase/queries";
 import {
   moneySchema,
@@ -14,7 +15,7 @@ export async function refreshWorkshop() {
   revalidatePath("/", "layout");
 }
 export async function createCatalogAction(
-  kind: "work" | "part" | "role",
+  kind: "work" | "part" | "role" | "unit",
   name: string,
 ) {
   const { supabase } = await getAuthedSupabase(
@@ -22,10 +23,13 @@ export async function createCatalogAction(
       ? (["ADMIN"] as const)
       : (["ADMIN", "INTAKE"] as const)),
   );
-  const { data, error } = await supabase.rpc("create_catalog_entry", {
-    p_kind: z.enum(["work", "part", "role"]).parse(kind),
-    p_name: name,
-  });
+  const { data, error } =
+    kind === "unit"
+      ? await supabase.rpc("create_unit", { p_name: name })
+      : await supabase.rpc("create_catalog_entry", {
+          p_kind: z.enum(["work", "part", "role"]).parse(kind),
+          p_name: name,
+        });
   if (error) return { error: error.message };
   await refreshWorkshop();
   return { item: data as { id: string; name: string } };
@@ -33,7 +37,8 @@ export async function createCatalogAction(
 export async function recordPaymentAction(form: FormData) {
   const { supabase } = await getAuthedSupabase("ADMIN", "CASHIER");
   const amount = moneySchema.parse(form.get("amount"));
-  if (amount <= 0) return { error: "Ödəniş sıfırdan böyük olmalıdır." };
+  if (decimalMinor(amount) <= 0n)
+    return { error: "Ödəniş sıfırdan böyük olmalıdır." };
   const { error } = await supabase.rpc("record_cash_payment", {
     p_job: uuidValue(form, "service_job_id"),
     p_type: z
@@ -75,5 +80,21 @@ export async function voidPaymentAction(form: FormData) {
     p_reason: reason,
   });
   if (error) throw new Error(error.message);
+  await refreshWorkshop();
+}
+
+export async function manageUnitAction(form: FormData) {
+  const { supabase } = await getAuthedSupabase("ADMIN");
+  const { error } = await supabase.rpc("manage_unit", {
+    p_id: uuidValue(form, "id"),
+    p_name: z.string().trim().min(1).max(120).parse(form.get("name")),
+    p_short_name: z
+      .string()
+      .trim()
+      .max(20)
+      .parse(form.get("short_name") ?? ""),
+    p_active: form.get("is_active") === "on",
+  });
+  if (error) return { error: "Ölçü vahidi saxlanmadı. Təkrar adı yoxlayın." };
   await refreshWorkshop();
 }

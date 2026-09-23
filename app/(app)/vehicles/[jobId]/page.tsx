@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import {
   archiveServiceJobAction,
   restoreServiceJobAction,
+  deleteServiceJobAction,
 } from "@/app/actions/vehicles";
 import {
   PageHeader,
@@ -31,7 +32,7 @@ export default async function VehicleDetailPage({
   const { jobId } = await params,
     data = await getWorkshop(jobId),
     job = data.jobs[0];
-  if (!job) notFound();
+  if (!job || (job.deleted_at && profile.role !== "ADMIN")) notFound();
   if (profile.role === "INTAKE") return <IntakeDetail data={data} />;
   const v = job.vehicles!;
   const info: Array<[string, string | number | null | undefined]> = [
@@ -83,7 +84,9 @@ export default async function VehicleDetailPage({
       />
       {job.archived_at ? (
         <div className="mb-4">
-          <StatusBadge tone="warning">Arxivdə</StatusBadge>
+          <StatusBadge tone="warning">
+            {job.deleted_at ? "Silinib" : "Arxivdə"}
+          </StatusBadge>
         </div>
       ) : null}
       <div className="mb-5 flex flex-wrap items-start gap-3">
@@ -121,6 +124,12 @@ export default async function VehicleDetailPage({
             </ConfirmButton>
           )}
         </ActionForm>
+        {!job.deleted_at ? (
+          <ActionForm action={deleteServiceJobAction}>
+            <input name="id" type="hidden" value={job.id} />
+            <ConfirmButton message="Servis kartı aktiv siyahılardan silinsin? Ödəniş və audit tarixçəsi saxlanılacaq; kart arxivdən bərpa edilə bilər." />
+          </ActionForm>
+        ) : null}
       </div>
       <dl className="identity-grid mb-5 grid gap-4 text-sm sm:grid-cols-3">
         {info.map(([k, value]) => (

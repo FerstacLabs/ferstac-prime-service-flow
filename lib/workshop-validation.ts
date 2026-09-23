@@ -1,22 +1,32 @@
 import { z } from "zod";
+import { decimalMinor, parseLocalizedDecimal } from "@/lib/decimal";
 export const noteSchema = z
   .string()
   .trim()
   .max(250, "Qeyd maksimum 250 simvol ola bilər.");
-export const moneySchema = z.coerce
-  .number()
-  .finite()
-  .min(0)
-  .max(9999999999.99)
-  .refine(
-    (n) => Math.abs(n * 100 - Math.round(n * 100)) < 0.00001,
-    "Məbləğ ən çox 2 onluq rəqəm ola bilər.",
-  );
+const decimalSchema = (scale: number, min: bigint, max: bigint) =>
+  z.unknown().transform((value, ctx) => {
+    try {
+      const canonical = parseLocalizedDecimal(value, scale),
+        minor = decimalMinor(canonical, scale);
+      if (minor < min || minor > max)
+        throw new Error("Məbləğ icazə verilən aralıqda deyil.");
+      return canonical;
+    } catch (error) {
+      ctx.addIssue({ code: "custom", message: (error as Error).message });
+      return z.NEVER;
+    }
+  });
+export const moneySchema = decimalSchema(2, 0n, 999999999999n);
+export const quantitySchema = decimalSchema(3, 1n, 100000000n);
 export const quoteLinesSchema = z
   .array(
     z.object({
       catalogId: z.string().uuid(),
       quotedPrice: moneySchema,
+      quantity: quantitySchema.default("1.000"),
+      unitId: z.string().uuid().optional(),
+      costNote: noteSchema.default(""),
       note: noteSchema,
     }),
   )

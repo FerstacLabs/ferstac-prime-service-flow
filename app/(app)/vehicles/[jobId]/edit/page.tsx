@@ -13,6 +13,10 @@ import { PageHeader } from "@/components/app-shell";
 import { ActionForm } from "@/components/action-form";
 import { SubmitButton } from "@/components/submit-button";
 import { SearchSelect } from "@/components/search-select";
+import { EditQuoteFields } from "@/components/quote-editor";
+import { FundingFields } from "@/components/funding-fields";
+import { IntakeDateInput } from "@/components/intake-date-input";
+import { bakuDate } from "@/lib/filters";
 
 export default async function EditIntakePage({
   params,
@@ -29,14 +33,22 @@ export default async function EditIntakePage({
     list.map(({ name, label, type, required }) => (
       <label key={name} className="text-sm text-[var(--muted)]">
         {label}
-        <input
-          className="field mt-1"
-          name={name}
-          type={type || "text"}
-          step={type === "number" ? "0.01" : undefined}
-          required={required}
-          defaultValue={String(values[name as keyof typeof values] ?? "")}
-        />
+        {type === "date" ? (
+          <IntakeDateInput
+            name={name}
+            defaultValue={String(values[name as keyof typeof values] ?? "")}
+            required={required}
+          />
+        ) : (
+          <input
+            className="field mt-1"
+            name={name}
+            type={type || "text"}
+            step={type === "number" ? "0.01" : undefined}
+            required={required}
+            defaultValue={String(values[name as keyof typeof values] ?? "")}
+          />
+        )}
       </label>
     ));
   return (
@@ -57,28 +69,12 @@ export default async function EditIntakePage({
         </section>
         <section className="grid gap-4 border-t border-[var(--border)] pt-6 sm:grid-cols-2 xl:grid-cols-3">
           {fields(jobIntakeFields, job)}
-          <label className="text-sm text-[var(--muted)]">
-            Mənbə
-            <select
-              name="funding_source"
-              className="field mt-1"
-              defaultValue={job.funding_source}
-            >
-              <option value="CUSTOMER_FUNDED">Müştəri hesabına</option>
-              <option value="INSURANCE_CLAIM">Sığorta hadisəsi üzrə</option>
-            </select>
-          </label>
+          <FundingFields job={job} />
           <label className="text-sm text-[var(--muted)]">
             Qəbul tarixi
-            <input
+            <IntakeDateInput
               name="received_at"
-              className="field mt-1"
-              type="datetime-local"
-              defaultValue={new Date(
-                new Date(job.received_at).getTime() + 4 * 3600000,
-              )
-                .toISOString()
-                .slice(0, 16)}
+              defaultValue={bakuDate(job.received_at)}
               required
             />
           </label>
@@ -107,14 +103,20 @@ export default async function EditIntakePage({
                       id: w.id,
                       catalog: w.work_catalog_id!,
                       title: workTitle(w),
-                      price: w.quoted_price,
+                      price: w.customer_unit_price ?? w.quoted_price,
+                      quantity: w.quantity ?? 1,
+                      unitId: w.unit_id ?? "",
+                      costNote: w.cost_note,
                       note: w.notes,
                     }))
                 : data.parts.map((p) => ({
                     id: p.id,
                     catalog: p.part_catalog_id,
                     title: p.part_catalog?.name,
-                    price: p.quoted_price,
+                    price: p.customer_unit_price ?? p.quoted_price,
+                    quantity: p.quantity ?? 1,
+                    unitId: p.unit_id ?? "",
+                    costNote: p.cost_note,
                     note: p.notes,
                   }));
             return (
@@ -129,7 +131,21 @@ export default async function EditIntakePage({
                 </h2>
                 {[
                   ...rows,
-                  { id: "new", catalog: "", title: "", price: "", note: "" },
+                  {
+                    id: "new",
+                    catalog: "",
+                    title: "",
+                    price: "",
+                    note: "",
+                    quantity: 1,
+                    unitId:
+                      master.units.find(
+                        (u) =>
+                          u.name === (kind === "work" ? "Xidmət" : "Ədəd") &&
+                          u.is_active,
+                      )?.id ?? "",
+                    costNote: "",
+                  },
                 ].map((row) => (
                   <ActionForm
                     key={row.id}
@@ -139,7 +155,7 @@ export default async function EditIntakePage({
                     <input type="hidden" name="service_job_id" value={jobId} />
                     <input type="hidden" name="kind" value={kind} />
                     {row.catalog ? (
-                      <div>
+                      <div className="sm:col-span-2 xl:col-span-4">
                         <input
                           type="hidden"
                           name="catalog_id"
@@ -159,27 +175,17 @@ export default async function EditIntakePage({
                         ).filter((c) => !rows.some((r) => r.catalog === c.id))}
                       />
                     )}
-                    <label className="text-sm text-[var(--muted)]">
-                      Müştəri qiyməti
-                      <input
-                        name="quoted_price"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        className="field mt-1"
-                        required
-                        defaultValue={row.price ?? ""}
-                      />
-                    </label>
-                    <label className="text-sm text-[var(--muted)]">
-                      Qeyd
-                      <textarea
-                        name="notes"
-                        maxLength={250}
-                        className="field mt-1"
-                        defaultValue={row.note ?? ""}
-                      />
-                    </label>
+                    <EditQuoteFields
+                      units={master.units}
+                      initial={{
+                        catalogId: row.catalog,
+                        quotedPrice: String(row.price ?? ""),
+                        quantity: String(row.quantity),
+                        unitId: row.unitId,
+                        note: row.note ?? "",
+                        costNote: row.costNote ?? "",
+                      }}
+                    />
                     <SubmitButton variant="secondary">
                       {row.catalog ? "Təklifi saxla" : "Əlavə et"}
                     </SubmitButton>

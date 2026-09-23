@@ -33,6 +33,8 @@ import { formatMoney, formatDate } from "@/lib/format";
 import { statusLabels } from "@/components/app-shell";
 import { workerWorkFinance } from "@/lib/worker-finance";
 import { EmptyState } from "@/components/empty-state";
+import { DecimalInput } from "@/components/decimal-input";
+import { formatQuantity } from "@/lib/decimal";
 export function MoneyGrid({
   items,
 }: {
@@ -129,9 +131,8 @@ export function PaymentForm({
         <input name="target_id" type="hidden" value={target} />
         <label className="text-xs text-[var(--muted)]">
           Ödəniş məbləği (AZN)
-          <input
+          <DecimalInput
             name="amount"
-            type="number"
             required
             min="0.01"
             step="0.01"
@@ -180,11 +181,26 @@ export function WorkerCostForm({
       className="mt-4 flex max-w-lg flex-wrap items-end gap-3"
     >
       <input type="hidden" name="id" value={work.id} />
+      <div className="basis-full text-sm text-[var(--muted)]">
+        {formatQuantity(work.quantity ?? 1)}{" "}
+        {work.unit_catalog?.name ?? "Xidmət"} · Vahid qiyməti:{" "}
+        {work.customer_unit_price == null
+          ? "-"
+          : formatMoney(work.customer_unit_price)}
+        {work.notes ? <p className="mt-1">{work.notes}</p> : null}
+      </div>
+      {work.cost_note ? (
+        <div className="basis-full border-l-2 border-[var(--accent)] pl-3 text-sm">
+          <strong>Maya qeydi</strong>
+          <p className="mt-1 whitespace-pre-wrap break-words">
+            {work.cost_note}
+          </p>
+        </div>
+      ) : null}
       <label className="min-w-0 flex-[1_1_12rem] text-xs text-[var(--muted)]">
         Usta maya dəyəri
-        <input
+        <DecimalInput
           name="labor_cost"
-          type="number"
           min={paid}
           step="0.01"
           required

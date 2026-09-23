@@ -220,7 +220,7 @@ a {
 .print-report h1 {
   margin: 0.2rem 0 0;
   color: #111;
-  font-size: 1.8rem;
+  font-size: 1.25rem;
   line-height: 1.15;
 }
 
@@ -233,18 +233,18 @@ a {
 
 .print-summary {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.5rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
   margin: 0 0 0.8rem;
 }
 
 .print-summary-item,
 .print-fields > div {
   break-inside: avoid;
-  border: 1px solid #d9d9d9;
-  border-radius: 0.35rem;
-  background: #fbfbfb;
-  padding: 0.55rem;
+  border: 0.5px solid #aaa;
+  border-radius: 0;
+  background: #fff;
+  padding: 0.35rem 0.5rem;
 }
 
 .print-summary-item span,
@@ -281,8 +281,8 @@ a {
 
 .print-fields {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.5rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
   margin: 0 0 0.7rem;
 }
 .print-fields .print-wide-field {
@@ -331,7 +331,7 @@ a {
 
 .print-empty {
   border: 1px solid #d9d9d9;
-  border-radius: 0.35rem;
+  border-radius: 0;
   padding: 0.7rem;
   color: #666;
   background: #fbfbfb;
@@ -923,22 +923,10 @@ select.field {
 @media print {
   @page {
     size: A4;
-    margin: 12mm;
-  }
-  @page wide-report {
-    size: A4 landscape;
-    margin: 12mm;
-  }
-  .print-landscape {
-    page: wide-report;
-  }
-
-  @page audit-report {
-    size: A4 landscape;
     margin: 12mm 12mm 18mm;
     background: #fff;
     @bottom-left {
-      content: "PRIME Tuning & Detailing | PRIME Flow";
+      content: "Prime Performance Service & Detailing";
       font-family: Arial, sans-serif;
       font-size: 8pt;
       color: #606060;
@@ -950,7 +938,32 @@ select.field {
       color: #606060;
     }
   }
-  html:has(.print-audit) {
+  @page wide-report {
+    size: A4 landscape;
+    margin: 12mm 12mm 18mm;
+  }
+  .print-landscape {
+    page: wide-report;
+  }
+
+  @page audit-report {
+    size: A4 landscape;
+    margin: 12mm 12mm 18mm;
+    background: #fff;
+    @bottom-left {
+      content: "Prime Performance Service & Detailing";
+      font-family: Arial, sans-serif;
+      font-size: 8pt;
+      color: #606060;
+    }
+    @bottom-right {
+      content: "Səhifə " counter(page) " / " counter(pages);
+      font-family: Arial, sans-serif;
+      font-size: 8pt;
+      color: #606060;
+    }
+  }
+  html:has(.print-report) {
     background: #fff;
     color-scheme: light;
   }
@@ -991,10 +1004,99 @@ select.field {
   }
 
   .print-report-footer {
-    position: fixed;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    background: #fff;
+    display: none;
   }
+}
+
+.print-report .print-company {
+  color: #111;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+.print-report .print-address {
+  font-size: 0.8rem;
+  margin-bottom: 0.7rem;
+}
+.handover .print-company,
+.handover .print-address {
+  text-align: center;
+}
+.print-quotation {
+  max-width: 210mm;
+}
+.print-identity {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.7rem;
+}
+.print-identity .print-logo {
+  flex: none;
+  width: 150px;
+  margin: 0;
+}
+.print-identity .print-address {
+  margin-bottom: 0;
+}
+.print-quotation .print-fields > div {
+  display: grid;
+  grid-template-columns: 37% minmax(0, 1fr);
+  align-items: center;
+  gap: 0.2rem;
+  min-height: 1.65rem;
+  padding: 0.3rem 0.4rem;
+}
+.print-quotation .print-fields dd {
+  font-size: 0.8rem;
+  margin: 0;
+}
+.print-quotation .print-fields dt {
+  font-size: 0.7rem;
+}
+.print-quotation .print-section {
+  margin-top: 0.65rem;
+}
+.print-quotation .print-section h2 {
+  font-size: 0.9rem;
+  margin-bottom: 0.35rem;
+}
+.print-quotation .print-report-header {
+  margin-bottom: 0.65rem;
+  padding-bottom: 0.65rem;
+}
+@media screen and (max-width: 600px) {
+  .print-identity {
+    flex-wrap: wrap;
+  }
+}
+.print-keep-together {
+  break-inside: avoid;
+}
+.print-signatures {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin-top: 1rem;
+}
+.print-signature {
+  font-size: 0.8rem;
+}
+.print-signature p {
+  margin-top: 0.5rem;
+}
+.print-quotation .print-summary {
+  display: block;
+  margin-left: auto;
+  max-width: 26rem;
+}
+.print-quotation .print-summary-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 0;
+  border-bottom: 0.5px solid #aaa;
+}
+.print-quotation .print-summary-item strong {
+  white-space: nowrap;
+  margin: 0;
 }

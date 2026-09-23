@@ -6,10 +6,12 @@ import { normalizeAzPlate, isValidAzPlate } from "@/lib/plate";
 import { getAuthedSupabase } from "@/lib/supabase/queries";
 import { vehicleIntakeFields, jobIntakeFields } from "@/lib/intake-fields";
 import { z } from "zod";
+import { parseIntakeDate } from "@/lib/intake-date";
 import {
   moneySchema,
   noteValue,
   quoteLinesSchema,
+  quantitySchema,
   uuidValue,
 } from "@/lib/workshop-validation";
 
@@ -91,12 +93,17 @@ export async function createServiceJobAction(formData: FormData) {
             : "CUSTOMER_FUNDED",
         insurance_company: nullable(formData.get("insurance_company")),
         insurance_claim_no: nullable(formData.get("insurance_claim_no")),
-        insurance_approved_amount: numberOrNull(
+        insurance_approved_amount: nullable(
           formData.get("insurance_approved_amount"),
-        ),
-        agreed_budget: moneySchema.parse(formData.get("agreed_budget") || 0),
-        received_at: received ? `${received}+04:00` : new Date().toISOString(),
-        target_delivery_date: nullable(formData.get("target_delivery_date")),
+        )
+          ? moneySchema.parse(formData.get("insurance_approved_amount"))
+          : null,
+        received_at: received
+          ? `${parseIntakeDate(received)}T00:00:00+04:00`
+          : new Date().toISOString(),
+        target_delivery_date: nullable(formData.get("target_delivery_date"))
+          ? parseIntakeDate(formData.get("target_delivery_date"))
+          : null,
         notes: noteValue(formData),
       },
     },
@@ -122,7 +129,10 @@ async function setArchiveState(formData: FormData, archived: boolean) {
   const id = uuidValue(formData, "id");
   const { error } = await supabase
     .from("service_jobs")
-    .update({ archived_at: archived ? new Date().toISOString() : null })
+    .update({
+      archived_at: archived ? new Date().toISOString() : null,
+      ...(!archived ? { deleted_at: null } : {}),
+    })
     .eq("id", id)
     .eq("organization_id", profile.organization_id)
     .select("id")
@@ -148,7 +158,7 @@ export async function updateVehicleIntakeAction(form: FormData) {
             : type === "number"
               ? z.coerce.number().finite().nonnegative().parse(raw)
               : type === "date"
-                ? z.iso.date().parse(raw)
+                ? parseIntakeDate(raw)
                 : z.string().max(500).parse(raw),
         ];
       }),
@@ -163,12 +173,16 @@ export async function updateVehicleIntakeAction(form: FormData) {
     p_vehicle: vehicle,
     p_details: {
       ...readFields(jobIntakeFields),
-      agreed_budget: moneySchema.parse(form.get("agreed_budget")),
+      insurance_company: nullable(form.get("insurance_company")),
+      insurance_claim_no: nullable(form.get("insurance_claim_no")),
+      insurance_approved_amount: nullable(form.get("insurance_approved_amount"))
+        ? moneySchema.parse(form.get("insurance_approved_amount"))
+        : null,
       funding_source: z
         .enum(["CUSTOMER_FUNDED", "INSURANCE_CLAIM"])
         .parse(form.get("funding_source")),
       received_at: received
-        ? new Date(`${received}+04:00`).toISOString()
+        ? `${parseIntakeDate(received)}T00:00:00+04:00`
         : undefined,
       notes: noteValue(form),
     },
@@ -185,10 +199,23 @@ export async function saveQuoteLineAction(form: FormData) {
     p_catalog: uuidValue(form, "catalog_id"),
     p_price: moneySchema.parse(form.get("quoted_price")),
     p_note: noteValue(form),
+    p_quantity: quantitySchema.parse(form.get("quantity") || 1),
+    p_unit: uuidValue(form, "unit_id"),
+    p_cost_note: noteValue(form, "cost_note"),
   });
   if (error)
     return {
       error: "Təklif saxlanmadı. Qiyməti və bağlı əməliyyatları yoxlayın.",
     };
   revalidatePath("/", "layout");
+}
+
+export async function deleteServiceJobAction(form: FormData) {
+  const { supabase } = await getAuthedSupabase("ADMIN");
+  const { error } = await supabase.rpc("soft_delete_service_job", {
+    p_job: uuidValue(form, "id"),
+  });
+  if (error) return { error: "Servis kartı silinmədi." };
+  revalidatePath("/", "layout");
+  redirect("/vehicles");
 }

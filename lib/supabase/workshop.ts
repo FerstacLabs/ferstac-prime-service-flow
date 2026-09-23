@@ -37,7 +37,11 @@ export async function getWorkshop(jobId?: string) {
   if (profile.role === "INTAKE") {
     const [jobs, parts] = await Promise.all([
       rows<DbServiceJob>("service_jobs", "*,vehicles(*)", jobId),
-      rows<RequiredPart>("job_required_parts", "*,part_catalog(name)", jobId),
+      rows<RequiredPart>(
+        "job_required_parts",
+        "*,part_catalog(name),unit_catalog(id,name,short_name)",
+        jobId,
+      ),
     ]);
     const work: DbWorkItem[] = [];
     for (let offset = 0; ; offset += 500) {
@@ -63,10 +67,14 @@ export async function getWorkshop(jobId?: string) {
       rows<DbServiceJob>("service_jobs", "*,vehicles(*)", jobId),
       rows<DbWorkItem>(
         "job_work_items",
-        "*,work_catalog(id,name,category),workers(id,first_name,last_name,role_id)",
+        "*,work_catalog(id,name,category),workers(id,first_name,last_name,role_id),unit_catalog(id,name,short_name)",
         jobId,
       ),
-      rows<RequiredPart>("job_required_parts", "*,part_catalog(name)", jobId),
+      rows<RequiredPart>(
+        "job_required_parts",
+        "*,part_catalog(name),unit_catalog(id,name,short_name)",
+        jobId,
+      ),
       rows<DbPurchase>(
         "purchases",
         "*,part_catalog(id,name,category),suppliers(id,company_name,shop_name,first_name,last_name,father_name),workers(id,first_name,last_name)",
@@ -135,6 +143,8 @@ export function selectWork(data: WorkshopData, f: WorkshopFilters) {
   return data.work.filter(
     (w) =>
       jobs.has(w.service_job_id) &&
+      (f.visibility !== "active" ||
+        !data.jobs.find((j) => j.id === w.service_job_id)?.deleted_at) &&
       (!f.worker || w.assigned_worker_id === f.worker) &&
       (!f.work || w.work_catalog_id === f.work) &&
       (!f.status || w.status === f.status) &&
@@ -149,6 +159,8 @@ export function selectPurchases(data: WorkshopData, f: WorkshopFilters) {
     .filter(
       (p) =>
         jobs.has(p.service_job_id) &&
+        (f.visibility !== "active" ||
+          !data.jobs.find((j) => j.id === p.service_job_id)?.deleted_at) &&
         (!f.supplier || p.supplier_id === f.supplier) &&
         (!f.payment || p.payment_status === f.payment) &&
         inPeriod(p.purchase_date, f),

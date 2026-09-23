@@ -23,6 +23,7 @@ export type ReportTableColumn = {
   key: string;
   label: string;
   width?: number;
+  align?: "left" | "right";
 };
 
 export type ReportTableRow = {
@@ -37,6 +38,7 @@ export type ReportTable = {
 };
 
 export type ReportSection = {
+  keepTogether?: boolean;
   paragraphs?: string[];
   signatures?: string[];
   title: string;

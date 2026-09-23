@@ -1,5 +1,6 @@
 import { requireAccess } from "@/lib/supabase/auth";
 import type { AppRole } from "@/lib/security";
+import type { QuoteMeasure } from "@/lib/workshop";
 import type {
   FundingSource,
   JobStatus,
@@ -34,6 +35,7 @@ export type DbVehicle = {
 };
 
 export type DbServiceJob = {
+  deleted_at?: string | null;
   has_line_quotes?: boolean;
   id: string;
   vehicle_id: string;
@@ -54,7 +56,7 @@ export type DbServiceJob = {
   vehicles?: DbVehicle;
 };
 
-export type DbWorkItem = {
+export type DbWorkItem = QuoteMeasure & {
   quoted_price?: number | null;
   labor_cost_known?: boolean;
   display_order?: number;
@@ -239,7 +241,7 @@ export async function getWorkers() {
 
 export async function getMasterData() {
   const { supabase } = await getAuthedSupabase();
-  const [work, parts, roles] = await Promise.all([
+  const [work, parts, roles, units] = await Promise.all([
     supabase
       .from("work_catalog")
       .select("*")
@@ -255,14 +257,25 @@ export async function getMasterData() {
       .select("*")
       .eq("active", true)
       .order("sort_order"),
+    supabase
+      .from("unit_catalog")
+      .select("id,name,short_name,is_active")
+      .order("name"),
   ]);
   if (work.error) throw work.error;
   if (parts.error) throw parts.error;
   if (roles.error) throw roles.error;
+  if (units.error) throw units.error;
   return {
     workCatalog: (work.data ?? []) as DbWorkCatalog[],
     partCatalog: (parts.data ?? []) as DbPartCatalog[],
     workerRoles: (roles.data ?? []) as DbWorkerRole[],
+    units: (units.data ?? []) as {
+      id: string;
+      name: string;
+      short_name: string;
+      is_active: boolean;
+    }[],
   };
 }
 

@@ -1,5 +1,6 @@
 /* eslint-disable jsx-a11y/alt-text -- React-PDF images are not DOM images. */
 import path from "node:path";
+import { reportBrand, numericReportColumn } from "@/lib/reports/brand";
 import { readFileSync } from "node:fs";
 import {
   Document,
@@ -53,8 +54,8 @@ const styles = StyleSheet.create({
   },
   header: {
     borderBottom: "1.5px solid #1e1e1e",
-    paddingBottom: 10,
-    marginBottom: 12,
+    paddingBottom: 8,
+    marginBottom: 8,
   },
   brand: {
     fontSize: 9,
@@ -64,7 +65,7 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   title: {
-    fontSize: 18,
+    fontSize: 14,
     lineHeight: 1.3,
     marginBottom: 5,
     fontWeight: 700,
@@ -77,30 +78,35 @@ const styles = StyleSheet.create({
     marginHorizontal: -3,
     marginBottom: 8,
   },
-  summaryBox: { width: "25%", paddingHorizontal: 3, marginBottom: 6 },
+  summaryBox: { width: "50%", paddingHorizontal: 3, marginBottom: 0 },
   summaryInner: {
-    border: "1px solid #d8d8d8",
-    borderRadius: 4,
-    padding: 7,
-    minHeight: 36,
-    backgroundColor: "#fbfbfb",
+    borderBottom: "0.5px solid #aaa",
+    padding: 5,
+    minHeight: 30,
+    backgroundColor: "#fff",
   },
   label: { color: "#666", fontSize: 7.8, marginBottom: 2 },
   value: { fontSize: 10, fontWeight: 700, color: "#111" },
-  section: { marginTop: 14 },
+  section: { marginTop: 7 },
   sectionHead: {
-    marginBottom: 6,
+    marginBottom: 4,
     borderBottom: "1px solid #d9d9d9",
     paddingBottom: 3,
   },
   heading: { fontSize: 12, fontWeight: 700, color: "#111" },
   fields: { flexDirection: "row", flexWrap: "wrap", marginHorizontal: -3 },
-  field: { width: "33.333%", paddingHorizontal: 3, marginBottom: 6 },
-  fieldInner: { border: "1px solid #e1e1e1", borderRadius: 4, padding: 6 },
+  field: { width: "50%", paddingHorizontal: 0, marginBottom: 0 },
+  fieldInner: {
+    border: "0.5px solid #aaa",
+    padding: 4,
+    minHeight: 24,
+    flexDirection: "row",
+    alignItems: "center",
+  },
   table: { width: "100%", border: "1px solid #d7d7d7", borderBottom: 0 },
   tableHeader: {
     flexDirection: "row",
-    backgroundColor: "#f0f1f3",
+    backgroundColor: "#f5f5f5",
     borderBottom: "1px solid #cfcfcf",
   },
   row: {
@@ -164,6 +170,12 @@ export function ReportDocument({ report }: { report: PrimeReport }) {
               marginBottom: 5,
             }}
           />
+          <Text style={{ textAlign: "center", fontSize: 8, fontWeight: 700 }}>
+            {reportBrand.company}
+          </Text>
+          <Text style={{ textAlign: "center", fontSize: 7, marginBottom: 5 }}>
+            {reportBrand.address}
+          </Text>
           <Text
             style={{
               fontSize: 16,
@@ -185,6 +197,13 @@ export function ReportDocument({ report }: { report: PrimeReport }) {
           >
             {report.subtitle}
           </Text>
+          <Text
+            fixed
+            style={{ position: "absolute", bottom: 7, right: 28, fontSize: 7 }}
+            render={({ pageNumber, totalPages }) =>
+              `Səhifə ${pageNumber} / ${totalPages}`
+            }
+          />
           {report.sections.map((section) => (
             <View
               key={section.title}
@@ -245,7 +264,7 @@ export function ReportDocument({ report }: { report: PrimeReport }) {
           />
         ))}
         <View style={styles.footer} fixed>
-          <Text>PRIME Tuning & Detailing | PRIME Flow</Text>
+          <Text>{reportBrand.company}</Text>
         </View>
         <Text
           fixed
@@ -271,17 +290,29 @@ export function ReportDocument({ report }: { report: PrimeReport }) {
 function ReportHeader({ report }: { report: PrimeReport }) {
   return (
     <View style={styles.header}>
-      <Image
-        src={readFileSync(
-          path.join(process.cwd(), "public/brand/prime-logo.png"),
-        )}
-        style={{
-          width: 140,
-          height: 42,
-          objectFit: "contain",
-          marginBottom: 6,
-        }}
-      />
+      <View
+        style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}
+      >
+        <Image
+          src={readFileSync(
+            path.join(process.cwd(), "public/brand/prime-logo.png"),
+          )}
+          style={{
+            width: 140,
+            height: 42,
+            objectFit: "contain",
+            marginBottom: 6,
+          }}
+        />
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <Text style={{ fontSize: 10, fontWeight: 700 }}>
+            {reportBrand.company}
+          </Text>
+          <Text style={{ fontSize: 8, marginTop: 3 }}>
+            {reportBrand.address}
+          </Text>
+        </View>
+      </View>
       <Text style={styles.title}>{report.title}</Text>
       <Text style={styles.meta}>
         Yaradılma tarixi: {report.generatedAt} | Valyuta: AZN
@@ -295,8 +326,10 @@ function ReportHeader({ report }: { report: PrimeReport }) {
 
 function SummaryGrid({
   items = [],
+  stacked = false,
 }: {
   items?: Array<{ label: string; value: string }>;
+  stacked?: boolean;
 }) {
   if (!items.length) return null;
   return (
@@ -304,10 +337,25 @@ function SummaryGrid({
       {items.map((item) => (
         <View
           key={`${item.label}-${item.value}`}
-          style={styles.summaryBox}
+          style={
+            stacked ? { width: "100%", paddingLeft: "35%" } : styles.summaryBox
+          }
           wrap={false}
         >
-          <View style={styles.summaryInner}>
+          <View
+            style={[
+              styles.summaryInner,
+              stacked
+                ? {
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    minHeight: 20,
+                    paddingVertical: 3,
+                  }
+                : {},
+            ]}
+          >
             <Text style={styles.label}>{item.label}</Text>
             <Text style={styles.value}>{item.value}</Text>
           </View>
@@ -325,14 +373,42 @@ function ReportSectionView({
   landscape: boolean;
 }) {
   return (
-    <View style={styles.section}>
+    <View style={styles.section} wrap={!section.keepTogether}>
       <View style={styles.sectionHead} wrap={false} minPresenceAhead={45}>
         <Text style={styles.heading}>{section.title}</Text>
       </View>
-      <SummaryGrid items={section.summary} />
+      <SummaryGrid items={section.summary} stacked={section.keepTogether} />
       {section.fields?.length ? <FieldGrid fields={section.fields} /> : null}
       {section.table ? (
         <ReportTableView table={section.table} landscape={landscape} />
+      ) : null}
+      {section.signatures ? (
+        <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 6 }}>
+          {section.signatures.map((label) => (
+            <View
+              key={label}
+              style={{
+                width: label === "Tarix" ? "100%" : "50%",
+                marginTop: 7,
+              }}
+            >
+              <Text style={{ fontSize: 9 }}>
+                {label}
+                {label === "Tarix" ? ": ____________________" : ""}
+              </Text>
+              {label !== "Tarix" ? (
+                <>
+                  <Text style={{ marginTop: 5, fontSize: 8 }}>
+                    Ad/Soyad: ____________________
+                  </Text>
+                  <Text style={{ marginTop: 5, fontSize: 8 }}>
+                    İmza: ____________________
+                  </Text>
+                </>
+              ) : null}
+            </View>
+          ))}
+        </View>
       ) : null}
     </View>
   );
@@ -344,8 +420,12 @@ function FieldGrid({ fields }: { fields: ReportField[] }) {
       {fields.map((field) => (
         <View key={field.label} style={styles.field} wrap={false}>
           <View style={styles.fieldInner}>
-            <Text style={styles.label}>{field.label}</Text>
-            <Text style={styles.value}>{field.value}</Text>
+            <Text style={[styles.label, { width: "37%", marginBottom: 0 }]}>
+              {field.label}
+            </Text>
+            <Text style={[styles.value, { width: "63%", fontSize: 9 }]}>
+              {field.value}
+            </Text>
           </View>
         </View>
       ))}
@@ -387,6 +467,9 @@ function ReportTableView({
                     flexBasis: `${column.width ?? 10}%`,
                     flexGrow: column.width ?? 10,
                     flexShrink: 1,
+                    textAlign:
+                      column.align ??
+                      (numericReportColumn(column.label) ? "right" : "left"),
                   },
                 ]}
               >
@@ -406,6 +489,11 @@ function ReportTableView({
                         flexBasis: `${column.width ?? 10}%`,
                         flexGrow: column.width ?? 10,
                         flexShrink: 1,
+                        textAlign:
+                          column.align ??
+                          (numericReportColumn(column.label)
+                            ? "right"
+                            : "left"),
                       },
                     ]}
                   >

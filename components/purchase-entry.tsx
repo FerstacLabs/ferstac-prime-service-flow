@@ -8,6 +8,13 @@ import type { RequiredPart } from "@/lib/workshop";
 import type { DbPurchase } from "@/lib/supabase/queries";
 import { bakuDate } from "@/lib/filters";
 import { formatMoney } from "@/lib/format";
+import { DecimalInput } from "@/components/decimal-input";
+import {
+  formatQuantity,
+  parseLocalizedDecimal,
+  multiplyMoney,
+} from "@/lib/decimal";
+import { subtractMoney } from "@/lib/workshop";
 export function PurchaseEntry({
   jobId,
   part,
@@ -26,6 +33,15 @@ export function PurchaseEntry({
   const [source, setSource] = useState(purchase?.source_type ?? "SUPPLIER");
   const [payment, setPayment] = useState("UNPAID");
   const [cost, setCost] = useState(String(purchase?.unit_price ?? ""));
+  let actualTotal: number | null = null;
+  try {
+    actualTotal =
+      source === "CUSTOMER_PROVIDED"
+        ? 0
+        : Number(
+            multiplyMoney(purchase?.quantity ?? 1, parseLocalizedDecimal(cost)),
+          );
+  } catch {}
   return (
     <ActionForm
       action={savePurchaseAction}
@@ -59,6 +75,26 @@ export function PurchaseEntry({
         value={purchase?.custom_item_name ?? ""}
       />
       <input type="hidden" name="quantity" value={purchase?.quantity ?? 1} />
+      {part ? (
+        <div className="sm:col-span-2 xl:col-span-4 text-sm">
+          <strong>{part.part_catalog?.name}</strong>
+          <p className="mt-1 text-[var(--muted)]">
+            {formatQuantity(part.quantity ?? 1)}{" "}
+            {part.unit_catalog?.name ?? "Ədəd"} · Vahid qiyməti:{" "}
+            {formatMoney(part.customer_unit_price ?? part.quoted_price)} ·
+            Məbləğ: {formatMoney(part.quoted_price)}
+          </p>
+          {part.notes ? <p className="mt-1">{part.notes}</p> : null}
+          {part.cost_note ? (
+            <div className="mt-3 border-l-2 border-[var(--accent)] pl-3">
+              <strong>Maya qeydi</strong>
+              <p className="mt-1 whitespace-pre-wrap break-words">
+                {part.cost_note}
+              </p>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       <label className="text-xs text-[var(--muted)]">
         Mənbə
         <select
@@ -75,10 +111,11 @@ export function PurchaseEntry({
         </select>
       </label>
       <label className="text-xs text-[var(--muted)]">
-        Faktiki maya (AZN)
-        <input
+        {Number(purchase?.quantity ?? 1) === 1
+          ? "Faktiki maya, cəmi (AZN)"
+          : "Faktiki vahid mayası (AZN)"}
+        <DecimalInput
           name="unit_price"
-          type="number"
           step="0.01"
           min="0"
           required
@@ -134,12 +171,11 @@ export function PurchaseEntry({
           {payment === "PARTIAL" ? (
             <label className="text-xs text-[var(--muted)]">
               İndi ödənən (AZN)
-              <input
+              <DecimalInput
                 name="paid_amount"
                 required
                 min="0.01"
                 step="0.01"
-                type="number"
                 className="field mt-1"
               />
             </label>
@@ -188,11 +224,8 @@ export function PurchaseEntry({
           Müştəriyə: <strong>{formatMoney(part.quoted_price)}</strong>
           <br />
           Marja:{" "}
-          {cost || source === "CUSTOMER_PROVIDED"
-            ? formatMoney(
-                part.quoted_price -
-                  (source === "CUSTOMER_PROVIDED" ? 0 : Number(cost)),
-              )
+          {actualTotal !== null
+            ? formatMoney(subtractMoney(part.quoted_price, actualTotal))
             : "Maya daxil edilməyib"}
         </p>
       ) : null}

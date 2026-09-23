@@ -32,18 +32,5 @@ export const vehicleIntakeFields: Field[] = [
 export const jobIntakeFields: Field[] = [
   { name: "customer_name", label: "Müştəri" },
   { name: "customer_phone", label: "Telefon" },
-  { name: "insurance_company", label: "Sığorta şirkəti" },
-  { name: "insurance_claim_no", label: "Sığorta işi" },
-  {
-    name: "insurance_approved_amount",
-    label: "Sığorta təsdiqi",
-    type: "number",
-  },
-  {
-    name: "agreed_budget",
-    label: "Razılaşdırılmış büdcə",
-    type: "number",
-    required: true,
-  },
   { name: "target_delivery_date", label: "Hədəf təhvil", type: "date" },
 ];

@@ -1,7 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { workerCashFixture } from "./fixtures/worker-cash";
 import { parseFilters, filterQuery } from "@/lib/filters";
-import { selectJobs } from "@/lib/supabase/workshop";
+import {
+  selectJobs,
+  selectWork,
+  selectPurchases,
+  selectCash,
+} from "@/lib/supabase/workshop";
 import {
   jobFinance,
   missingCostDescription,
@@ -17,6 +22,21 @@ import {
 import { buildWorkshopReport } from "@/lib/reports/workshop-report";
 
 describe("archive and cashier refinements", () => {
+  it("hides soft-deleted work from active operations without hiding ledger history", () => {
+    const data = workerCashFixture(),
+      f = parseFilters({});
+    const before = selectCash(data, f);
+    data.jobs[0].deleted_at = "2026-09-23";
+    data.jobs[0].archived_at = "2026-09-23";
+    expect(selectJobs(data, f).some((j) => j.id === "job")).toBe(false);
+    expect(selectWork(data, f).some((w) => w.service_job_id === "job")).toBe(
+      false,
+    );
+    expect(
+      selectPurchases(data, f).some((p) => p.service_job_id === "job"),
+    ).toBe(false);
+    expect(selectCash(data, f)).toEqual(before);
+  });
   it("keeps archive visibility separate from operational status and preserves it in URLs", () => {
     const data = workerCashFixture();
     expect(selectJobs(data).map((j) => j.id)).toEqual(["job"]);

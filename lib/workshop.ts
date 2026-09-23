@@ -3,8 +3,17 @@ import type {
   DbServiceJob,
   DbWorkItem,
 } from "@/lib/supabase/queries";
+import { decimalMinor, multiplyMoney } from "@/lib/decimal";
 
-export type RequiredPart = {
+export type QuoteMeasure = {
+  quantity?: number;
+  unit_id?: string;
+  customer_unit_price?: number | null;
+  cost_note?: string | null;
+  unit_catalog?: { id: string; name: string; short_name?: string } | null;
+};
+
+export type RequiredPart = QuoteMeasure & {
   id: string;
   service_job_id: string;
   part_catalog_id: string;
@@ -64,7 +73,9 @@ export const canGenerateHandover = (status: DbServiceJob["status"]) =>
 
 // Calculate in integer qəpik; NUMERIC remains the persistence format.
 export const cents = (value: number | string | null | undefined) =>
-  Math.round(Number(value ?? 0) * 100);
+  Number(
+    decimalMinor(typeof value === "number" ? value.toFixed(2) : (value ?? 0)),
+  );
 export const sumMoney = (values: Array<number | null | undefined>) =>
   values.reduce<number>((sum, v) => sum + cents(v), 0) / 100;
 export const subtractMoney = (a: number, b: number) =>
@@ -74,7 +85,7 @@ export const costKnown = (work: DbWorkItem) =>
 export const purchaseCost = (p: DbPurchase) =>
   p.source_type === "CUSTOMER_PROVIDED"
     ? 0
-    : cents(p.total_price ?? Number(p.quantity) * Number(p.unit_price)) / 100;
+    : cents(p.total_price ?? multiplyMoney(p.quantity, p.unit_price)) / 100;
 export function paidFor(
   cash: CashTransaction[],
   type: AllocationType,

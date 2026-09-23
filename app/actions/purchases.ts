@@ -2,7 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { getAuthedSupabase } from "@/lib/supabase/queries";
-import { moneySchema, noteValue, uuidValue } from "@/lib/workshop-validation";
+import {
+  moneySchema,
+  quantitySchema,
+  noteValue,
+  uuidValue,
+} from "@/lib/workshop-validation";
+import { decimalMinor, multiplyMoney } from "@/lib/decimal";
 import { bakuDate } from "@/lib/filters";
 import { z } from "zod";
 
@@ -56,20 +62,16 @@ export async function archiveSupplierAction(formData: FormData) {
 
 export async function savePurchaseAction(formData: FormData) {
   const { supabase, user } = await getAuthedSupabase("ADMIN");
-  const quantity = z.coerce
-    .number()
-    .positive()
-    .max(100000)
-    .parse(formData.get("quantity") || 1);
+  const quantity = quantitySchema.parse(formData.get("quantity") || 1);
   const unitPrice = moneySchema.parse(formData.get("unit_price") || 0);
   const status = z
     .enum(["PAID", "PARTIAL", "UNPAID"])
     .parse(formData.get("payment_status") || "UNPAID");
   const paidAmount =
     status === "PAID"
-      ? quantity * unitPrice
+      ? multiplyMoney(quantity, unitPrice)
       : status === "UNPAID"
-        ? 0
+        ? "0.00"
         : moneySchema.parse(formData.get("paid_amount") || 0);
   const sourceType = z
     .enum(["SUPPLIER", "INTERNAL_STOCK", "CUSTOMER_PROVIDED"])
@@ -106,7 +108,9 @@ export async function savePurchaseAction(formData: FormData) {
     throw new Error("Alan işçini seçin.");
   if (
     status === "PARTIAL" &&
-    (paidAmount <= 0 || paidAmount >= quantity * unitPrice)
+    (decimalMinor(paidAmount) <= 0n ||
+      decimalMinor(paidAmount) >=
+        decimalMinor(multiplyMoney(quantity, unitPrice)))
   )
     throw new Error(
       "Qismən ödəniş maya dəyərindən kiçik və sıfırdan böyük olmalıdır.",

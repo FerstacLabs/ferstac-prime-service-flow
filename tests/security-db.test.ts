@@ -9,6 +9,7 @@ const admin = randomUUID(),
   intake = randomUUID(),
   outsider = randomUUID();
 let db: PGlite,
+  legacyQuote: string,
   org: string,
   otherOrg: string,
   job: string,
@@ -66,6 +67,28 @@ beforeAll(async () => {
   await db.exec(
     readFileSync("supabase/migrations/0004_rbac_audit_security.sql", "utf8"),
   );
+  await db.exec(
+    `update user_profiles set must_change_password=false where auth_user_id='${admin}';`,
+  );
+  await asUser(admin);
+  work = (
+    await scalar<{ id: string }>(
+      "select create_catalog_entry('work','Legacy quoted work') as value",
+    )
+  ).id;
+  part = (
+    await scalar<{ id: string }>(
+      "select create_catalog_entry('part','Legacy quoted part') as value",
+    )
+  ).id;
+  legacyQuote = await rpcJob(randomUUID(), "10-LQ-001");
+  await db.exec("reset role;");
+  await db.exec(
+    readFileSync(
+      "supabase/migrations/0005_intake_units_money_reports.sql",
+      "utf8",
+    ),
+  );
   org = await scalar(
     "select id as value from organizations where slug='prime'",
   );
@@ -83,6 +106,35 @@ afterAll(async () => {
 describe.sequential(
   "organization RBAC and immutable audit in PostgreSQL",
   () => {
+    it("backfills unit quantity and unit price without changing old quoted totals", async () => {
+      for (const [table, price, unit] of [
+        ["job_work_items", 450, "Xidmət"],
+        ["job_required_parts", 950, "Ədəd"],
+      ] as const) {
+        const row = await scalar<{
+          quantity: number;
+          price: number;
+          total: number;
+          unit: string;
+        }>(
+          `select jsonb_build_object('quantity',q.quantity,'price',q.customer_unit_price,'total',q.quoted_price,'unit',u.name) as value from ${table} q join unit_catalog u on u.id=q.unit_id where service_job_id=$1`,
+          [legacyQuote],
+        );
+        expect(row).toEqual({ quantity: 1, price, total: price, unit });
+      }
+      expect(
+        await scalar(
+          "select count(*)::int as value from unit_catalog where organization_id=$1",
+          [org],
+        ),
+      ).toBe(12);
+      expect(
+        await scalar(
+          "select count(*)::int as value from unit_catalog where organization_id=$1",
+          [otherOrg],
+        ),
+      ).toBe(12);
+    });
     it("preserves legacy rows and creator, bootstraps the original admin", async () => {
       expect(
         await scalar(
@@ -506,6 +558,298 @@ describe.sequential(
         scalar("select set_worker_cost($1,1) as value", [work]),
       ).rejects.toThrow();
       await db.exec("reset role; set app.jwt_iat='';");
+    });
+    it("creates reusable normalized units and restricts global management", async () => {
+      await db.exec(
+        `reset role; update user_profiles set is_active=true,must_change_password=false,session_not_before=now()-interval '1 hour' where auth_user_id in ('${intake}','${cashier}');`,
+      );
+      await asUser(intake);
+      const unit = await scalar<{ id: string; name: string }>(
+        "select create_unit('  Cüt  ') as value",
+      );
+      expect(
+        (await scalar<{ id: string }>("select create_unit('cüt') as value")).id,
+      ).toBe(unit.id);
+      const each = await scalar<{ id: string }>(
+        "select create_unit('  ədəd  ') as value",
+      );
+      expect(
+        await scalar("select name as value from unit_catalog where id=$1", [
+          each.id,
+        ]),
+      ).toBe("Ədəd");
+      await expect(
+        scalar("select manage_unit($1,'Cüt','cüt',false) as value", [unit.id]),
+      ).rejects.toThrow();
+      await asUser(cashier);
+      expect(
+        await scalar(
+          "select count(*)::int as value from unit_catalog where id=$1",
+          [unit.id],
+        ),
+      ).toBe(1);
+      await expect(
+        scalar("select create_unit('Forbidden') as value"),
+      ).rejects.toThrow();
+      await asUser(outsider);
+      expect(
+        await scalar(
+          "select count(*)::int as value from unit_catalog where id=$1",
+          [unit.id],
+        ),
+      ).toBe(0);
+      await asUser(admin);
+      await scalar("select manage_unit($1,'Cüt','cüt',false) as value", [
+        unit.id,
+      ]);
+      await expect(
+        scalar("select create_unit('CÜT') as value"),
+      ).rejects.toThrow();
+      expect(
+        await scalar(
+          "select count(*)::int as value from audit_logs where entity_id=$1 and action in ('UNIT_CREATED','UNIT_UPDATED')",
+          [unit.id],
+        ),
+      ).toBe(2);
+    });
+    it("stores decimal line totals and private cost notes, rejects foreign units and excess precision", async () => {
+      await asUser(admin);
+      const work = (
+        await scalar<{ id: string }>(
+          "select create_catalog_entry('work','Decimal quantity') as value",
+        )
+      ).id;
+      const ownUnit = await scalar(
+        "select id as value from unit_catalog where name='Litr'",
+      );
+      const otherUnit = (await scalar(
+        "select create_unit('Panel') as value",
+      )) as unknown as { id: string };
+      await asUser(outsider);
+      const foreignUnit = await scalar(
+        "select id as value from unit_catalog where name='Litr'",
+      );
+      await asUser(intake);
+      const newJob = await scalar(
+        "select create_workshop_job($1,$2,$3,'[]',$4) as value",
+        [
+          JSON.stringify({ plate: "99-QT-501", make: "LIXIANG", model: "L7" }),
+          JSON.stringify({
+            funding_source: "CUSTOMER_FUNDED",
+            received_at: "2026-09-23T00:00:00+04:00",
+            target_delivery_date: "2026-09-25",
+          }),
+          JSON.stringify([
+            {
+              catalogId: work,
+              quantity: "2.5",
+              unitId: ownUnit,
+              quotedPrice: "100.40",
+              note: "Customer visible",
+              costNote: "INTERNAL MAYA ONLY",
+            },
+          ]),
+          randomUUID(),
+        ],
+      );
+      const row = await scalar<Record<string, unknown>>(
+        "select intake_work_items($1) as value",
+        [newJob],
+      );
+      expect(row.quantity).toBe(2.5);
+      expect(row.customer_unit_price).toBe(100.4);
+      expect(row.quoted_price).toBe(251);
+      expect(row.cost_note).toBe("INTERNAL MAYA ONLY");
+      expect(
+        await scalar(
+          "select target_delivery_date::text as value from service_jobs where id=$1",
+          [newJob],
+        ),
+      ).toBe("2026-09-25");
+      await scalar(
+        "select save_quote_line($1,'work',$2,100.50,'Customer edited',0.75,$3,'Updated maya') as value",
+        [newJob, work, otherUnit.id],
+      );
+      expect(
+        (
+          await scalar<Record<string, unknown>>(
+            "select intake_work_items($1) as value",
+            [newJob],
+          )
+        ).quoted_price,
+      ).toBe(75.38);
+      await expect(
+        scalar(
+          "select save_quote_line($1,'work',$2,100.50,'',1,$3,'') as value",
+          [newJob, work, foreignUnit],
+        ),
+      ).rejects.toThrow();
+      await expect(
+        scalar(
+          "select save_quote_line($1,'work',$2,100.501,'',1,$3,'') as value",
+          [newJob, work, ownUnit],
+        ),
+      ).rejects.toThrow();
+      await expect(
+        scalar(
+          "select save_quote_line($1,'work',$2,100.50,'',1.0001,$3,'') as value",
+          [newJob, work, ownUnit],
+        ),
+      ).rejects.toThrow();
+      await expect(
+        scalar(
+          "select save_quote_line($1,'work',$2,9999999999.99,'',100000,$3,'') as value",
+          [newJob, work, ownUnit],
+        ),
+      ).rejects.toThrow();
+      await asUser(admin);
+      expect(
+        await scalar(
+          "select count(*)::int as value from audit_logs where service_job_id=$1 and changes ? 'quantity'",
+          [newJob],
+        ),
+      ).toBeGreaterThan(0);
+    });
+    it("adds measured work and parts during edit and retains inactive units on existing rows", async () => {
+      await asUser(intake);
+      const w = (
+        await scalar<{ id: string }>(
+          "select create_catalog_entry('work','Edit new work') as value",
+        )
+      ).id;
+      const p = (
+        await scalar<{ id: string }>(
+          "select create_catalog_entry('part','Edit new part') as value",
+        )
+      ).id;
+      const u = (
+        await scalar<{ id: string }>(
+          "select create_unit('Reusable edit unit') as value",
+        )
+      ).id;
+      await scalar(
+        "select save_quote_line($1,'work',$2,100.40,'Public work',2.5,$3,'Private work') as value",
+        [legacyQuote, w, u],
+      );
+      await scalar(
+        "select save_quote_line($1,'part',$2,18.40,'Public part',2.5,$3,'Private part') as value",
+        [legacyQuote, p, u],
+      );
+      await asUser(admin);
+      expect(
+        Number(
+          await scalar(
+            "select quoted_price as value from job_work_items where service_job_id=$1 and work_catalog_id=$2",
+            [legacyQuote, w],
+          ),
+        ),
+      ).toBe(251);
+      expect(
+        Number(
+          await scalar(
+            "select quoted_price as value from job_required_parts where service_job_id=$1 and part_catalog_id=$2",
+            [legacyQuote, p],
+          ),
+        ),
+      ).toBe(46);
+      await scalar(
+        "select manage_unit($1,'Reusable edit unit','re',false) as value",
+        [u],
+      );
+      await asUser(intake);
+      await scalar(
+        "select save_quote_line($1,'part',$2,18.40,'Edited',2.5,$3,'Private revised') as value",
+        [legacyQuote, p, u],
+      );
+      expect(
+        await scalar(
+          "select cost_note as value from job_required_parts where service_job_id=$1 and part_catalog_id=$2",
+          [legacyQuote, p],
+        ),
+      ).toBe("Private revised");
+      await scalar(
+        "select save_quote_line($1,'work',$2,100.40,'Edited',2.5,$3,'Private revised') as value",
+        [legacyQuote, w, u],
+      );
+    });
+    it("accepts an explicitly selected unit when the original default was deactivated", async () => {
+      await asUser(admin);
+      const unit = await scalar(
+        "select id as value from unit_catalog where name='Xidmət'",
+      );
+      const active = await scalar(
+        "select id as value from unit_catalog where name='Saat'",
+      );
+      const w = (
+        await scalar<{ id: string }>(
+          "select create_catalog_entry('work','Other unit work') as value",
+        )
+      ).id;
+      await scalar("select manage_unit($1,'Xidmət','xidmət',false) as value", [
+        unit,
+      ]);
+      const id = await scalar(
+        "select create_workshop_job($1,$2,$3,'[]',$4) as value",
+        [
+          JSON.stringify({ plate: "99-UN-506", make: "QA", model: "Unit" }),
+          JSON.stringify({ funding_source: "CUSTOMER_FUNDED" }),
+          JSON.stringify([
+            {
+              catalogId: w,
+              quantity: "2",
+              unitId: active,
+              quotedPrice: "10.50",
+              note: "",
+            },
+          ]),
+          randomUUID(),
+        ],
+      );
+      expect(
+        await scalar(
+          "select unit_id as value from job_work_items where service_job_id=$1",
+          [id],
+        ),
+      ).toBe(active);
+      await scalar("select manage_unit($1,'Xidmət','xidmət',true) as value", [
+        unit,
+      ]);
+    });
+    it("allows only admin soft delete/restore and keeps accounting history intact", async () => {
+      for (const user of [intake, cashier]) {
+        await asUser(user);
+        await expect(
+          scalar("select soft_delete_service_job($1) as value", [job]),
+        ).rejects.toThrow();
+      }
+      await asUser(admin);
+      const before = await scalar(
+        "select count(*)::int as value from cash_transactions where service_job_id=$1",
+        [job],
+      );
+      await scalar("select soft_delete_service_job($1) as value", [job]);
+      expect(
+        await scalar(
+          "select archived_at is not null and deleted_at is not null as value from service_jobs where id=$1",
+          [job],
+        ),
+      ).toBe(true);
+      expect(
+        await scalar(
+          "select count(*)::int as value from cash_transactions where service_job_id=$1",
+          [job],
+        ),
+      ).toBe(before);
+      await db.query(
+        "update service_jobs set archived_at=null,deleted_at=null where id=$1",
+        [job],
+      );
+      expect(
+        await scalar(
+          "select count(*)::int as value from audit_logs where service_job_id=$1 and action in ('SERVICE_JOB_SOFT_DELETED','SERVICE_JOB_SOFT_RESTORED')",
+          [job],
+        ),
+      ).toBe(2);
     });
   },
 );

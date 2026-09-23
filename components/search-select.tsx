@@ -20,7 +20,7 @@ export function SearchSelect({
   value?: string;
   onChange?: (id: string) => void;
   required?: boolean;
-  createKind?: "work" | "part" | "role";
+  createKind?: "work" | "part" | "role" | "unit";
 }) {
   const id = useId();
   const [local, setLocal] = useState(defaultValue);

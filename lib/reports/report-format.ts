@@ -6,6 +6,7 @@ import type {
   WorkStatus,
 } from "@/lib/types";
 import { bakuDate } from "@/lib/filters";
+import { formatMoneyAZN } from "@/lib/decimal";
 
 export const reportJobStatusLabels: Record<JobStatus, string> = {
   RECEIVED: "Qəbul edilib",
@@ -42,11 +43,7 @@ export const reportPurchaseSourceLabels: Record<PurchaseSource, string> = {
 };
 
 export function formatReportMoney(value: number | null | undefined) {
-  const amount = Number(value ?? 0);
-  const sign = amount < 0 ? "-" : "";
-  const absolute = Math.abs(amount);
-  const [whole, fraction] = absolute.toFixed(2).split(".");
-  return `${sign}${whole.replace(/\B(?=(\d{3})+(?!\d))/g, " ")},${fraction} AZN`;
+  return formatMoneyAZN(value, "AZN");
 }
 
 export function formatReportDate(value: string | null | undefined) {
