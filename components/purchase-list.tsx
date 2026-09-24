@@ -15,6 +15,7 @@ import { formatMoney, formatDate } from "@/lib/format";
 import { reportPaymentLabels } from "@/lib/reports/report-format";
 import { StatusBadge } from "@/components/app-shell";
 import { EmptyState } from "@/components/empty-state";
+import { formatQuantity } from "@/lib/decimal";
 export function PurchaseList({
   data,
   items,
@@ -36,6 +37,9 @@ export function PurchaseList({
           <article key={p.id} className="py-5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h3 className="font-semibold">{partTitle(p)}</h3>
+              {part?.is_additional || !p.required_part_id ? (
+                <span className="text-xs text-[var(--accent)]">Əlavə alış</span>
+              ) : null}
               <Link
                 className="font-mono text-[var(--accent)]"
                 href={`/vehicles/${p.service_job_id}`}
@@ -47,6 +51,10 @@ export function PurchaseList({
             <dl className="metric-grid my-4 grid grid-cols-2 gap-4 text-sm md:grid-cols-3 xl:grid-cols-4">
               {[
                 ["Tarix", formatDate(p.purchase_date)],
+                [
+                  "Miqdar / vahid",
+                  `${formatQuantity(part?.quantity ?? p.quantity)} ${part?.unit_catalog?.name ?? "Ədəd"}`,
+                ],
                 [
                   "Müştəri qiyməti",
                   part
@@ -118,10 +126,12 @@ export function PurchaseList({
                     jobId={p.service_job_id}
                     part={part}
                     purchase={p}
-                    suppliers={data.suppliers.map((s) => ({
-                      id: s.id,
-                      name: supplierDisplayName(s),
-                    }))}
+                    suppliers={data.suppliers
+                      .filter((s) => s.active || s.id === p.supplier_id)
+                      .map((s) => ({
+                        id: s.id,
+                        name: supplierDisplayName(s),
+                      }))}
                     workers={data.workers.map((w) => ({
                       id: w.id,
                       name: workerDisplayName(w),

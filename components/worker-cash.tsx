@@ -5,11 +5,7 @@ import {
   Pagination,
   pageRows,
 } from "@/components/workshop-filters";
-import {
-  MoneyGrid,
-  PaymentForm,
-  WorkerCostForm,
-} from "@/components/job-finance";
+import { MoneyGrid, PaymentForm } from "@/components/job-finance";
 import { StatusBadge, statusLabels } from "@/components/app-shell";
 import { filterQuery, type WorkshopFilters as Filters } from "@/lib/filters";
 import {
@@ -247,10 +243,9 @@ export function WorkerCash({
                   />
                   {!n.known ? (
                     <p className="text-sm text-[var(--warning)]">
-                      Usta mayası daxil edilməyib
+                      Usta maya dəyəri daxil edilməyib
                     </p>
                   ) : null}
-                  <WorkerCostForm work={work} paid={n.paid} />
                   {n.canPay ? (
                     <PaymentForm
                       job={work.service_job_id}

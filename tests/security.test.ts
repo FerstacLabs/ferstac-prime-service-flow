@@ -21,6 +21,9 @@ import {
   saveSupplierAction,
   savePurchaseAction,
   deletePurchaseAction,
+  archiveSupplierAction,
+  saveWorkCostingAction,
+  createAdditionalWorkAction,
 } from "@/app/actions/purchases";
 import {
   recordPaymentAction,
@@ -149,6 +152,10 @@ describe("real server-action guards execute BEFORE mutation", () => {
     },
   );
   const forbiddenCashier = [
+    archiveSupplierAction,
+    saveWorkCostingAction,
+    createAdditionalWorkAction,
+    setWorkerCostAction,
     deleteServiceJobAction,
     manageUnitAction,
     createServiceJobAction,
@@ -170,6 +177,9 @@ describe("real server-action guards execute BEFORE mutation", () => {
     expect(state.rpc).not.toHaveBeenCalled();
   });
   it.each([
+    archiveSupplierAction,
+    saveWorkCostingAction,
+    createAdditionalWorkAction,
     deleteServiceJobAction,
     manageUnitAction,
     recordPaymentAction,
@@ -205,7 +215,7 @@ describe("real server-action guards execute BEFORE mutation", () => {
       "REDIRECT:/vehicles",
     );
   });
-  it.each(["ADMIN", "CASHIER"] as const)(
+  it.each(["ADMIN"] as const)(
     "%s can invoke the narrowly scoped financial RPC",
     async (role) => {
       state.role = role;

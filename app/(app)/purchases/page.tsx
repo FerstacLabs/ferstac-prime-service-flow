@@ -8,6 +8,10 @@ import { SubmitButton } from "@/components/submit-button";
 import { ReportActions } from "@/components/report-actions";
 import { PurchaseEntry } from "@/components/purchase-entry";
 import { PurchaseList } from "@/components/purchase-list";
+import { WorkerCostForm, AdditionalWorkForm } from "@/components/work-costing";
+import { paidFor, purchaseCost } from "@/lib/workshop";
+import { formatQuantity } from "@/lib/decimal";
+import { formatMoney } from "@/lib/format";
 import {
   WorkshopFilters,
   Pagination,
@@ -27,25 +31,34 @@ export default async function PurchasesPage({
   searchParams: Promise<SearchParams>;
 }) {
   await requireAccess(["ADMIN"]);
-  const f = parseFilters(await searchParams),
+  const params = await searchParams;
+  const workTab = params.tab === "work";
+  const archivedSuppliers = params.suppliers === "archived";
+  const f = parseFilters(params),
     data = await getWorkshop(),
     items = selectPurchases(data, f),
     master = await getMasterData();
   const jobs = data.jobs
-      .filter((j) => !j.deleted_at)
+      .filter((j) => !j.archived_at && !j.deleted_at)
       .map((j) => ({
         id: j.id,
         name: `${j.vehicles?.plate} · ${j.vehicles?.make} ${j.vehicles?.model} · ${j.job_no}`,
       })),
-    suppliers = data.suppliers.map((s) => ({
-      id: s.id,
-      name: supplierDisplayName(s),
-    })),
-    workers = data.workers.map((w) => ({
-      id: w.id,
-      name: workerDisplayName(w),
-    }));
-  const selectedJob = data.jobs.find((j) => j.id === f.job && !j.deleted_at);
+    suppliers = data.suppliers
+      .filter((s) => s.active)
+      .map((s) => ({
+        id: s.id,
+        name: supplierDisplayName(s),
+      })),
+    workers = data.workers
+      .filter((w) => w.active)
+      .map((w) => ({
+        id: w.id,
+        name: workerDisplayName(w),
+      }));
+  const selectedJob = data.jobs.find(
+    (j) => j.id === f.job && !j.archived_at && !j.deleted_at,
+  );
   const requirements = data.parts.filter(
     (p) => p.service_job_id === selectedJob?.id,
   );
@@ -53,12 +66,42 @@ export default async function PurchasesPage({
     <>
       <PageHeader
         title="Satınalma"
-        eyebrow="Detal, material və təchizatçılar"
+        eyebrow="Alışlar və əməliyyat mayası"
         actions={<ReportActions report="purchases" query={filterQuery(f)} />}
       />
+      <nav
+        aria-label="Satınalma bölmələri"
+        className="mb-5 flex flex-wrap gap-4 border-b border-[var(--border)] pb-3"
+      >
+        <Link
+          aria-current={!workTab ? "page" : undefined}
+          className={
+            !workTab
+              ? "font-semibold text-[var(--accent)]"
+              : "text-[var(--muted)]"
+          }
+          href={`/purchases?job=${f.job}`}
+        >
+          Detallar / alışlar
+        </Link>
+        <Link
+          aria-current={workTab ? "page" : undefined}
+          className={
+            workTab
+              ? "font-semibold text-[var(--accent)]"
+              : "text-[var(--muted)]"
+          }
+          href={`/purchases?tab=work&job=${f.job}`}
+        >
+          İşçilik / usta maya
+        </Link>
+      </nav>
       <section className="mb-6">
-        <h2 className="mb-3 text-lg font-semibold">Yeni alış</h2>
+        <h2 className="mb-3 text-lg font-semibold">
+          {workTab ? "İşçilik / usta maya" : "Yeni alış"}
+        </h2>
         <form className="mb-4 grid max-w-3xl grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
+          {workTab ? <input type="hidden" name="tab" value="work" /> : null}
           <SearchSelect
             name="job"
             label="Avtomobil / servis kartı"
@@ -68,124 +111,207 @@ export default async function PurchasesPage({
           />
           <button className="btn btn-primary">Seç</button>
         </form>
-        {requirements.map((part) => {
-          const purchase = data.purchases.find(
-            (p) => p.required_part_id === part.id,
-          );
-          return (
-            <div key={part.id} className="border-t border-[var(--border)] py-4">
-              <h3 className="mb-3 font-semibold">{part.part_catalog?.name}</h3>
-              {purchase ? (
-                <p className="text-sm text-[var(--success)]">
-                  {purchase.source_type === "CUSTOMER_PROVIDED"
-                    ? "Müştəri təqdim edib"
-                    : "Alınıb"}
-                </p>
-              ) : (
-                <PurchaseEntry
-                  jobId={part.service_job_id}
-                  part={part}
-                  suppliers={suppliers}
+        {workTab ? (
+          <>
+            {data.work
+              .filter((w) => w.service_job_id === selectedJob?.id)
+              .map((work) => (
+                <article
+                  key={work.id}
+                  className="border-t border-[var(--border)] py-4"
+                >
+                  <WorkerCostForm
+                    work={work}
+                    paid={paidFor(data.cash, "WORKER_WORK_ITEM", work.id)}
+                    workers={data.workers
+                      .filter(
+                        (w) => w.active || w.id === work.assigned_worker_id,
+                      )
+                      .map((w) => ({ id: w.id, name: workerDisplayName(w) }))}
+                  />
+                </article>
+              ))}
+            {selectedJob ? (
+              <details className="mt-4 border-t border-[var(--border)] pt-4">
+                <summary className="cursor-pointer font-semibold">
+                  Təklifdən kənar əlavə iş
+                </summary>
+                <AdditionalWorkForm
+                  jobId={selectedJob.id}
+                  catalog={master.workCatalog}
+                  units={master.units}
                   workers={workers}
                 />
-              )}
-            </div>
-          );
-        })}
-        {selectedJob && !requirements.length ? (
-          <p className="text-sm text-[var(--muted)]">
-            Bu servis kartında tələb olunan detal yoxdur.
-          </p>
-        ) : null}
-        {selectedJob ? (
-          <details className="mt-4 border-t border-[var(--border)] pt-4">
-            <summary className="cursor-pointer text-sm text-[var(--muted)]">
-              Təklifdən kənar əlavə alış
-            </summary>
-            <div className="mt-4">
-              <PurchaseEntry
-                jobId={f.job}
-                catalog={master.partCatalog}
-                suppliers={suppliers}
-                workers={workers}
-              />
-            </div>
-          </details>
-        ) : null}
+              </details>
+            ) : null}
+          </>
+        ) : (
+          <>
+            {requirements.map((part) => {
+              const purchase = data.purchases.find(
+                (p) => p.required_part_id === part.id,
+              );
+              return (
+                <div
+                  key={part.id}
+                  className="border-t border-[var(--border)] py-4"
+                >
+                  <h3 className="mb-3 font-semibold">
+                    {part.part_catalog?.name}
+                  </h3>
+                  {purchase ? (
+                    <div>
+                      <p className="text-sm text-[var(--success)]">
+                        {purchase.source_type === "CUSTOMER_PROVIDED"
+                          ? "Müştəri təqdim edib"
+                          : "Alınıb"}
+                      </p>
+                      <p className="mt-1 text-sm text-[var(--muted)]">
+                        {formatQuantity(part.quantity ?? 1)}{" "}
+                        {part.unit_catalog?.name ?? "Ədəd"} · Müştəri vahid
+                        qiyməti:{" "}
+                        {formatMoney(
+                          part.customer_unit_price ?? part.quoted_price,
+                        )}{" "}
+                        · Müştəri məbləği: {formatMoney(part.quoted_price)} ·
+                        Faktiki maya: {formatMoney(purchaseCost(purchase))}
+                      </p>
+                      {part.cost_note ? (
+                        <p className="mt-2 text-sm">
+                          <strong>Maya qeydi: </strong>
+                          {part.cost_note}
+                        </p>
+                      ) : null}
+                      {part.is_additional ? (
+                        <span className="text-xs text-[var(--accent)]">
+                          Əlavə alış
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <PurchaseEntry
+                      jobId={part.service_job_id}
+                      part={part}
+                      suppliers={suppliers}
+                      workers={workers}
+                    />
+                  )}
+                </div>
+              );
+            })}
+            {selectedJob && !requirements.length ? (
+              <p className="text-sm text-[var(--muted)]">
+                Bu servis kartında tələb olunan detal yoxdur.
+              </p>
+            ) : null}
+            {selectedJob ? (
+              <details className="mt-4 border-t border-[var(--border)] pt-4">
+                <summary className="cursor-pointer text-sm text-[var(--muted)]">
+                  Təklifdən kənar əlavə alış
+                </summary>
+                <div className="mt-4">
+                  <PurchaseEntry
+                    jobId={f.job}
+                    catalog={master.partCatalog}
+                    suppliers={suppliers}
+                    workers={workers}
+                    units={master.units}
+                  />
+                </div>
+              </details>
+            ) : null}
+          </>
+        )}
       </section>
-      <details className="mb-5 border-y border-[var(--border)] py-4">
-        <summary className="cursor-pointer font-semibold">
-          Yeni təchizatçı
-        </summary>
-        <ActionForm
-          action={saveSupplierAction}
-          className="mt-4 grid items-end gap-4 sm:grid-cols-2 xl:grid-cols-3"
-          reset
-        >
-          <label className="text-xs text-[var(--muted)]">
-            Təchizatçı növü
-            <select
-              name="entity_type"
-              aria-label="Təchizatçı növü"
-              className="field mt-1"
+      {!workTab ? (
+        <>
+          <details className="mb-5 border-y border-[var(--border)] py-4">
+            <summary className="cursor-pointer font-semibold">
+              Yeni təchizatçı
+            </summary>
+            <ActionForm
+              action={saveSupplierAction}
+              className="mt-4 grid items-end gap-4 sm:grid-cols-2 xl:grid-cols-3"
+              reset
             >
-              <option value="LEGAL_ENTITY">Hüquqi şəxs</option>
-              <option value="INDIVIDUAL">Fiziki şəxs</option>
-            </select>
-          </label>
-          {[
-            ["company_name", "Firma adı"],
-            ["shop_name", "Mağaza adı"],
-            ["tax_id_voen", "VÖEN"],
-            ["first_name", "Ad"],
-            ["last_name", "Soyad"],
-            ["father_name", "Ata adı"],
-            ["phone", "Telefon"],
-            ["address", "Ünvan"],
-          ].map(([name, label]) => (
-            <label key={name} className="text-xs text-[var(--muted)]">
-              {label}
-              <input name={name} aria-label={label} className="field mt-1" />
-            </label>
-          ))}
-          <label className="text-xs text-[var(--muted)] sm:col-span-2">
-            Qeyd
-            <textarea
-              name="notes"
-              maxLength={250}
-              aria-label="Qeyd"
-              rows={3}
-              className="field mt-1"
-            />
-          </label>
-          <SubmitButton pendingText="Saxlanır...">
-            Təchizatçını saxla
-          </SubmitButton>
-        </ActionForm>
-      </details>
-      <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {data.suppliers.map((s) => (
-          <Link
-            key={s.id}
-            href={`/purchases/suppliers/${s.id}`}
-            className="interactive-card"
-          >
-            <strong>{supplierDisplayName(s)}</strong>
-            <p className="mt-1 text-sm text-[var(--muted)]">
-              {s.phone || s.tax_id_voen || "-"}
-            </p>
-          </Link>
-        ))}
-      </div>
-      <h2 className="text-lg font-semibold">Alış tarixçəsi</h2>
-      <WorkshopFilters
-        scope="purchases"
-        filters={f}
-        jobs={jobs}
-        suppliers={suppliers}
-      />
-      <PurchaseList data={data} items={pageRows(items, f)} editable />
-      <Pagination filters={f} total={items.length} />
+              <label className="text-xs text-[var(--muted)]">
+                Təchizatçı növü
+                <select
+                  name="entity_type"
+                  aria-label="Təchizatçı növü"
+                  className="field mt-1"
+                >
+                  <option value="LEGAL_ENTITY">Hüquqi şəxs</option>
+                  <option value="INDIVIDUAL">Fiziki şəxs</option>
+                </select>
+              </label>
+              {[
+                ["company_name", "Firma adı"],
+                ["shop_name", "Mağaza adı"],
+                ["tax_id_voen", "VÖEN"],
+                ["first_name", "Ad"],
+                ["last_name", "Soyad"],
+                ["father_name", "Ata adı"],
+                ["phone", "Telefon"],
+                ["address", "Ünvan"],
+              ].map(([name, label]) => (
+                <label key={name} className="text-xs text-[var(--muted)]">
+                  {label}
+                  <input
+                    name={name}
+                    aria-label={label}
+                    className="field mt-1"
+                  />
+                </label>
+              ))}
+              <label className="text-xs text-[var(--muted)] sm:col-span-2">
+                Qeyd
+                <textarea
+                  name="notes"
+                  maxLength={250}
+                  aria-label="Qeyd"
+                  rows={3}
+                  className="field mt-1"
+                />
+              </label>
+              <SubmitButton pendingText="Saxlanır...">
+                Təchizatçını saxla
+              </SubmitButton>
+            </ActionForm>
+          </details>
+          <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="col-span-full flex gap-4 text-sm">
+              <Link href={`/purchases?job=${f.job}`}>Aktiv təchizatçılar</Link>
+              <Link href={`/purchases?job=${f.job}&suppliers=archived`}>
+                Arxiv
+              </Link>
+            </div>
+            {data.suppliers
+              .filter((s) => (archivedSuppliers ? !s.active : s.active))
+              .map((s) => (
+                <Link
+                  key={s.id}
+                  href={`/purchases/suppliers/${s.id}`}
+                  className="interactive-card"
+                >
+                  <strong>{supplierDisplayName(s)}</strong>
+                  <p className="mt-1 text-sm text-[var(--muted)]">
+                    {s.phone || s.tax_id_voen || "-"}
+                  </p>
+                </Link>
+              ))}
+          </div>
+          <h2 className="text-lg font-semibold">Alış tarixçəsi</h2>
+          <WorkshopFilters
+            scope="purchases"
+            filters={f}
+            jobs={jobs}
+            suppliers={suppliers}
+          />
+          <PurchaseList data={data} items={pageRows(items, f)} editable />
+          <Pagination filters={f} total={items.length} />
+        </>
+      ) : null}
     </>
   );
 }

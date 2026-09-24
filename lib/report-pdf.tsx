@@ -253,18 +253,23 @@ export function ReportDocument({ report }: { report: PrimeReport }) {
         orientation={report.orientation ?? "portrait"}
         style={[
           styles.page,
-          report.scope === "quotation" ? { paddingTop: 22 } : {},
+          ["quotation", "purchases"].includes(report.scope)
+            ? { paddingTop: 22 }
+            : {},
         ]}
         wrap
       >
         <ReportHeader report={report} />
-        <SummaryGrid items={report.summary} />
+        <SummaryGrid
+          items={report.summary}
+          band={report.scope === "purchases"}
+        />
         {report.sections.map((section) => (
           <ReportSectionView
             key={section.title}
             section={section}
             landscape={report.orientation === "landscape"}
-            compact={report.scope === "quotation"}
+            compact={["quotation", "purchases"].includes(report.scope)}
           />
         ))}
         <View style={styles.footer} fixed>
@@ -292,7 +297,7 @@ export function ReportDocument({ report }: { report: PrimeReport }) {
 }
 
 function ReportHeader({ report }: { report: PrimeReport }) {
-  const compact = report.scope === "quotation";
+  const compact = ["quotation", "purchases"].includes(report.scope);
   return (
     <View
       style={[
@@ -346,10 +351,12 @@ function SummaryGrid({
   items = [],
   stacked = false,
   compact = false,
+  band = false,
 }: {
   items?: Array<{ label: string; value: string }>;
   stacked?: boolean;
   compact?: boolean;
+  band?: boolean;
 }) {
   if (!items.length) return null;
   return (
@@ -358,7 +365,11 @@ function SummaryGrid({
         <View
           key={`${item.label}-${item.value}`}
           style={
-            stacked ? { width: "100%", paddingLeft: "35%" } : styles.summaryBox
+            band
+              ? { width: `${100 / items.length}%` }
+              : stacked
+                ? { width: "100%", paddingLeft: "35%" }
+                : styles.summaryBox
           }
           wrap={false}
         >

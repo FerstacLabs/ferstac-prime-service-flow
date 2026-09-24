@@ -1240,3 +1240,27 @@ select.field {
     padding: 0;
   }
 }
+.print-purchases {
+  max-width: 297mm;
+}
+.print-purchases > .print-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  max-width: none;
+  margin: 6pt 0;
+}
+.print-purchases > .print-summary .print-summary-item {
+  display: block;
+  border: 0.5pt solid #aaa;
+  padding: 4pt 6pt;
+}
+.print-purchases .print-row-details {
+  display: block;
+  font-size: 8pt;
+  margin: 0;
+}
+@media print {
+  .print-purchases {
+    page: wide-report;
+  }
+}

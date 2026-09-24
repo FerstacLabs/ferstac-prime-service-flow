@@ -9,6 +9,10 @@ import type { PrimeReport } from "@/lib/reports/report-types";
 import type { SearchParams } from "@/lib/filters";
 
 export const auditActions = [
+  "SUPPLIER_ARCHIVED",
+  "SUPPLIER_RESTORED",
+  "ADDITIONAL_WORK_CREATED",
+  "ADDITIONAL_PURCHASE_CREATED",
   "UNIT_CREATED",
   "UNIT_UPDATED",
   "SERVICE_JOB_SOFT_DELETED",
@@ -78,6 +82,10 @@ export type AuditLog = {
   created_at: string;
 };
 const auditDescriptions: Record<(typeof auditActions)[number], string> = {
+  SUPPLIER_ARCHIVED: "təchizatçını arxivlədi",
+  SUPPLIER_RESTORED: "təchizatçını bərpa etdi",
+  ADDITIONAL_WORK_CREATED: "təklifdən kənar iş əlavə etdi",
+  ADDITIONAL_PURCHASE_CREATED: "təklifdən kənar alış yaratdı",
   UNIT_CREATED: "ölçü vahidi yaratdı",
   UNIT_UPDATED: "ölçü vahidini yenilədi",
   SERVICE_JOB_SOFT_DELETED: "servis kartını təhlükəsiz sildi",

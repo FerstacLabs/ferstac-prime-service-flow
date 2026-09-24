@@ -63,7 +63,7 @@ export async function recordPaymentAction(form: FormData) {
   await refreshWorkshop();
 }
 export async function setWorkerCostAction(form: FormData) {
-  const { supabase } = await getAuthedSupabase("ADMIN", "CASHIER");
+  const { supabase } = await getAuthedSupabase("ADMIN");
   const { error } = await supabase.rpc("set_worker_cost", {
     p_cost: moneySchema.parse(form.get("labor_cost")),
     p_id: uuidValue(form, "id"),

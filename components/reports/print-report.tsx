@@ -50,7 +50,7 @@ export function PrintReport({ report }: { report: PrimeReport }) {
     );
   return (
     <main
-      className={`print-report ${report.orientation === "landscape" ? "print-landscape" : ""} ${report.scope === "audit" ? "print-audit" : ""} ${report.scope === "quotation" ? "print-quotation" : ""}`}
+      className={`print-report ${report.orientation === "landscape" ? "print-landscape" : ""} ${report.scope === "audit" ? "print-audit" : ""} ${["quotation", "purchases"].includes(report.scope) ? "print-quotation" : ""} ${report.scope === "purchases" ? "print-purchases" : ""}`}
     >
       <PrintTrigger />
       <header className="print-report-header">

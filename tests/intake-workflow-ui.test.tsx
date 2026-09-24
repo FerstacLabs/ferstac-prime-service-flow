@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { PurchaseEntry } from "@/components/purchase-entry";
-import { WorkerCostForm } from "@/components/job-finance";
+import { WorkerCostForm } from "@/components/work-costing";
+import { JobFinance } from "@/components/job-finance";
 import { IntakeDateInput } from "@/components/intake-date-input";
 import { FundingFields } from "@/components/funding-fields";
 import { workerCashFixture } from "./fixtures/worker-cash";
@@ -14,9 +15,41 @@ vi.mock("@/app/actions/finance", () => ({
   voidPaymentAction: vi.fn(),
   createCatalogAction: vi.fn(),
 }));
-vi.mock("@/app/actions/purchases", () => ({ savePurchaseAction: vi.fn() }));
+vi.mock("@/app/actions/purchases", () => ({
+  savePurchaseAction: vi.fn(),
+  saveWorkCostingAction: vi.fn(),
+  createAdditionalWorkAction: vi.fn(),
+}));
 afterEach(cleanup);
 describe("intake notes and date inputs", () => {
+  it("keeps worker payment controls but no cost-definition input in Kassa", () => {
+    const data = workerCashFixture();
+    const {container} = render(<JobFinance job={data.jobs[0]} data={data} editable />);
+    expect(container.querySelector('[name="labor_cost"]')).toBeNull();
+    expect(screen.queryByText("Mayanı saxla")).toBeNull();
+    expect(screen.getAllByText("Ustaya ödəniş et").length).toBeGreaterThan(0);
+  });
+  it("only requires an employee when the buyer is a worker", () => {
+    render(
+      <PurchaseEntry
+        jobId="job"
+        suppliers={[]}
+        workers={[{ id: "worker", name: "Rauf Əliyev" }]}
+      />,
+    );
+    expect(screen.queryByRole("combobox", { name: "Alan işçi" })).toBeNull();
+    fireEvent.change(screen.getByLabelText("Alıcı"), {
+      target: { value: "worker" },
+    });
+    expect(
+      (screen.getByRole("combobox", { name: "Alan işçi" }) as HTMLInputElement)
+        .required,
+    ).toBe(true);
+    fireEvent.change(screen.getByLabelText("Alıcı"), {
+      target: { value: "admin" },
+    });
+    expect(screen.queryByRole("combobox", { name: "Alan işçi" })).toBeNull();
+  });
   it("shows part cost note and measures next to actual total cost without multiplying by quoted quantity", () => {
     const part = {
       ...workerCashFixture().parts[0],

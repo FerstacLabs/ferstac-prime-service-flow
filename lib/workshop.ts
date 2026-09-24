@@ -6,6 +6,7 @@ import type {
 import { decimalMinor, multiplyMoney } from "@/lib/decimal";
 
 export type QuoteMeasure = {
+  is_additional?: boolean;
   quantity?: number;
   unit_id?: string;
   customer_unit_price?: number | null;
@@ -145,7 +146,11 @@ export function jobFinance(
     (work.some((w) => w.quoted_price != null) || required.length > 0);
   const quotedTotal = detailed
     ? sumMoney([quotedWork, quotedParts])
-    : Number(job.agreed_budget);
+    : sumMoney([
+        Number(job.agreed_budget),
+        ...work.filter((w) => w.is_additional).map((w) => w.quoted_price),
+        ...required.filter((p) => p.is_additional).map((p) => p.quoted_price),
+      ]);
   const activeWork = work.filter((w) => w.status !== "CANCELLED");
   const workCost = sumMoney(
     activeWork.filter(costKnown).map((w) => w.labor_cost),

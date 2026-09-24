@@ -98,6 +98,7 @@ export default async function EditIntakePage({
             const rows =
               kind === "work"
                 ? data.work
+                    .filter((w) => !w.is_additional)
                     .filter((w) => w.work_catalog_id)
                     .map((w) => ({
                       id: w.id,
@@ -109,16 +110,18 @@ export default async function EditIntakePage({
                       costNote: w.cost_note,
                       note: w.notes,
                     }))
-                : data.parts.map((p) => ({
-                    id: p.id,
-                    catalog: p.part_catalog_id,
-                    title: p.part_catalog?.name,
-                    price: p.customer_unit_price ?? p.quoted_price,
-                    quantity: p.quantity ?? 1,
-                    unitId: p.unit_id ?? "",
-                    costNote: p.cost_note,
-                    note: p.notes,
-                  }));
+                : data.parts
+                    .filter((p) => !p.is_additional)
+                    .map((p) => ({
+                      id: p.id,
+                      catalog: p.part_catalog_id,
+                      title: p.part_catalog?.name,
+                      price: p.customer_unit_price ?? p.quoted_price,
+                      quantity: p.quantity ?? 1,
+                      unitId: p.unit_id ?? "",
+                      costNote: p.cost_note,
+                      note: p.notes,
+                    }));
             return (
               <section
                 key={kind}

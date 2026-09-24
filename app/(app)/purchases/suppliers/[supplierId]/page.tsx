@@ -1,4 +1,7 @@
 import { requireAccess } from "@/lib/supabase/auth";
+import { archiveSupplierAction } from "@/app/actions/purchases";
+import { ActionForm } from "@/components/action-form";
+import { SubmitButton } from "@/components/submit-button";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/app-shell";
 import { ReportActions } from "@/components/report-actions";
@@ -38,6 +41,17 @@ export default async function SupplierPage({
         eyebrow="Təchizatçı"
         actions={<ReportActions report="purchases" query={filterQuery(f)} />}
       />
+      <ActionForm action={archiveSupplierAction} className="mb-4">
+        <input type="hidden" name="id" value={supplier.id} />
+        <input
+          type="hidden"
+          name="restore"
+          value={supplier.active ? "false" : "true"}
+        />
+        <SubmitButton variant={supplier.active ? "danger" : "secondary"}>
+          {supplier.active ? "Təchizatçını arxivlə" : "Təchizatçını bərpa et"}
+        </SubmitButton>
+      </ActionForm>
       <dl className="identity-grid grid gap-4 border-b border-[var(--border)] pb-5 text-sm sm:grid-cols-3">
         {[
           [

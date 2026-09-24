@@ -1,8 +1,4 @@
-import {
-  recordPaymentAction,
-  setWorkerCostAction,
-  voidPaymentAction,
-} from "@/app/actions/finance";
+import { recordPaymentAction, voidPaymentAction } from "@/app/actions/finance";
 import { ActionForm } from "@/components/action-form";
 import { SubmitButton } from "@/components/submit-button";
 import { ReportActions } from "@/components/report-actions";
@@ -12,7 +8,6 @@ import {
   partTitle,
   supplierDisplayName,
   type DbServiceJob,
-  type DbWorkItem,
 } from "@/lib/supabase/queries";
 import type { WorkshopData } from "@/lib/supabase/workshop";
 import {
@@ -34,7 +29,6 @@ import { statusLabels } from "@/components/app-shell";
 import { workerWorkFinance } from "@/lib/worker-finance";
 import { EmptyState } from "@/components/empty-state";
 import { DecimalInput } from "@/components/decimal-input";
-import { formatQuantity } from "@/lib/decimal";
 export function MoneyGrid({
   items,
 }: {
@@ -168,52 +162,6 @@ export function PaymentForm({
     </details>
   );
 }
-export function WorkerCostForm({
-  work,
-  paid,
-}: {
-  work: DbWorkItem;
-  paid: number;
-}) {
-  return (
-    <ActionForm
-      action={setWorkerCostAction}
-      className="mt-4 flex max-w-lg flex-wrap items-end gap-3"
-    >
-      <input type="hidden" name="id" value={work.id} />
-      <div className="basis-full text-sm text-[var(--muted)]">
-        {formatQuantity(work.quantity ?? 1)}{" "}
-        {work.unit_catalog?.name ?? "Xidmət"} · Vahid qiyməti:{" "}
-        {work.customer_unit_price == null
-          ? "-"
-          : formatMoney(work.customer_unit_price)}
-        {work.notes ? <p className="mt-1">{work.notes}</p> : null}
-      </div>
-      {work.cost_note ? (
-        <div className="basis-full border-l-2 border-[var(--accent)] pl-3 text-sm">
-          <strong>Maya qeydi</strong>
-          <p className="mt-1 whitespace-pre-wrap break-words">
-            {work.cost_note}
-          </p>
-        </div>
-      ) : null}
-      <label className="min-w-0 flex-[1_1_12rem] text-xs text-[var(--muted)]">
-        Usta maya dəyəri
-        <DecimalInput
-          name="labor_cost"
-          min={paid}
-          step="0.01"
-          required
-          defaultValue={costKnown(work) ? work.labor_cost : ""}
-          className="field mt-1"
-        />
-      </label>
-      <SubmitButton variant="secondary" pendingText="Saxlanır...">
-        Mayanı saxla
-      </SubmitButton>
-    </ActionForm>
-  );
-}
 export function JobFinance({
   job,
   data,
@@ -245,7 +193,10 @@ export function JobFinance({
           job={job.id}
           type="CUSTOMER_BUDGET"
           target=""
-          remaining={n.customerReceivable}
+          remaining={subtractMoney(
+            job.agreed_budget,
+            paidFor(data.cash, "CUSTOMER_BUDGET", job.id),
+          )}
         />
       ) : null}
       <section className="mt-6">
@@ -295,7 +246,7 @@ export function JobFinance({
               />
               {!worker.known ? (
                 <p className="text-sm text-[var(--warning)]">
-                  Usta mayası daxil edilməyib
+                  Usta maya dəyəri daxil edilməyib
                 </p>
               ) : null}
               {w.notes ? (
@@ -305,7 +256,6 @@ export function JobFinance({
               ) : null}
               {editable ? (
                 <>
-                  <WorkerCostForm work={w} paid={worker.paid} />
                   {w.quoted_price != null ? (
                     <PaymentForm
                       job={job.id}

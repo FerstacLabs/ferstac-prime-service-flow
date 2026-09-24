@@ -54,10 +54,12 @@ export async function archiveSupplierAction(formData: FormData) {
   const { supabase } = await getAuthedSupabase("ADMIN");
   const { error } = await supabase
     .from("suppliers")
-    .update({ active: false })
-    .eq("id", String(formData.get("id") ?? ""));
+    .update({ active: formData.get("restore") === "true" })
+    .eq("id", uuidValue(formData, "id"))
+    .select("id")
+    .single();
   if (error) throw error;
-  revalidatePath("/purchases");
+  revalidatePath("/", "layout");
 }
 
 export async function savePurchaseAction(formData: FormData) {
@@ -89,7 +91,10 @@ export async function savePurchaseAction(formData: FormData) {
     source_type: sourceType,
     supplier_id:
       sourceType === "SUPPLIER" ? text(formData.get("supplier_id")) : null,
-    purchased_by_worker_id: text(formData.get("purchased_by_worker_id")),
+    purchased_by_worker_id:
+      formData.get("purchased_by") === "worker"
+        ? text(formData.get("purchased_by_worker_id"))
+        : null,
     purchased_by_admin: formData.get("purchased_by") !== "worker",
     payment_status: status,
     paid_amount: paidAmount,
@@ -101,6 +106,19 @@ export async function savePurchaseAction(formData: FormData) {
       .date()
       .parse(text(formData.get("purchase_date")) ?? bakuDate()),
     notes: noteValue(formData),
+    ...(formData.get("additional") === "true"
+      ? {
+          additional: true,
+          quoted_quantity: quantitySchema.parse(
+            formData.get("quoted_quantity"),
+          ),
+          unit_id: uuidValue(formData, "unit_id"),
+          customer_unit_price: moneySchema.parse(
+            formData.get("customer_unit_price") || 0,
+          ),
+          cost_note: noteValue(formData, "cost_note"),
+        }
+      : {}),
   };
   if (sourceType === "SUPPLIER" && !payload.supplier_id)
     throw new Error("Təchizatçı seçilməlidir.");
@@ -124,6 +142,41 @@ export async function savePurchaseAction(formData: FormData) {
   revalidatePath("/overview");
   revalidatePath("/vehicles");
   revalidatePath("/kassa");
+}
+
+export async function saveWorkCostingAction(form: FormData) {
+  const { supabase } = await getAuthedSupabase("ADMIN");
+  const { error } = await supabase.rpc("set_work_costing", {
+    p_id: uuidValue(form, "id"),
+    p_worker: text(form.get("assigned_worker_id"))
+      ? uuidValue(form, "assigned_worker_id")
+      : null,
+    p_cost: moneySchema.parse(form.get("labor_cost")),
+  });
+  if (error) return { error: error.message };
+  revalidatePath("/", "layout");
+}
+
+export async function createAdditionalWorkAction(form: FormData) {
+  const { supabase } = await getAuthedSupabase("ADMIN");
+  const { error } = await supabase.rpc("create_additional_work", {
+    p_key: uuidValue(form, "idempotency_key"),
+    p_data: {
+      service_job_id: uuidValue(form, "service_job_id"),
+      catalog_id: uuidValue(form, "catalog_id"),
+      quantity: quantitySchema.parse(form.get("quoted_quantity")),
+      unit_id: uuidValue(form, "unit_id"),
+      customer_unit_price: moneySchema.parse(form.get("customer_unit_price")),
+      notes: noteValue(form),
+      cost_note: noteValue(form, "cost_note"),
+      worker_id: text(form.get("assigned_worker_id"))
+        ? uuidValue(form, "assigned_worker_id")
+        : null,
+      labor_cost: moneySchema.parse(form.get("labor_cost")),
+    },
+  });
+  if (error) return { error: error.message };
+  revalidatePath("/", "layout");
 }
 
 export async function deletePurchaseAction(formData: FormData) {

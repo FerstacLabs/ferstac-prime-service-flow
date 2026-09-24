@@ -15,6 +15,8 @@ export function customerQuotation(
   works: DbWorkItem[],
   parts: RequiredPart[],
 ): PrimeReport {
+  works = works.filter((row) => !row.is_additional);
+  parts = parts.filter((row) => !row.is_additional);
   const fields: ReportField[] = [];
   const add = (label: string, value: string | number | null | undefined) => {
     if (value !== null && value !== undefined && value !== "")

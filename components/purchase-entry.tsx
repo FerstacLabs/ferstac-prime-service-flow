@@ -15,6 +15,7 @@ import {
   multiplyMoney,
 } from "@/lib/decimal";
 import { subtractMoney } from "@/lib/workshop";
+import { AdditionalMeasureFields } from "@/components/work-costing";
 export function PurchaseEntry({
   jobId,
   part,
@@ -22,6 +23,7 @@ export function PurchaseEntry({
   suppliers,
   workers,
   catalog,
+  units = [],
 }: {
   jobId: string;
   part?: RequiredPart;
@@ -29,8 +31,12 @@ export function PurchaseEntry({
   suppliers: SelectOption[];
   workers: SelectOption[];
   catalog?: SelectOption[];
+  units?: SelectOption[];
 }) {
   const [source, setSource] = useState(purchase?.source_type ?? "SUPPLIER");
+  const [buyer, setBuyer] = useState(
+    purchase?.purchased_by_admin === false ? "worker" : "admin",
+  );
   const [payment, setPayment] = useState("UNPAID");
   const [cost, setCost] = useState(String(purchase?.unit_price ?? ""));
   let actualTotal: number | null = null;
@@ -45,7 +51,7 @@ export function PurchaseEntry({
   return (
     <ActionForm
       action={savePurchaseAction}
-      className="grid items-end gap-4 sm:grid-cols-2 xl:grid-cols-4"
+      className="grid max-w-6xl items-end gap-3 sm:grid-cols-2 xl:grid-cols-3"
     >
       <input type="hidden" name="service_job_id" value={jobId} />
       <input
@@ -69,6 +75,12 @@ export function PurchaseEntry({
           value={part?.part_catalog_id ?? purchase?.part_catalog_id ?? ""}
         />
       )}
+      {catalog ? (
+        <>
+          <input type="hidden" name="additional" value="true" />
+          <AdditionalMeasureFields units={units} />
+        </>
+      ) : null}
       <input
         type="hidden"
         name="custom_item_name"
@@ -76,13 +88,18 @@ export function PurchaseEntry({
       />
       <input type="hidden" name="quantity" value={purchase?.quantity ?? 1} />
       {part ? (
-        <div className="sm:col-span-2 xl:col-span-4 text-sm">
+        <div className="sm:col-span-2 xl:col-span-3 text-sm">
           <strong>{part.part_catalog?.name}</strong>
+          {part.is_additional ? (
+            <span className="ml-2 text-xs text-[var(--accent)]">
+              Əlavə alış
+            </span>
+          ) : null}
           <p className="mt-1 text-[var(--muted)]">
             {formatQuantity(part.quantity ?? 1)}{" "}
-            {part.unit_catalog?.name ?? "Ədəd"} · Vahid qiyməti:{" "}
+            {part.unit_catalog?.name ?? "Ədəd"} · Müştəri vahid qiyməti:{" "}
             {formatMoney(part.customer_unit_price ?? part.quoted_price)} ·
-            Məbləğ: {formatMoney(part.quoted_price)}
+            Müştəri məbləği: {formatMoney(part.quoted_price)}
           </p>
           {part.notes ? <p className="mt-1">{part.notes}</p> : null}
           {part.cost_note ? (
@@ -134,25 +151,27 @@ export function PurchaseEntry({
           defaultValue={purchase?.supplier_id ?? ""}
         />
       ) : null}
-      <SearchSelect
-        label="Alan işçi"
-        name="purchased_by_worker_id"
-        options={workers}
-        defaultValue={purchase?.purchased_by_worker_id ?? ""}
-      />
       <label className="text-xs text-[var(--muted)]">
         Alıcı
         <select
           name="purchased_by"
-          defaultValue={
-            purchase?.purchased_by_admin === false ? "worker" : "admin"
-          }
+          value={buyer}
+          onChange={(event) => setBuyer(event.target.value)}
           className="field mt-1"
         >
           <option value="admin">Mən / Administrator</option>
           <option value="worker">İşçi</option>
         </select>
       </label>
+      {buyer === "worker" ? (
+        <SearchSelect
+          label="Alan işçi"
+          name="purchased_by_worker_id"
+          options={workers}
+          defaultValue={purchase?.purchased_by_worker_id ?? ""}
+          required
+        />
+      ) : null}
       {!purchase && source === "SUPPLIER" ? (
         <>
           <label className="text-xs text-[var(--muted)]">
@@ -192,33 +211,40 @@ export function PurchaseEntry({
           className="field mt-1"
         />
       </label>
-      {(
-        [
-          ["part_code_oem", "OEM kodu"],
-          ["brand_model", "Brend/model"],
-          ["serial_no", "Serial nömrəsi"],
-          ["document_no", "Qaimə/sənəd"],
-        ] as const
-      ).map(([key, label]) => (
-        <label key={key} className="text-xs text-[var(--muted)]">
-          {label}
-          <input
-            name={key}
-            defaultValue={purchase?.[key] ?? ""}
-            className="field mt-1"
-          />
-        </label>
-      ))}
-      <label className="text-xs text-[var(--muted)] md:col-span-2">
-        Qeyd
-        <textarea
-          name="notes"
-          rows={3}
-          maxLength={250}
-          defaultValue={purchase?.notes ?? ""}
-          className="field mt-1"
-        />
-      </label>
+      <details className="sm:col-span-2 xl:col-span-3">
+        <summary className="cursor-pointer text-sm text-[var(--muted)]">
+          Əlavə məlumatlar
+        </summary>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {(
+            [
+              ["part_code_oem", "OEM kodu"],
+              ["brand_model", "Brend/model"],
+              ["serial_no", "Serial nömrəsi"],
+              ["document_no", "Qaimə/sənəd"],
+            ] as const
+          ).map(([key, label]) => (
+            <label key={key} className="text-xs text-[var(--muted)]">
+              {label}
+              <input
+                name={key}
+                defaultValue={purchase?.[key] ?? ""}
+                className="field mt-1"
+              />
+            </label>
+          ))}
+          <label className="text-xs text-[var(--muted)] md:col-span-2">
+            Qeyd
+            <textarea
+              name="notes"
+              rows={3}
+              maxLength={250}
+              defaultValue={purchase?.notes ?? ""}
+              className="field mt-1"
+            />
+          </label>
+        </div>
+      </details>
       {part ? (
         <p className="text-sm">
           Müştəriyə: <strong>{formatMoney(part.quoted_price)}</strong>

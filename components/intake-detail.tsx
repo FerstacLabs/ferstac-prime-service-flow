@@ -73,7 +73,7 @@ export function IntakeDetail({ data }: { data: WorkshopData }) {
           title: "Planlaşdırılan işlər",
           rows: data.work.map((w) => ({
             id: w.id,
-            name: workTitle(w),
+            name: `${workTitle(w)}${w.is_additional ? " (əlavə iş)" : ""}`,
             price: w.quoted_price,
             note: w.notes,
             measure: `${formatQuantity(w.quantity ?? 1)} ${w.unit_catalog?.name ?? "Xidmət"} × ${formatMoney(w.customer_unit_price ?? w.quoted_price ?? 0)}`,
@@ -84,7 +84,7 @@ export function IntakeDetail({ data }: { data: WorkshopData }) {
           title: "Alınacaq detallar",
           rows: data.parts.map((p) => ({
             id: p.id,
-            name: p.part_catalog?.name,
+            name: `${p.part_catalog?.name ?? "Detal"}${p.is_additional ? " (əlavə alış)" : ""}`,
             price: p.quoted_price,
             note: p.notes,
             measure: `${formatQuantity(p.quantity ?? 1)} ${p.unit_catalog?.name ?? "Ədəd"} × ${formatMoney(p.customer_unit_price ?? p.quoted_price)}`,
@@ -121,13 +121,17 @@ export function IntakeDetail({ data }: { data: WorkshopData }) {
         </section>
       ))}
       <div className="mt-6 flex justify-between border-t border-[var(--border)] py-4 font-semibold">
-        <span>Ümumi təklif</span>
+        <span>İlkin təklif</span>
         <span>
           {formatMoney(
             job.has_line_quotes
               ? sumMoney([
-                  ...data.work.map((w) => w.quoted_price),
-                  ...data.parts.map((p) => p.quoted_price),
+                  ...data.work
+                    .filter((w) => !w.is_additional)
+                    .map((w) => w.quoted_price),
+                  ...data.parts
+                    .filter((p) => !p.is_additional)
+                    .map((p) => p.quoted_price),
                 ])
               : job.agreed_budget,
           )}

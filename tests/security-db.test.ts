@@ -98,6 +98,12 @@ beforeAll(async () => {
   await db.exec(`update user_profiles set must_change_password=false where auth_user_id='${admin}';
     insert into user_profiles(auth_user_id,organization_id,username,display_name,role,must_change_password) values
     ('${cashier}','${org}','kassa','Kassir','CASHIER',false),('${intake}','${org}','qeydiyyat','Intake','INTAKE',false),('${outsider}','${otherOrg}','other','Other','ADMIN',false);`);
+  await db.exec(
+    readFileSync(
+      "supabase/migrations/0006_purchasing_work_costing.sql",
+      "utf8",
+    ),
+  );
 }, 60000);
 afterAll(async () => {
   await db?.close();
@@ -309,7 +315,9 @@ describe.sequential(
         randomUUID(),
       ]);
     });
-    it("cashier reads the SAME job, sets cost and records three payment types", async () => {
+    it("admin sets cost and cashier reads the SAME job and records three payment types", async () => {
+      await asUser(admin);
+      await scalar("select set_worker_cost($1,300) as value", [work]);
       await asUser(cashier);
       expect(
         await scalar(
@@ -317,7 +325,9 @@ describe.sequential(
           [job],
         ),
       ).toBe(intake);
-      await scalar("select set_worker_cost($1,300) as value", [work]);
+      await expect(
+        scalar("select set_worker_cost($1,300) as value", [work]),
+      ).rejects.toThrow();
       payment = await scalar(
         "select record_cash_payment($1,'CUSTOMER_WORK',$2,200,current_date,null,$3) as value",
         [job, work, randomUUID()],
@@ -850,6 +860,258 @@ describe.sequential(
           [job],
         ),
       ).toBe(2);
+    });
+    it("creates additional work atomically, preserves its source and allows only cashier payments", async () => {
+      await asUser(admin);
+      const catalog = (
+        await scalar<{ id: string }>(
+          "select create_catalog_entry('work','Additional lower arm') as value",
+        )
+      ).id;
+      const unit = await scalar(
+        "select id as value from unit_catalog where name='Xidmət' and organization_id=$1",
+        [org],
+      );
+      const id = randomUUID();
+      const payload = JSON.stringify({
+        service_job_id: job,
+        catalog_id: catalog,
+        quantity: "1",
+        unit_id: unit,
+        customer_unit_price: "300.50",
+        worker_id: worker,
+        labor_cost: "180.25",
+        notes: "Public note",
+        cost_note: "Private cost instruction",
+      });
+      expect(
+        await scalar("select create_additional_work($1,$2) as value", [
+          payload,
+          id,
+        ]),
+      ).toBe(id);
+      expect(
+        await scalar("select create_additional_work($1,$2) as value", [
+          payload,
+          id,
+        ]),
+      ).toBe(id);
+      expect(
+        await scalar(
+          "select jsonb_build_object('additional',is_additional,'price',quoted_price,'cost',labor_cost,'worker',assigned_worker_id) as value from job_work_items where id=$1",
+          [id],
+        ),
+      ).toEqual({ additional: true, price: 300.5, cost: 180.25, worker });
+      await expect(
+        db.query("update job_work_items set is_additional=false where id=$1", [
+          id,
+        ]),
+      ).rejects.toThrow();
+      await asUser(intake);
+      const projection = await scalar<Record<string, unknown>>(
+        "select x as value from intake_work_items($1) x where x->>'id'=$2",
+        [job, id],
+      );
+      expect(projection.is_additional).toBe(true);
+      expect(projection).not.toHaveProperty("labor_cost");
+      for (const user of [cashier, intake, outsider]) {
+        await asUser(user);
+        await expect(
+          scalar("select set_work_costing($1,$2,500) as value", [id, worker]),
+        ).rejects.toThrow();
+        await expect(
+          scalar("select create_additional_work($1,$2) as value", [
+            payload,
+            randomUUID(),
+          ]),
+        ).rejects.toThrow();
+        await expect(
+          scalar("select prime_private.set_worker_cost($1,500) as value", [id]),
+        ).rejects.toThrow();
+      }
+      await asUser(admin);
+      await scalar("select set_work_costing($1,$2,500) as value", [id, worker]);
+      await asUser(cashier);
+      await scalar(
+        "select record_cash_payment($1,'WORKER_WORK_ITEM',$2,200,current_date,null,$3) as value",
+        [job, id, randomUUID()],
+      );
+      expect(
+        await scalar(
+          "select jsonb_build_object('cost',labor_cost,'paid',(select sum(amount) from cash_transactions where work_item_id=w.id and voided_at is null),'status',status) as value from job_work_items w where id=$1",
+          [id],
+        ),
+      ).toEqual({ cost: 500, paid: 200, status: "TODO" });
+      await asUser(admin);
+      await db.query("update job_work_items set status='DONE' where id=$1", [
+        id,
+      ]);
+      expect(
+        Number(
+          await scalar(
+            "select labor_cost-(select sum(amount) from cash_transactions where work_item_id=w.id and voided_at is null) as value from job_work_items w where id=$1",
+            [id],
+          ),
+        ),
+      ).toBe(300);
+      for (const action of [
+        "ADDITIONAL_WORK_CREATED",
+        "WORKER_ASSIGNED",
+        "WORKER_COST_SET",
+      ])
+        expect(
+          Number(
+            await scalar(
+              "select count(*) as value from audit_logs where entity_id=$1 and action=$2",
+              [id, action],
+            ),
+          ),
+        ).toBeGreaterThan(0);
+    });
+    it("creates an additional measured purchase without double multiplication or ambiguous buyer", async () => {
+      await asUser(admin);
+      const catalog = (
+        await scalar<{ id: string }>(
+          "select create_catalog_entry('part','Additional fluid') as value",
+        )
+      ).id;
+      const unit = await scalar(
+        "select id as value from unit_catalog where name='Litr' and organization_id=$1",
+        [org],
+      );
+      const key = randomUUID();
+      const payload = {
+        service_job_id: job,
+        part_catalog_id: catalog,
+        additional: true,
+        quoted_quantity: "2.5",
+        unit_id: unit,
+        customer_unit_price: "18.40",
+        cost_note: "Private fluid note",
+        notes: "Public fluid note",
+        quantity: 1,
+        unit_price: "32.15",
+        source_type: "SUPPLIER",
+        supplier_id: supplier,
+        purchased_by_admin: false,
+        purchased_by_worker_id: null,
+        payment_status: "UNPAID",
+        paid_amount: 0,
+        purchase_date: "2026-09-24",
+      };
+      await expect(
+        scalar("select save_workshop_purchase($1,$2) as value", [
+          JSON.stringify(payload),
+          key,
+        ]),
+      ).rejects.toThrow();
+      expect(
+        Number(
+          await scalar(
+            "select count(*) as value from job_required_parts where part_catalog_id=$1",
+            [catalog],
+          ),
+        ),
+      ).toBe(0);
+      const valid = JSON.stringify({
+        ...payload,
+        purchased_by_admin: true,
+        purchased_by_worker_id: worker,
+      });
+      expect(
+        await scalar("select save_workshop_purchase($1,$2) as value", [
+          valid,
+          key,
+        ]),
+      ).toBe(key);
+      expect(
+        await scalar("select save_workshop_purchase($1,$2) as value", [
+          valid,
+          key,
+        ]),
+      ).toBe(key);
+      expect(
+        await scalar(
+          "select jsonb_build_object('cost',p.total_price,'quantity',r.quantity,'quote',r.quoted_price,'additional',r.is_additional,'worker',p.purchased_by_worker_id) as value from purchases p join job_required_parts r on r.id=p.required_part_id where p.id=$1",
+          [key],
+        ),
+      ).toEqual({
+        cost: 32.15,
+        quantity: 2.5,
+        quote: 46,
+        additional: true,
+        worker: null,
+      });
+      expect(
+        Number(
+          await scalar(
+            "select count(*) as value from audit_logs where entity_id=$1 and action='ADDITIONAL_PURCHASE_CREATED'",
+            [key],
+          ),
+        ),
+      ).toBe(1);
+    });
+    it("archives and restores suppliers without losing purchases, balances or payment history", async () => {
+      await asUser(admin);
+      const before = await scalar(
+        "select jsonb_build_object('purchases',(select count(*) from purchases where supplier_id=$1),'paid',(select sum(paid_amount) from purchases where supplier_id=$1),'ledger',(select count(*) from cash_transactions where purchase_id in(select id from purchases where supplier_id=$1))) as value",
+        [supplier],
+      );
+      for (const user of [cashier, intake]) {
+        await asUser(user);
+        await db.query("update suppliers set active=false where id=$1", [
+          supplier,
+        ]);
+      }
+      await asUser(admin);
+      expect(
+        await scalar("select active as value from suppliers where id=$1", [
+          supplier,
+        ]),
+      ).toBe(true);
+      await db.query("update suppliers set active=false where id=$1", [
+        supplier,
+      ]);
+      expect(
+        await scalar(
+          "select jsonb_build_object('purchases',(select count(*) from purchases where supplier_id=$1),'paid',(select sum(paid_amount) from purchases where supplier_id=$1),'ledger',(select count(*) from cash_transactions where purchase_id in(select id from purchases where supplier_id=$1))) as value",
+          [supplier],
+        ),
+      ).toEqual(before);
+      await expect(
+        scalar("select save_workshop_purchase($1,$2) as value", [
+          JSON.stringify({
+            service_job_id: job,
+            custom_item_name: "Archived vendor item",
+            quantity: 1,
+            unit_price: 1,
+            source_type: "SUPPLIER",
+            supplier_id: supplier,
+            purchased_by_admin: true,
+            payment_status: "UNPAID",
+            paid_amount: 0,
+            purchase_date: "2026-09-24",
+          }),
+          randomUUID(),
+        ]),
+      ).rejects.toThrow("arxivdədir");
+      await db.query("update suppliers set active=true where id=$1", [
+        supplier,
+      ]);
+      expect(
+        await scalar("select active as value from suppliers where id=$1", [
+          supplier,
+        ]),
+      ).toBe(true);
+      for (const action of ["SUPPLIER_ARCHIVED", "SUPPLIER_RESTORED"])
+        expect(
+          Number(
+            await scalar(
+              "select count(*) as value from audit_logs where entity_id=$1 and action=$2",
+              [supplier, action],
+            ),
+          ),
+        ).toBe(1);
     });
   },
 );

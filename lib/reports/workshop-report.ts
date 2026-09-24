@@ -1,7 +1,6 @@
 import {
   getWorkshop,
   selectJobs,
-  selectPurchases,
   selectWork,
   selectCash,
   type WorkshopData,
@@ -40,10 +39,11 @@ import {
   reportJobStatusLabels,
   reportFundingLabels,
   reportPaymentLabels,
-  reportPurchaseSourceLabels,
 } from "@/lib/reports/report-format";
 import { handoverReport } from "@/lib/reports/handover";
 import { customerQuotation } from "@/lib/reports/customer-quotation";
+import { purchaseReport } from "@/lib/reports/purchase-report";
+import { formatQuantity } from "@/lib/decimal";
 import { requireAccess } from "@/lib/supabase/auth";
 import { appRoles, canReport } from "@/lib/security";
 import type {
@@ -226,7 +226,19 @@ export function buildWorkshopReport(
               reportWorkStatusLabels[w.status],
               `${date(w.planned_at)} / ${date(w.completed_at) || "-"}`,
             ],
-            details: [["Qeyd", w.notes || "-"]],
+            details: [
+              [
+                "Miqdar / vahid",
+                `${formatQuantity(w.quantity ?? 1)} ${w.unit_catalog?.name ?? "Xidmət"}`,
+              ],
+              ["Mənbə", w.is_additional ? "Əlavə iş" : "İlkin təklif"],
+              ["Müştəri qiyməti", value(w.quoted_price)],
+              [
+                "Usta mayası",
+                costKnown(w) ? money(w.labor_cost) : missingValue,
+              ],
+              ["Qeyd", w.notes || "-"],
+            ],
           })),
         ),
       },
@@ -234,89 +246,8 @@ export function buildWorkshopReport(
     return report;
   }
   if (scope === "purchases") {
-    const purchases = selectPurchases(data, f),
-      supplier = data.suppliers.find((s) => s.id === f.supplier),
-      cost = sumMoney(purchases.map(purchaseCost)),
-      paid = sumMoney(
-        purchases.map((p) => paidFor(data.cash, "SUPPLIER_PURCHASE", p.id)),
-      );
-    report.summary = pairs([
-      ["Alış sayı", String(purchases.length)],
-      ["Faktiki maya", money(cost)],
-      ["Təchizatçıya ödənilib", money(paid)],
-      [
-        "Təchizatçı borcu",
-        money(
-          sumMoney(
-            purchases
-              .filter((p) => p.source_type === "SUPPLIER")
-              .map(purchaseCost),
-          ) - paid,
-        ),
-      ],
-    ]);
-    if (supplier)
-      report.sections.push({
-        title: supplierDisplayName(supplier),
-        fields: pairs([
-          ["Telefon", supplier.phone || "-"],
-          ["Ünvan", supplier.address || "-"],
-          ["VÖEN", supplier.tax_id_voen || "-"],
-          ["Qeyd", supplier.notes || "-"],
-        ]),
-      });
-    report.sections.push({
-      title: "Alış tarixçəsi",
-      table: table(
-        [
-          "Tarix / avtomobil",
-          "Detal",
-          "Müştəri qiyməti",
-          "Maya / marja",
-          "Ödənilib / qalıq",
-        ],
-        purchases.map((p) => {
-          const quote = data.parts.find(
-              (r) => r.id === p.required_part_id,
-            )?.quoted_price,
-            paid = paidFor(data.cash, "SUPPLIER_PURCHASE", p.id),
-            cost = purchaseCost(p),
-            j = data.jobs.find((j) => j.id === p.service_job_id);
-          return {
-            id: p.id,
-            values: [
-              `${date(p.purchase_date)} · ${j?.vehicles?.plate} · ${j?.vehicles?.make} ${j?.vehicles?.model}`,
-              partTitle(p),
-              value(quote),
-              `${money(cost)} / ${quote == null ? missingValue : money(subtractMoney(quote, cost))}`,
-              `${money(paid)} / ${money(p.source_type === "SUPPLIER" ? subtractMoney(cost, paid) : 0)}`,
-            ],
-            details: [
-              [
-                "Mənbə",
-                p.source_type === "SUPPLIER"
-                  ? supplierDisplayName(p.suppliers)
-                  : reportPurchaseSourceLabels[p.source_type],
-              ],
-              ["Ödəniş", reportPaymentLabels[p.payment_status]],
-              [
-                "Alan",
-                p.purchased_by_admin
-                  ? "Administrator"
-                  : workerDisplayName(p.workers),
-              ],
-              [
-                "Qaimə / OEM",
-                [p.document_no, p.part_code_oem].filter(Boolean).join(" / ") ||
-                  "-",
-              ],
-              ["Qeyd", p.notes || "-"],
-            ],
-          };
-        }),
-      ),
-    });
-    return report;
+    report.filters = filterText({ ...f, job: "", supplier: "" }, data);
+    return purchaseReport(report, data, f);
   }
   if (scope === "workers" || (scope === "kassa" && f.view === "workers")) {
     const workers = selectWorkerFinances(data, f);
