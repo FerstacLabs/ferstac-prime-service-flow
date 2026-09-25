@@ -34,6 +34,10 @@ async function rows<T>(table: string, select: string, jobId?: string) {
 }
 export async function getWorkshop(jobId?: string) {
   const { supabase, profile } = await getAuthedSupabase();
+  if (profile.role === "CASHIER")
+    throw new Error(
+      "Maliyyə məlumatları üçün təhlükəsiz proyeksiya tələb olunur.",
+    );
   if (profile.role === "INTAKE") {
     const [jobs, parts] = await Promise.all([
       rows<DbServiceJob>("service_jobs", "*,vehicles(*)", jobId),
@@ -88,7 +92,12 @@ export async function getWorkshop(jobId?: string) {
     jobs,
     work,
     parts,
-    purchases: purchases.filter((p) => !p.voided_at),
+    purchases: purchases
+      .filter((p) => !p.voided_at)
+      .map((p) => ({
+        ...p,
+        suppliers: p.suppliers ?? p.supplier_snapshot ?? null,
+      })),
     cash,
     workers,
     suppliers,
@@ -161,7 +170,9 @@ export function selectPurchases(data: WorkshopData, f: WorkshopFilters) {
         jobs.has(p.service_job_id) &&
         (f.visibility !== "active" ||
           !data.jobs.find((j) => j.id === p.service_job_id)?.deleted_at) &&
-        (!f.supplier || p.supplier_id === f.supplier) &&
+        (!f.supplier ||
+          p.supplier_id === f.supplier ||
+          p.historical_supplier_id === f.supplier) &&
         (!f.payment || p.payment_status === f.payment) &&
         inPeriod(p.purchase_date, f),
     )

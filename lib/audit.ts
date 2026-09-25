@@ -9,6 +9,21 @@ import type { PrimeReport } from "@/lib/reports/report-types";
 import type { SearchParams } from "@/lib/filters";
 
 export const auditActions = [
+  "CASH_IN_CREATED",
+  "CASH_OUT_CREATED",
+  "BANK_IN_CREATED",
+  "BANK_OUT_CREATED",
+  "INTERNAL_TRANSFER_CREATED",
+  "GENERAL_INCOME_CREATED",
+  "GENERAL_EXPENSE_CREATED",
+  "FINANCIAL_TRANSACTION_REVERSED",
+  "VEHICLE_FINANCE_CLOSED",
+  "VEHICLE_FINANCE_REOPENED",
+  "BANK_ACCOUNT_CREATED",
+  "BANK_ACCOUNT_UPDATED",
+  "BANK_ACCOUNT_ARCHIVED",
+  "TRANSACTION_CATEGORY_CREATED",
+  "SUPPLIER_PERMANENTLY_DELETED",
   "SUPPLIER_ARCHIVED",
   "SUPPLIER_RESTORED",
   "ADDITIONAL_WORK_CREATED",
@@ -50,6 +65,8 @@ export const auditActions = [
   "PAYMENT_REVERSED",
 ] as const;
 export const auditEntities = [
+  "account",
+  "category",
   "unit_catalog",
   "vehicles",
   "service_jobs",
@@ -82,6 +99,22 @@ export type AuditLog = {
   created_at: string;
 };
 const auditDescriptions: Record<(typeof auditActions)[number], string> = {
+  CASH_IN_CREATED: "nağd mədaxil qeydə aldı",
+  CASH_OUT_CREATED: "nağd məxaric qeydə aldı",
+  BANK_IN_CREATED: "bank mədaxili qeydə aldı",
+  BANK_OUT_CREATED: "bank məxarici qeydə aldı",
+  INTERNAL_TRANSFER_CREATED: "daxili köçürmə yaratdı",
+  GENERAL_INCOME_CREATED: "ümumi gəlir qeydə aldı",
+  GENERAL_EXPENSE_CREATED: "ümumi xərc qeydə aldı",
+  FINANCIAL_TRANSACTION_REVERSED: "maliyyə əməliyyatını səbəblə ləğv etdi",
+  VEHICLE_FINANCE_CLOSED: "avtomobilin maliyyəsini bağladı",
+  VEHICLE_FINANCE_REOPENED: "avtomobilin maliyyəsini yenidən açdı",
+  BANK_ACCOUNT_CREATED: "bank hesabı yaratdı",
+  BANK_ACCOUNT_UPDATED: "bank hesabını yenilədi",
+  BANK_ACCOUNT_ARCHIVED: "bank hesabını arxivlədi",
+  TRANSACTION_CATEGORY_CREATED: "maliyyə kateqoriyası yaratdı",
+  SUPPLIER_PERMANENTLY_DELETED:
+    "təchizatçını tarixçə saxlanmaqla həmişəlik sildi",
   SUPPLIER_ARCHIVED: "təchizatçını arxivlədi",
   SUPPLIER_RESTORED: "təchizatçını bərpa etdi",
   ADDITIONAL_WORK_CREATED: "təklifdən kənar iş əlavə etdi",

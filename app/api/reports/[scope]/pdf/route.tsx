@@ -7,6 +7,7 @@ import type { ReportScope } from "@/lib/reports/report-types";
 import { getCurrentAccess } from "@/lib/supabase/auth";
 import { canReport } from "@/lib/security";
 import { loadAuditReport } from "@/lib/audit";
+import { loadFinanceReport } from "@/lib/reports/finance-report";
 
 export async function GET(
   _request: Request,
@@ -28,6 +29,7 @@ export async function GET(
     );
   if (
     ![
+      "finance",
       "overview",
       "purchases",
       "workers",
@@ -44,14 +46,20 @@ export async function GET(
     );
   }
   const report =
-    scope === "audit"
-      ? await loadAuditReport(
+    scope === "finance"
+      ? await loadFinanceReport(
           Object.fromEntries(new URL(_request.url).searchParams),
         )
-      : await loadWorkshopReport(
-          scope as ReportScope,
-          parseFilters(Object.fromEntries(new URL(_request.url).searchParams)),
-        );
+      : scope === "audit"
+        ? await loadAuditReport(
+            Object.fromEntries(new URL(_request.url).searchParams),
+          )
+        : await loadWorkshopReport(
+            scope as ReportScope,
+            parseFilters(
+              Object.fromEntries(new URL(_request.url).searchParams),
+            ),
+          );
   if (!report)
     return NextResponse.json(
       { error: "Hesabat tapılmadı və ya servis hazır deyil." },

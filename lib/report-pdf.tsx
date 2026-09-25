@@ -253,7 +253,7 @@ export function ReportDocument({ report }: { report: PrimeReport }) {
         orientation={report.orientation ?? "portrait"}
         style={[
           styles.page,
-          ["quotation", "purchases"].includes(report.scope)
+          ["quotation", "purchases", "finance"].includes(report.scope)
             ? { paddingTop: 22 }
             : {},
         ]}
@@ -262,14 +262,17 @@ export function ReportDocument({ report }: { report: PrimeReport }) {
         <ReportHeader report={report} />
         <SummaryGrid
           items={report.summary}
-          band={report.scope === "purchases"}
+          band={["purchases", "finance"].includes(report.scope)}
         />
         {report.sections.map((section) => (
           <ReportSectionView
             key={section.title}
             section={section}
             landscape={report.orientation === "landscape"}
-            compact={["quotation", "purchases"].includes(report.scope)}
+            compact={["quotation", "purchases", "finance"].includes(
+              report.scope,
+            )}
+            denseLedger={report.scope === "finance"}
           />
         ))}
         <View style={styles.footer} fixed>
@@ -297,7 +300,7 @@ export function ReportDocument({ report }: { report: PrimeReport }) {
 }
 
 function ReportHeader({ report }: { report: PrimeReport }) {
-  const compact = ["quotation", "purchases"].includes(report.scope);
+  const compact = ["quotation", "purchases", "finance"].includes(report.scope);
   return (
     <View
       style={[
@@ -400,10 +403,12 @@ function ReportSectionView({
   section,
   landscape,
   compact = false,
+  denseLedger = false,
 }: {
   section: ReportSection;
   landscape: boolean;
   compact?: boolean;
+  denseLedger?: boolean;
 }) {
   return (
     <View
@@ -435,6 +440,7 @@ function ReportSectionView({
           table={section.table}
           landscape={landscape}
           compact={compact}
+          denseLedger={denseLedger}
         />
       ) : null}
       {section.paragraphs?.length ? (
@@ -505,7 +511,11 @@ function FieldGrid({
   return (
     <View style={styles.fields}>
       {fields.map((field) => (
-        <View key={field.label} style={styles.field} wrap={false}>
+        <View
+          key={field.label}
+          style={[styles.field, field.fullWidth ? { width: "100%" } : {}]}
+          wrap={false}
+        >
           <View
             style={[
               styles.fieldInner,
@@ -529,10 +539,12 @@ function ReportTableView({
   table,
   landscape,
   compact = false,
+  denseLedger = false,
 }: {
   table: ReportTable;
   landscape: boolean;
   compact?: boolean;
+  denseLedger?: boolean;
 }) {
   if (!table.rows.length) {
     return (
@@ -541,7 +553,7 @@ function ReportTableView({
       </View>
     );
   }
-  const chunks = tableChunks(table, landscape);
+  const chunks = tableChunks(table, landscape, denseLedger);
   return (
     <>
       {chunks.map((rows, index) => (
@@ -620,10 +632,20 @@ function ReportTableView({
   );
 }
 
-function tableChunks(table: ReportTable, landscape: boolean) {
+function tableChunks(
+  table: ReportTable,
+  landscape: boolean,
+  denseLedger = false,
+) {
   const chunks: ReportTable["rows"][] = [];
   const width = landscape ? 785 : 539;
-  const maxHeight = landscape ? 320 : 500;
+  const maxHeight = denseLedger
+    ? landscape
+      ? 350
+      : 550
+    : landscape
+      ? 320
+      : 500;
   const totalWidth = table.columns.reduce(
     (sum, column) => sum + (column.width ?? 10),
     0,
@@ -636,7 +658,10 @@ function tableChunks(table: ReportTable, landscape: boolean) {
       ...table.columns.map((column) => {
         const charsPerLine = Math.max(
           1,
-          Math.floor(((width * (column.width ?? 10)) / totalWidth - 9) / 5.7),
+          Math.floor(
+            ((width * (column.width ?? 10)) / totalWidth - 9) /
+              (denseLedger ? 4.2 : 5.7),
+          ),
         );
         return (row.cells[column.key] || "-")
           .split("\n")
@@ -659,7 +684,10 @@ function tableChunks(table: ReportTable, landscape: boolean) {
           ),
       0,
     );
-    const rowHeight = Math.max(24, lineCount * 12 + 10) + detailHeight;
+    const rowHeight =
+      (denseLedger
+        ? Math.max(19, lineCount * 9.6 + 6)
+        : Math.max(24, lineCount * 12 + 10)) + detailHeight;
     if (rows.length && height + rowHeight > maxHeight) {
       chunks.push(rows);
       rows = [];

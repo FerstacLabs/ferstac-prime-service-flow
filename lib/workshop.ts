@@ -24,6 +24,14 @@ export type RequiredPart = QuoteMeasure & {
   part_catalog?: { name: string } | null;
 };
 export type AllocationType =
+  | "CUSTOMER_VEHICLE"
+  | "GENERAL_IN"
+  | "GENERAL_OUT"
+  | "VEHICLE_EXPENSE"
+  | "TRANSFER_IN"
+  | "TRANSFER_OUT"
+  | "OPENING_IN"
+  | "OPENING_OUT"
   | "CUSTOMER_WORK"
   | "CUSTOMER_PART"
   | "CUSTOMER_BUDGET"
@@ -44,6 +52,14 @@ export type CashTransaction = {
   void_reason: string | null;
 };
 export const allocationLabels: Record<AllocationType, string> = {
+  CUSTOMER_VEHICLE: "Müştəri: avtomobil",
+  GENERAL_IN: "Digər mədaxil",
+  GENERAL_OUT: "Ümumi məxaric",
+  VEHICLE_EXPENSE: "Əlavə avtomobil xərci",
+  TRANSFER_IN: "Daxili köçürmə: mədaxil",
+  TRANSFER_OUT: "Daxili köçürmə: məxaric",
+  OPENING_IN: "Başlanğıc qalıq",
+  OPENING_OUT: "Başlanğıc qalıq",
   CUSTOMER_WORK: "Müştəri: iş",
   CUSTOMER_PART: "Müştəri: detal",
   CUSTOMER_BUDGET: "Müştəri: əvvəlki büdcə",
@@ -161,7 +177,9 @@ export function jobFinance(
     (r) => !purchases.some((p) => p.required_part_id === r.id),
   ).length;
   const customerPaid = sumMoney(
-    cash.filter((t) => t.direction === "IN").map((t) => t.amount),
+    cash
+      .filter((t) => t.allocation_type.startsWith("CUSTOMER_"))
+      .map((t) => t.amount),
   );
   const supplierPaid = sumMoney(
     cash
@@ -184,6 +202,11 @@ export function jobFinance(
   const supplierCost = sumMoney(
     purchases.filter((p) => p.source_type === "SUPPLIER").map(purchaseCost),
   );
+  const otherCost = sumMoney(
+    cash
+      .filter((t) => t.allocation_type === "VEHICLE_EXPENSE")
+      .map((t) => t.amount),
+  );
   return {
     detailed,
     quotedWork,
@@ -191,7 +214,8 @@ export function jobFinance(
     quotedTotal,
     workCost,
     partsCost,
-    totalCost: sumMoney([workCost, partsCost]),
+    otherCost,
+    totalCost: sumMoney([workCost, partsCost, otherCost]),
     missingWork,
     missingParts,
     customerPaid,
@@ -212,12 +236,17 @@ export function jobFinance(
       detailed && !missingParts ? subtractMoney(quotedParts, partsCost) : null,
     grossProfit:
       detailed && !missingWork && !missingParts
-        ? subtractMoney(quotedTotal, sumMoney([workCost, partsCost]))
+        ? subtractMoney(quotedTotal, sumMoney([workCost, partsCost, otherCost]))
         : null,
   };
 }
 export function cashFlow(cash: CashTransaction[]) {
-  const live = cash.filter((t) => !t.voided_at);
+  const live = cash.filter(
+    (t) =>
+      !t.voided_at &&
+      !t.allocation_type.startsWith("TRANSFER_") &&
+      !t.allocation_type.startsWith("OPENING_"),
+  );
   const cashIn = sumMoney(
     live.filter((t) => t.direction === "IN").map((t) => t.amount),
   );

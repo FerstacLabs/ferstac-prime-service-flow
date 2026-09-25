@@ -127,12 +127,18 @@ export function WorkerCostForm({
         Usta maya dəyəri
         <DecimalInput
           name="labor_cost"
-          min={paid}
+          min={0}
           required
           defaultValue={costKnown(work) ? work.labor_cost : ""}
           className="field mt-1"
         />
       </label>
+      {paid > Number(work.labor_cost) ? (
+        <p className="sm:col-span-2 text-sm text-[var(--warning)]">
+          Artıq ödəniş: {formatMoney(paid - Number(work.labor_cost))}.
+          Uzlaşdırma tələb olunur.
+        </p>
+      ) : null}
       <div>
         <SubmitButton pendingText="Saxlanır...">Mayanı saxla</SubmitButton>
       </div>

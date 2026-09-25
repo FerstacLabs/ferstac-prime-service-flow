@@ -6,11 +6,13 @@ export function ActionForm({
   children,
   className,
   reset = false,
+  onSuccess,
 }: {
   action: (form: FormData) => Promise<void | { error: string }>;
   children: React.ReactNode;
   className?: string;
   reset?: boolean;
+  onSuccess?: () => void;
 }) {
   const [error, setError] = useState("");
   const key = useRef<string | null>(null);
@@ -41,6 +43,7 @@ export function ActionForm({
             allowReset.current = false;
           }
           router.refresh();
+          onSuccess?.();
         } catch (e) {
           if (e instanceof Error && e.message.includes("NEXT_REDIRECT"))
             throw e;

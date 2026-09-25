@@ -1,10 +1,7 @@
 import { requireAccess } from "@/lib/supabase/auth";
 import Link from "next/link";
-import { saveSupplierAction } from "@/app/actions/purchases";
 import { PageHeader } from "@/components/app-shell";
-import { ActionForm } from "@/components/action-form";
 import { SearchSelect } from "@/components/search-select";
-import { SubmitButton } from "@/components/submit-button";
 import { ReportActions } from "@/components/report-actions";
 import { PurchaseEntry } from "@/components/purchase-entry";
 import { PurchaseList } from "@/components/purchase-list";
@@ -33,7 +30,6 @@ export default async function PurchasesPage({
   await requireAccess(["ADMIN"]);
   const params = await searchParams;
   const workTab = params.tab === "work";
-  const archivedSuppliers = params.suppliers === "archived";
   const f = parseFilters(params),
     data = await getWorkshop(),
     items = selectPurchases(data, f),
@@ -225,82 +221,12 @@ export default async function PurchasesPage({
       </section>
       {!workTab ? (
         <>
-          <details className="mb-5 border-y border-[var(--border)] py-4">
-            <summary className="cursor-pointer font-semibold">
-              Yeni təchizatçı
-            </summary>
-            <ActionForm
-              action={saveSupplierAction}
-              className="mt-4 grid items-end gap-4 sm:grid-cols-2 xl:grid-cols-3"
-              reset
-            >
-              <label className="text-xs text-[var(--muted)]">
-                Təchizatçı növü
-                <select
-                  name="entity_type"
-                  aria-label="Təchizatçı növü"
-                  className="field mt-1"
-                >
-                  <option value="LEGAL_ENTITY">Hüquqi şəxs</option>
-                  <option value="INDIVIDUAL">Fiziki şəxs</option>
-                </select>
-              </label>
-              {[
-                ["company_name", "Firma adı"],
-                ["shop_name", "Mağaza adı"],
-                ["tax_id_voen", "VÖEN"],
-                ["first_name", "Ad"],
-                ["last_name", "Soyad"],
-                ["father_name", "Ata adı"],
-                ["phone", "Telefon"],
-                ["address", "Ünvan"],
-              ].map(([name, label]) => (
-                <label key={name} className="text-xs text-[var(--muted)]">
-                  {label}
-                  <input
-                    name={name}
-                    aria-label={label}
-                    className="field mt-1"
-                  />
-                </label>
-              ))}
-              <label className="text-xs text-[var(--muted)] sm:col-span-2">
-                Qeyd
-                <textarea
-                  name="notes"
-                  maxLength={250}
-                  aria-label="Qeyd"
-                  rows={3}
-                  className="field mt-1"
-                />
-              </label>
-              <SubmitButton pendingText="Saxlanır...">
-                Təchizatçını saxla
-              </SubmitButton>
-            </ActionForm>
-          </details>
-          <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <div className="col-span-full flex gap-4 text-sm">
-              <Link href={`/purchases?job=${f.job}`}>Aktiv təchizatçılar</Link>
-              <Link href={`/purchases?job=${f.job}&suppliers=archived`}>
-                Arxiv
-              </Link>
-            </div>
-            {data.suppliers
-              .filter((s) => (archivedSuppliers ? !s.active : s.active))
-              .map((s) => (
-                <Link
-                  key={s.id}
-                  href={`/purchases/suppliers/${s.id}`}
-                  className="interactive-card"
-                >
-                  <strong>{supplierDisplayName(s)}</strong>
-                  <p className="mt-1 text-sm text-[var(--muted)]">
-                    {s.phone || s.tax_id_voen || "-"}
-                  </p>
-                </Link>
-              ))}
-          </div>
+          <Link
+            href="/suppliers"
+            className="mb-5 inline-block text-sm text-[var(--accent)]"
+          >
+            Təchizatçıları idarə et
+          </Link>
           <h2 className="text-lg font-semibold">Alış tarixçəsi</h2>
           <WorkshopFilters
             scope="purchases"

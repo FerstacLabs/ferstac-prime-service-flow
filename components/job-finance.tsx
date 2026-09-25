@@ -1,4 +1,5 @@
 import { recordPaymentAction, voidPaymentAction } from "@/app/actions/finance";
+import Link from "next/link";
 import { ActionForm } from "@/components/action-form";
 import { SubmitButton } from "@/components/submit-button";
 import { ReportActions } from "@/components/report-actions";
@@ -175,8 +176,7 @@ export function JobFinance({
 }) {
   const work = data.work.filter((w) => w.service_job_id === job.id),
     parts = data.parts.filter((p) => p.service_job_id === job.id),
-    purchases = data.purchases.filter((p) => p.service_job_id === job.id),
-    n = jobFinance(job, work, parts, purchases, data.cash);
+    purchases = data.purchases.filter((p) => p.service_job_id === job.id);
   return (
     <>
       <FinanceSummary job={job} data={data} />
@@ -188,24 +188,17 @@ export function JobFinance({
           </div>
         </div>
       ) : null}
-      {!n.detailed && editable ? (
-        <PaymentForm
-          job={job.id}
-          type="CUSTOMER_BUDGET"
-          target=""
-          remaining={subtractMoney(
-            job.agreed_budget,
-            paidFor(data.cash, "CUSTOMER_BUDGET", job.id),
-          )}
-        />
+      {editable ? (
+        <Link href={`/kassa?job=${job.id}`} className="btn btn-secondary">
+          Avtomobil üzrə hesablaşma
+        </Link>
       ) : null}
       <section className="mt-6">
         <h2 className="border-b border-[var(--border)] pb-3 text-lg font-semibold">
           İşlər: müştəri və usta
         </h2>
         {work.map((w) => {
-          const received = paidFor(data.cash, "CUSTOMER_WORK", w.id),
-            worker = workerWorkFinance(w, data.cash);
+          const worker = workerWorkFinance(w, data.cash);
           return (
             <article
               key={w.id}
@@ -220,13 +213,6 @@ export function JobFinance({
               <MoneyGrid
                 items={[
                   ["Müştəri qiyməti", w.quoted_price],
-                  ["Müştəridən alınıb", received],
-                  [
-                    "Müştəri qalığı",
-                    w.quoted_price != null
-                      ? subtractMoney(w.quoted_price, received)
-                      : null,
-                  ],
                   ["Usta mayası", costKnown(w) ? w.labor_cost : null],
                   ["Qazanılmış", worker.earned],
                   ["Ustaya ödənilib", worker.paid],
@@ -254,26 +240,6 @@ export function JobFinance({
                   {w.notes}
                 </p>
               ) : null}
-              {editable ? (
-                <>
-                  {w.quoted_price != null ? (
-                    <PaymentForm
-                      job={job.id}
-                      type="CUSTOMER_WORK"
-                      target={w.id}
-                      remaining={subtractMoney(w.quoted_price, received)}
-                    />
-                  ) : null}
-                  {worker.canPay ? (
-                    <PaymentForm
-                      job={job.id}
-                      type="WORKER_WORK_ITEM"
-                      target={w.id}
-                      remaining={worker.remaining ?? 0}
-                    />
-                  ) : null}
-                </>
-              ) : null}
             </article>
           );
         })}
@@ -284,8 +250,7 @@ export function JobFinance({
         </h2>
         {parts.map((r) => {
           const matches = purchases.filter((p) => p.required_part_id === r.id),
-            cost = sumMoney(matches.map(purchaseCost)),
-            received = paidFor(data.cash, "CUSTOMER_PART", r.id);
+            cost = sumMoney(matches.map(purchaseCost));
           return (
             <article
               key={r.id}
@@ -295,8 +260,6 @@ export function JobFinance({
               <MoneyGrid
                 items={[
                   ["Müştəri qiyməti", r.quoted_price],
-                  ["Müştəridən alınıb", received],
-                  ["Müştəri qalığı", subtractMoney(r.quoted_price, received)],
                   ["Faktiki maya", matches.length ? cost : null],
                   [
                     "Detal mənfəəti",
@@ -314,20 +277,12 @@ export function JobFinance({
                   {r.notes}
                 </p>
               ) : null}
-              {editable ? (
-                <PaymentForm
-                  job={job.id}
-                  type="CUSTOMER_PART"
-                  target={r.id}
-                  remaining={subtractMoney(r.quoted_price, received)}
-                />
-              ) : null}
               {matches.map((p) => (
                 <PurchaseBalance
                   key={p.id}
                   purchase={p}
                   data={data}
-                  editable={editable}
+                  editable={false}
                 />
               ))}
             </article>
@@ -341,7 +296,7 @@ export function JobFinance({
               className="border-b border-[var(--border)] py-4"
             >
               <h3>{partTitle(p)}</h3>
-              <PurchaseBalance purchase={p} data={data} editable={editable} />
+              <PurchaseBalance purchase={p} data={data} editable={false} />
             </article>
           ))}
       </section>

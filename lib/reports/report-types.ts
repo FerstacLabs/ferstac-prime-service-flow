@@ -1,4 +1,5 @@
 export type ReportScope =
+  | "finance"
   | "audit"
   | "overview"
   | "purchases"
@@ -17,6 +18,7 @@ export type ReportSummaryItem = {
 export type ReportField = {
   label: string;
   value: string;
+  fullWidth?: boolean;
 };
 
 export type ReportTableColumn = {

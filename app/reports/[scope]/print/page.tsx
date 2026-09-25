@@ -4,6 +4,7 @@ import { loadWorkshopReport } from "@/lib/reports/workshop-report";
 import { parseFilters, type SearchParams } from "@/lib/filters";
 import type { ReportScope } from "@/lib/reports/report-types";
 import { loadAuditReport } from "@/lib/audit";
+import { loadFinanceReport } from "@/lib/reports/finance-report";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,7 @@ export default async function ReportPrintPage({
   const { scope } = await params;
   if (
     ![
+      "finance",
       "overview",
       "purchases",
       "workers",
@@ -29,12 +31,14 @@ export default async function ReportPrintPage({
   )
     notFound();
   const report =
-    scope === "audit"
-      ? await loadAuditReport(await searchParams)
-      : await loadWorkshopReport(
-          scope as ReportScope,
-          parseFilters(await searchParams),
-        );
+    scope === "finance"
+      ? await loadFinanceReport(await searchParams)
+      : scope === "audit"
+        ? await loadAuditReport(await searchParams)
+        : await loadWorkshopReport(
+            scope as ReportScope,
+            parseFilters(await searchParams),
+          );
   if (!report) notFound();
   return <PrintReport report={report} />;
 }

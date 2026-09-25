@@ -50,7 +50,7 @@ export function PrintReport({ report }: { report: PrimeReport }) {
     );
   return (
     <main
-      className={`print-report ${report.orientation === "landscape" ? "print-landscape" : ""} ${report.scope === "audit" ? "print-audit" : ""} ${["quotation", "purchases"].includes(report.scope) ? "print-quotation" : ""} ${report.scope === "purchases" ? "print-purchases" : ""}`}
+      className={`print-report ${report.orientation === "landscape" ? "print-landscape" : ""} ${report.scope === "audit" ? "print-audit" : ""} ${["quotation", "purchases", "finance"].includes(report.scope) ? "print-quotation" : ""} ${report.scope === "purchases" ? "print-purchases" : ""} ${report.scope === "finance" ? "print-finance" : ""}`}
     >
       <PrintTrigger />
       <header className="print-report-header">
@@ -155,7 +155,11 @@ function Fields({ fields }: { fields: ReportField[] }) {
       {fields.map((field) => (
         <div
           key={field.label}
-          className={field.value.length > 140 ? "print-wide-field" : undefined}
+          className={
+            field.fullWidth || field.value.length > 140
+              ? "print-wide-field"
+              : undefined
+          }
         >
           <dt>{field.label}</dt>
           <dd>{field.value}</dd>

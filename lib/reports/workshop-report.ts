@@ -16,7 +16,6 @@ import { parseFilters, type WorkshopFilters } from "@/lib/filters";
 import {
   jobFinance,
   cashFlow,
-  paidFor,
   purchaseCost,
   costKnown,
   sumMoney,
@@ -45,6 +44,7 @@ import { customerQuotation } from "@/lib/reports/customer-quotation";
 import { purchaseReport } from "@/lib/reports/purchase-report";
 import { formatQuantity } from "@/lib/decimal";
 import { requireAccess } from "@/lib/supabase/auth";
+import { loadFinanceReport } from "@/lib/reports/finance-report";
 import { appRoles, canReport } from "@/lib/security";
 import type {
   PrimeReport,
@@ -86,7 +86,21 @@ export async function loadWorkshopReport(
   scope: ReportScope,
   f = parseFilters({}),
 ) {
-  await requireAccess(appRoles.filter((role) => canReport(role, scope)));
+  const { profile } = await requireAccess(
+    appRoles.filter((role) => canReport(role, scope)),
+  );
+  if (
+    scope === "kassa" ||
+    scope === "finance" ||
+    (scope === "workers" && profile.role === "CASHIER")
+  )
+    return loadFinanceReport({
+      from: f.from,
+      to: f.to,
+      job: f.job,
+      worker: f.worker,
+      supplier: f.supplier,
+    });
   const data = await getWorkshop(f.job || undefined);
   if (
     (scope === "quotation" || scope === "handover" || scope === "vehicle") &&
@@ -98,7 +112,36 @@ export async function loadWorkshopReport(
     !data.jobs.some((j) => j.id === f.job && canGenerateHandover(j.status))
   )
     return null;
-  return buildWorkshopReport(scope, data, f);
+  if (scope === "vehicle") {
+    const finance = await loadFinanceReport({
+      from: f.from,
+      to: f.to,
+      job: f.job,
+    });
+    if (!finance) return null;
+    const job = data.jobs.find((j) => j.id === f.job)!;
+    const n = jobFinance(job, data.work, data.parts, data.purchases, data.cash);
+    finance.title = "Servis kartı maliyyə hesabatı";
+    finance.summary = pairs([
+      ["Müştəri yekun məbləği", money(n.quotedTotal)],
+      ["Məlum ümumi maya", money(n.totalCost)],
+      ["Brüt mənfəət", value(n.grossProfit)],
+      ["Müştəridən alınıb", money(n.customerPaid)],
+    ]);
+    return finance;
+  }
+  const report = buildWorkshopReport(scope, data, f);
+  if (scope === "workers") {
+    const finance = await loadFinanceReport({
+      from: f.from,
+      to: f.to,
+      job: f.job,
+      worker: f.worker,
+      supplier: f.supplier,
+    });
+    if (finance) report.sections.push(...finance.sections);
+  }
+  return report;
 }
 function filterText(f: WorkshopFilters, data: WorkshopData) {
   const entries: Array<[string, string | undefined]> = [
@@ -162,6 +205,7 @@ export function buildWorkshopReport(
   f = parseFilters({}),
 ): PrimeReport {
   const title = {
+    finance: "Mədaxil / Məxaric hesabatı",
     audit: "Audit jurnalı",
     overview: "İcmal hesabatı",
     purchases: "Satınalma hesabatı",
@@ -548,19 +592,16 @@ function vehicleSections(
           "İş / usta / status",
           "Müştəri qiyməti",
           "Usta mayası",
-          "Müştəri: alınıb / qalıq",
           "Usta: ödənilib / qazanılmış qalıq",
         ],
         work.map((w) => {
-          const received = paidFor(data.cash, "CUSTOMER_WORK", w.id),
-            finance = workerWorkFinance(w, data.cash);
+          const finance = workerWorkFinance(w, data.cash);
           return {
             id: w.id,
             values: [
               `${workTitle(w)} · ${workerDisplayName(w.workers)} · ${reportWorkStatusLabels[w.status]}`,
               value(w.quoted_price),
               costKnown(w) ? money(w.labor_cost) : missingValue,
-              `${money(received)} / ${w.quoted_price == null ? missingValue : money(subtractMoney(w.quoted_price, received))}`,
               `${money(finance.paid)} / ${money(finance.outstanding)}`,
             ],
             details: [
@@ -591,13 +632,12 @@ function vehicleSections(
     {
       title: "Tələb olunan detallar",
       table: table(
-        ["Detal", "Müştəri qiyməti", "Maya / marja", "Müştəri: alınıb / qalıq"],
+        ["Detal", "Müştəri qiyməti", "Maya / marja"],
         parts.map((r) => {
           const purchases = data.purchases.filter(
               (p) => p.required_part_id === r.id,
             ),
-            cost = sumMoney(purchases.map(purchaseCost)),
-            received = paidFor(data.cash, "CUSTOMER_PART", r.id);
+            cost = sumMoney(purchases.map(purchaseCost));
           return {
             id: r.id,
             values: [
@@ -606,7 +646,6 @@ function vehicleSections(
               purchases.length
                 ? `${money(cost)} / ${money(subtractMoney(r.quoted_price, cost))}`
                 : missingValue,
-              `${money(received)} / ${money(subtractMoney(r.quoted_price, received))}`,
             ],
             details: [["Qeyd", r.notes || "-"]],
           };

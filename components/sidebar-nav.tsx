@@ -11,12 +11,14 @@ import {
   Wallet,
   ScrollText,
   ShieldCheck,
+  Truck,
 } from "lucide-react";
 import { canAccessPath, type AppRole } from "@/lib/security";
 
 const items = [
   { href: "/vehicles", label: "Avtomobillər", icon: CarFront },
   { href: "/purchases", label: "Satınalma", icon: ShoppingCart },
+  { href: "/suppliers", label: "Təchizatçılar", icon: Truck },
   { href: "/workers", label: "İşçilər", icon: Users },
   { href: "/work", label: "Görüləcək işlər", icon: ClipboardList },
   { href: "/overview", label: "İcmal", icon: LayoutDashboard },

@@ -22,12 +22,15 @@ vi.mock("@/app/actions/purchases", () => ({
 }));
 afterEach(cleanup);
 describe("intake notes and date inputs", () => {
-  it("keeps worker payment controls but no cost-definition input in Kassa", () => {
+  it("routes payments through vehicle settlement without inline cost or payment forms", () => {
     const data = workerCashFixture();
-    const {container} = render(<JobFinance job={data.jobs[0]} data={data} editable />);
+    const { container } = render(
+      <JobFinance job={data.jobs[0]} data={data} editable />,
+    );
     expect(container.querySelector('[name="labor_cost"]')).toBeNull();
     expect(screen.queryByText("Mayanı saxla")).toBeNull();
-    expect(screen.getAllByText("Ustaya ödəniş et").length).toBeGreaterThan(0);
+    expect(screen.getByText("Avtomobil üzrə hesablaşma")).toBeTruthy();
+    expect(container.querySelector('[name="allocation_type"]')).toBeNull();
   });
   it("only requires an employee when the buyer is a worker", () => {
     render(

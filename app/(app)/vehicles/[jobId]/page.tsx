@@ -22,6 +22,8 @@ import { Archive, ArchiveRestore } from "lucide-react";
 import { getWorkshop } from "@/lib/supabase/workshop";
 import { formatDate, formatMoney } from "@/lib/format";
 import { IntakeDetail } from "@/components/intake-detail";
+import { getFinance } from "@/lib/supabase/finance";
+import { NewMovement, SettlementDialog } from "@/components/finance-forms";
 export const dynamic = "force-dynamic";
 export default async function VehicleDetailPage({
   params,
@@ -34,6 +36,8 @@ export default async function VehicleDetailPage({
     job = data.jobs[0];
   if (!job || (job.deleted_at && profile.role !== "ADMIN")) notFound();
   if (profile.role === "INTAKE") return <IntakeDetail data={data} />;
+  const finance = await getFinance(),
+    financialJob = finance.jobs.find((j) => j.id === job.id);
   const v = job.vehicles!;
   const info: Array<[string, string | number | null | undefined]> = [
     ["Müştəri", job.customer_name],
@@ -153,6 +157,19 @@ export default async function VehicleDetailPage({
         </dl>
       </details>
       <JobFinance job={job} data={data} />
+      {financialJob && !financialJob.closed_at ? (
+        <div className="my-5 flex flex-wrap gap-3">
+          {financialJob.customer_due > 0 ? (
+            <NewMovement
+              data={finance}
+              job={financialJob}
+              direction="IN"
+              channel="CASH"
+            />
+          ) : null}
+          <SettlementDialog data={finance} job={financialJob} />
+        </div>
+      ) : null}
       <section className="mt-6">
         <h2 className="text-lg font-semibold">Ödəniş tarixçəsi</h2>
         <CashHistory cash={data.cash} data={data} />

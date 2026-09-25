@@ -81,6 +81,8 @@ export type DbWorkItem = QuoteMeasure & {
 };
 
 export type DbPurchase = {
+  supplier_snapshot?: DbSupplier | null;
+  historical_supplier_id?: string | null;
   required_part_id?: string | null;
   voided_at?: string | null;
   id: string;

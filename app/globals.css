@@ -1243,6 +1243,25 @@ select.field {
 .print-purchases {
   max-width: 297mm;
 }
+.print-finance.print-landscape {
+  max-width: 297mm;
+}
+.print-finance > .print-summary {
+  display: flex;
+  max-width: none;
+  margin: 6pt 0;
+}
+.print-finance > .print-summary .print-summary-item {
+  flex: 1;
+  display: block;
+  border: 0.5pt solid #aaa;
+  padding: 4pt;
+}
+@media print {
+  .print-finance.print-landscape {
+    page: wide-report;
+  }
+}
 .print-purchases > .print-summary {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

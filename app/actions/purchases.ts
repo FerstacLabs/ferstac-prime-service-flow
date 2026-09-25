@@ -47,7 +47,7 @@ export async function saveSupplierAction(formData: FormData) {
     : supabase.from("suppliers").insert(payload);
   const { error } = await query;
   if (error) throw error;
-  revalidatePath("/purchases");
+  revalidatePath("/", "layout");
 }
 
 export async function archiveSupplierAction(formData: FormData) {

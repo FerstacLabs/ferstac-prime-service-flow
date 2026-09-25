@@ -16,6 +16,8 @@ import { getWorkshop, selectPurchases } from "@/lib/supabase/workshop";
 import { supplierDisplayName } from "@/lib/supabase/queries";
 import { purchaseCost, paidFor, sumMoney, subtractMoney } from "@/lib/workshop";
 import { formatMoney, formatDate } from "@/lib/format";
+import { SupplierForm } from "@/components/supplier-form";
+import { DeleteSupplierDialog } from "@/components/finance-forms";
 export default async function SupplierPage({
   params,
   searchParams,
@@ -52,6 +54,17 @@ export default async function SupplierPage({
           {supplier.active ? "Təchizatçını arxivlə" : "Təchizatçını bərpa et"}
         </SubmitButton>
       </ActionForm>
+      <DeleteSupplierDialog
+        id={supplier.id}
+        name={supplierDisplayName(supplier)}
+      />
+      <details className="my-5">
+        <summary className="cursor-pointer">Redaktə</summary>
+        <SupplierForm supplier={supplier} />
+      </details>
+      <div className="mb-4">
+        <ReportActions report="finance" query={`supplier=${supplier.id}`} />
+      </div>
       <dl className="identity-grid grid gap-4 border-b border-[var(--border)] pb-5 text-sm sm:grid-cols-3">
         {[
           [

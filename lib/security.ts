@@ -17,7 +17,7 @@ export const normalizeUsername = (value: string) => value.trim().toLowerCase();
 export const canReport = (role: AppRole, scope: string) =>
   role === "ADMIN" ||
   (role === "CASHIER"
-    ? ["kassa", "workers"].includes(scope)
+    ? ["kassa", "workers", "finance"].includes(scope)
     : scope === "quotation");
 export function canAccessPath(role: AppRole, path: string) {
   if (path === "/change-password") return true;
