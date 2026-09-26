@@ -139,3 +139,7 @@ pnpm build
 - Closure requires known costs, every supplier/worker allocation exactly settled and customer due zero. Closed jobs reject financial mutations. ADMIN must reopen with a reason. The immutable audit records actor/time, individual cost and payment totals, customer remaining and reopening reason.
 - Finance reports share filters and calculation code for PDF/Print: cash orders, bank documents, combined journal, daily/period source balances, vehicle, worker and supplier payments. Orders are internal documents, not asserted statutory forms.
 - See [manual 0007 rollout](docs/finance-ledger-rollout.md). Production migration is never part of the build or deployment command.
+
+## Operational Work Queue (0008)
+
+INTAKE can assign workers and update operational status/notes from `/work` without receiving financial fields. Work/audit PDF and Print use compact tables; Audit and Kassa share Azerbaijani display labels, and robot branding has been removed. Apply the new forward migration before deployment; see [manual 0008 rollout](docs/operational-work-queue-rollout.md). Production migrations are manual, never part of the build.

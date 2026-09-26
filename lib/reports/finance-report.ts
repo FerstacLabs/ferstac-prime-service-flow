@@ -1,4 +1,5 @@
 import type { PrimeReport, ReportSection } from "@/lib/reports/report-types";
+import { financialCategoryLabel } from "@/lib/finance-labels";
 import {
   channelName,
   filterLedger,
@@ -314,17 +315,7 @@ export function financeReport(
             : t.direction === "IN"
               ? "Mədaxil"
               : "Məxaric",
-          category: t.transfer_id
-            ? "Daxili köçürmə"
-            : t.allocation_type.startsWith("OPENING_")
-              ? "Başlanğıc qalıq"
-              : data.categories.find((c) => c.id === t.category_id)?.name ||
-                {
-                  CUSTOMER_VEHICLE: "Müştəri ödənişi",
-                  SUPPLIER_PURCHASE: "Təchizatçı ödənişi",
-                  WORKER_WORK_ITEM: "Usta ödənişi",
-                }[t.allocation_type] ||
-                "Ödəniş",
+          category: financialCategoryLabel(t, data.categories),
           party: t.counterparty_name_snapshot || "-",
           vehicle:
             data.jobs.find((j) => j.id === t.service_job_id)?.plate || "-",

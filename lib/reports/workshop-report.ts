@@ -1,7 +1,6 @@
 import {
   getWorkshop,
   selectJobs,
-  selectWork,
   selectCash,
   type WorkshopData,
 } from "@/lib/supabase/workshop";
@@ -42,7 +41,8 @@ import {
 import { handoverReport } from "@/lib/reports/handover";
 import { customerQuotation } from "@/lib/reports/customer-quotation";
 import { purchaseReport } from "@/lib/reports/purchase-report";
-import { formatQuantity } from "@/lib/decimal";
+import { workQueueReport } from "@/lib/reports/work-queue-report";
+import { getWorkQueue } from "@/lib/supabase/work-queue";
 import { requireAccess } from "@/lib/supabase/auth";
 import { loadFinanceReport } from "@/lib/reports/finance-report";
 import { appRoles, canReport } from "@/lib/security";
@@ -89,6 +89,7 @@ export async function loadWorkshopReport(
   const { profile } = await requireAccess(
     appRoles.filter((role) => canReport(role, scope)),
   );
+  if (scope === "work") return workQueueReport(await getWorkQueue(), f);
   if (
     scope === "kassa" ||
     scope === "finance" ||
@@ -253,41 +254,7 @@ export function buildWorkshopReport(
     return report;
   }
   if (scope === "work") {
-    const works = selectWork(data, f);
-    report.summary = pairs([["İş sayı", String(works.length)]]);
-    report.sections = [
-      {
-        title: "İş siyahısı",
-        table: table(
-          ["Avtomobil", "İş", "Usta", "Status", "Plan / tamamlanma"],
-          works.map((w) => ({
-            id: w.id,
-            values: [
-              data.jobs.find((j) => j.id === w.service_job_id)?.vehicles
-                ?.plate || "-",
-              workTitle(w),
-              workerDisplayName(w.workers),
-              reportWorkStatusLabels[w.status],
-              `${date(w.planned_at)} / ${date(w.completed_at) || "-"}`,
-            ],
-            details: [
-              [
-                "Miqdar / vahid",
-                `${formatQuantity(w.quantity ?? 1)} ${w.unit_catalog?.name ?? "Xidmət"}`,
-              ],
-              ["Mənbə", w.is_additional ? "Əlavə iş" : "İlkin təklif"],
-              ["Müştəri qiyməti", value(w.quoted_price)],
-              [
-                "Usta mayası",
-                costKnown(w) ? money(w.labor_cost) : missingValue,
-              ],
-              ["Qeyd", w.notes || "-"],
-            ],
-          })),
-        ),
-      },
-    ];
-    return report;
+    return workQueueReport(data, f);
   }
   if (scope === "purchases") {
     report.filters = filterText({ ...f, job: "", supplier: "" }, data);

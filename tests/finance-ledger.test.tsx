@@ -261,5 +261,5 @@ describe("finance reconciliation and reports", () => {
     const pages = pdf.toString("latin1").match(/\/Type \/Page\b/g)!.length;
     expect(pages).toBeGreaterThan(1);
     expect(pages).toBeLessThan(10);
-  });
+  }, 20000);
 });

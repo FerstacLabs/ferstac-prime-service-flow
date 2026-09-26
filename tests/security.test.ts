@@ -102,7 +102,6 @@ describe("role routes and report matrix", () => {
   it.each([
     "/purchases",
     "/workers",
-    "/work",
     "/overview",
     "/kassa",
     "/audit",
@@ -126,7 +125,7 @@ describe("role routes and report matrix", () => {
         role === "ADMIN" ||
         (role === "CASHIER"
           ? ["kassa", "workers"].includes(scope)
-          : scope === "quotation");
+          : ["quotation", "work"].includes(scope));
       expect(canReport(role, scope)).toBe(expected);
       expect(canAccessPath(role, `/api/reports/${scope}/pdf`)).toBe(expected);
       expect(canAccessPath(role, `/reports/${scope}/print`)).toBe(expected);
@@ -189,13 +188,32 @@ describe("real server-action guards execute BEFORE mutation", () => {
     saveSupplierAction,
     savePurchaseAction,
     deletePurchaseAction,
-    updateWorkItemAction,
     archiveServiceJobAction,
   ])("intake cannot call %s", async (action) => {
     state.role = "INTAKE";
     await expect(action(new FormData())).rejects.toThrow("REDIRECT:/vehicles");
     expect(state.from).not.toHaveBeenCalled();
     expect(state.rpc).not.toHaveBeenCalled();
+  });
+  it("intake can assign work but forged money fields are never forwarded", async () => {
+    state.role = "INTAKE";
+    state.rpc.mockResolvedValue({ error: null });
+    const form = new FormData();
+    form.set("id", "10000000-0000-4000-8000-000000000001");
+    form.set("assigned_worker_id", "10000000-0000-4000-8000-000000000002");
+    form.set("status", "IN_PROGRESS");
+    form.set("notes", "İşə başlandı");
+    form.set("labor_cost", "999");
+    form.set("quoted_price", "999");
+    await updateWorkItemAction(form);
+    expect(state.rpc).toHaveBeenCalledWith("update_work_assignment", {
+      p_id: form.get("id"),
+      p_worker: form.get("assigned_worker_id"),
+      p_status: "IN_PROGRESS",
+      p_notes: "İşə başlandı",
+    });
+    expect(state.from).not.toHaveBeenCalled();
+    expect(canAccessPath("INTAKE", "/work")).toBe(true);
   });
   it.each(["CUSTOMER_WORK", "SUPPLIER_PURCHASE", "WORKER_WORK_ITEM"])(
     "intake rejects forged %s payment",

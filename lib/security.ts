@@ -18,14 +18,17 @@ export const canReport = (role: AppRole, scope: string) =>
   role === "ADMIN" ||
   (role === "CASHIER"
     ? ["kassa", "workers", "finance"].includes(scope)
-    : scope === "quotation");
+    : ["quotation", "work"].includes(scope));
 export function canAccessPath(role: AppRole, path: string) {
   if (path === "/change-password") return true;
   const report = /^\/(?:api\/)?reports\/([^/]+)\//.exec(path);
   if (report) return canReport(role, report[1]);
   if (role === "ADMIN") return true;
   const home = roleHome(role);
-  return path === home || (role === "INTAKE" && path.startsWith(`${home}/`));
+  return (
+    path === home ||
+    (role === "INTAKE" && (path === "/work" || path.startsWith(`${home}/`)))
+  );
 }
 export const validPassword = (password: string) =>
   password.length >= 12 &&

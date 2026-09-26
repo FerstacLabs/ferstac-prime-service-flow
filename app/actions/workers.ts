@@ -47,31 +47,18 @@ export async function saveWorkerAction(formData: FormData) {
 }
 
 export async function updateWorkItemAction(formData: FormData) {
-  const { supabase } = await getAuthedSupabase("ADMIN");
+  const { supabase } = await getAuthedSupabase("ADMIN", "INTAKE");
   const status = z
     .enum(["TODO", "IN_PROGRESS", "DONE", "CANCELLED"])
     .parse(formData.get("status"));
   const id = uuidValue(formData, "id");
-  const { data: existing, error: readError } = await supabase
-    .from("job_work_items")
-    .select("status,started_at,completed_at")
-    .eq("id", id)
-    .single();
-  if (readError) throw readError;
-  const now = new Date().toISOString();
-  const payload = {
-    assigned_worker_id: nullable(formData.get("assigned_worker_id")),
-    status,
-    notes: noteValue(formData),
-    started_at:
-      existing.started_at ||
-      (status === "IN_PROGRESS" || status === "DONE" ? now : null),
-    completed_at: status === "DONE" ? existing.completed_at || now : null,
-  };
-  const { error } = await supabase
-    .from("job_work_items")
-    .update(payload)
-    .eq("id", String(formData.get("id") ?? ""));
+  const worker = nullable(formData.get("assigned_worker_id"));
+  const { error } = await supabase.rpc("update_work_assignment", {
+    p_id: id,
+    p_worker: worker ? z.uuid().parse(worker) : null,
+    p_status: status,
+    p_notes: noteValue(formData),
+  });
   if (error) throw error;
   revalidatePath("/work");
   revalidatePath("/workers");

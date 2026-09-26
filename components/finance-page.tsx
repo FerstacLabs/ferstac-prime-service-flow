@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { financialCategoryLabel } from "@/lib/finance-labels";
 import {
   channelName,
   filterLedger,
@@ -531,14 +532,7 @@ export function FinancePage({
                         ? "Mədaxil"
                         : "Məxaric"}
                   </td>
-                  <td>
-                    {t.transfer_id
-                      ? "Daxili köçürmə"
-                      : t.allocation_type.startsWith("OPENING_")
-                        ? "Başlanğıc qalıq"
-                        : data.categories.find((c) => c.id === t.category_id)
-                            ?.name || t.allocation_type}
-                  </td>
+                  <td>{financialCategoryLabel(t, data.categories)}</td>
                   <td>{t.counterparty_name_snapshot || "-"}</td>
                   <td>
                     {data.jobs.find((j) => j.id === t.service_job_id)?.plate ||

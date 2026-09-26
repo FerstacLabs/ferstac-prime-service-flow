@@ -68,6 +68,9 @@ beforeAll(async () => {
       "utf8",
     ),
   );
+  await db.exec(
+    readFileSync("supabase/migrations/0008_operational_work_queue.sql", "utf8"),
+  );
   await user(admin);
   const wc = (
     await value<{ id: string }>(
@@ -137,6 +140,87 @@ afterAll(async () => {
   await db?.close();
 });
 describe.sequential("unified cash and bank ledger", () => {
+  it("exposes only operational fields to intake and restricts assignment mutations", async () => {
+    await user(intake);
+    const projection = (
+      await db.query<{ v: Record<string, unknown> }>(
+        "select work_queue_data('work') v",
+      )
+    ).rows.map((r) => r.v);
+    expect(projection.find((w) => w.id === work)).toBeTruthy();
+    for (const kind of ["jobs", "work", "workers"]) {
+      const payload = JSON.stringify(
+        (await db.query("select work_queue_data($1) v", [kind])).rows,
+      );
+      for (const key of [
+        "labor_cost",
+        "quoted_price",
+        "agreed_budget",
+        "paid_amount",
+        "customer_phone",
+        "phone",
+        "profit",
+      ]) {
+        expect(payload).not.toContain(key);
+      }
+    }
+    await value(
+      "select update_work_assignment($1,$2,'IN_PROGRESS','İcra olunur') v",
+      [work, worker],
+    );
+    expect(
+      (await db.query("select * from job_work_items where id=$1", [work])).rows,
+    ).toHaveLength(0);
+    await expect(
+      db.query(
+        "update job_work_items set labor_cost=1 where id=$1 returning id",
+        [work],
+      ),
+    ).resolves.toMatchObject({ rows: [] });
+    await expect(
+      value("select update_work_assignment($1,$2,'INVALID',null) v", [
+        work,
+        worker,
+      ]),
+    ).rejects.toThrow();
+    await expect(
+      value("select update_work_assignment($1,$2,'TODO',$3) v", [
+        work,
+        worker,
+        "x".repeat(251),
+      ]),
+    ).rejects.toThrow();
+    await user(cashier);
+    await expect(value("select work_queue_data('work') v")).rejects.toThrow();
+    await expect(
+      value("select update_work_assignment($1,$2,'TODO',null) v", [
+        work,
+        worker,
+      ]),
+    ).rejects.toThrow();
+    await user(other);
+    expect(
+      (await db.query("select work_queue_data('work')")).rows,
+    ).toHaveLength(0);
+    await expect(
+      value("select update_work_assignment($1,$2,'TODO',null) v", [
+        work,
+        worker,
+      ]),
+    ).rejects.toThrow();
+    await user(admin);
+    expect(
+      Number(
+        await value("select labor_cost v from job_work_items where id=$1", [
+          work,
+        ]),
+      ),
+    ).toBe(500);
+    await value("select update_work_assignment($1,$2,'TODO',null) v", [
+      work,
+      worker,
+    ]);
+  });
   it("backfills the same legacy payment ID as CASH without duplicates", async () => {
     expect(
       await value("select channel v from cash_transactions where id=$1", [
@@ -743,5 +827,123 @@ describe.sequential("unified cash and bank ledger", () => {
         ),
       ).toBe(1);
     }
+  });
+  it("retains additional-work, paid-assignment, closure and session guards for intake", async () => {
+    await user(admin);
+    const catalog = await value("select id v from work_catalog limit 1");
+    const unit = await value("select id v from unit_catalog limit 1");
+    const extraJob = await value(
+      "select create_workshop_job($1,$2,$3,'[]',$4) v",
+      [
+        JSON.stringify({ plate: "99-WQ-808", make: "BMW", model: "F30" }),
+        JSON.stringify({ funding_source: "CUSTOMER_FUNDED" }),
+        JSON.stringify([
+          { catalogId: catalog, quotedPrice: 100, quantity: 1, unitId: unit },
+        ]),
+        randomUUID(),
+      ],
+    );
+    const extraCatalog = (
+      await value<{ id: string }>(
+        "select create_catalog_entry('work','Extra operational QA') v",
+      )
+    ).id;
+    const extra = await value("select create_additional_work($1,$2) v", [
+      JSON.stringify({
+        service_job_id: extraJob,
+        catalog_id: extraCatalog,
+        quantity: 1,
+        unit_id: unit,
+        customer_unit_price: 100,
+        worker_id: worker,
+        labor_cost: 50,
+      }),
+      randomUUID(),
+    ]);
+    await user(intake);
+    await value(
+      "select update_work_assignment($1,$2,'IN_PROGRESS','Əlavə iş başladı') v",
+      [extra, worker],
+    );
+    await expect(
+      value("select update_work_assignment($1,$2,'TODO',null) v", [
+        extra,
+        randomUUID(),
+      ]),
+    ).rejects.toThrow();
+    await user(admin);
+    expect(
+      await value("select is_additional v from job_work_items where id=$1", [
+        extra,
+      ]),
+    ).toBe(true);
+    expect(
+      Number(
+        await value("select labor_cost v from job_work_items where id=$1", [
+          extra,
+        ]),
+      ),
+    ).toBe(50);
+    await post({
+      allocation_type: "WORKER_WORK_ITEM",
+      service_job_id: extraJob,
+      target_id: extra,
+      amount: 10,
+    });
+    await user(intake);
+    await expect(
+      value("select update_work_assignment($1,null,'TODO',null) v", [extra]),
+    ).rejects.toThrow(/Ödənilmiş/);
+    await expect(
+      value("select update_work_assignment($1,$2,'CANCELLED',null) v", [
+        extra,
+        worker,
+      ]),
+    ).rejects.toThrow(/Ödənişi/);
+    await value("select update_work_assignment($1,$2,'DONE',null) v", [
+      extra,
+      worker,
+    ]);
+    await db.exec("reset role");
+    await db.query(
+      "update service_jobs set financially_closed_at=now() where id=$1",
+      [extraJob],
+    );
+    await user(intake);
+    await expect(
+      value("select update_work_assignment($1,$2,'TODO',null) v", [
+        extra,
+        worker,
+      ]),
+    ).rejects.toThrow(/maliyyəsini/);
+    for (const patch of [
+      "is_active=false",
+      "must_change_password=true",
+      "session_not_before=now()+interval '1 day'",
+    ]) {
+      await db.exec("reset role");
+      await db.exec(
+        `update user_profiles set ${patch} where auth_user_id='${intake}'`,
+      );
+      await user(intake);
+      await expect(value("select work_queue_data('work') v")).rejects.toThrow();
+      await expect(
+        value("select update_work_assignment($1,$2,'TODO',null) v", [
+          extra,
+          worker,
+        ]),
+      ).rejects.toThrow();
+      await db.exec("reset role");
+      await db.exec(
+        `update user_profiles set is_active=true,must_change_password=false,session_not_before='2000-01-01' where auth_user_id='${intake}'`,
+      );
+    }
+    await user(admin);
+    expect(
+      await value(
+        "select count(*)::int v from audit_logs where actor_user_id=$1 and action='WORK_STATUS_CHANGED' and entity_id=$2",
+        [intake, extra],
+      ),
+    ).toBeGreaterThan(0);
   });
 });

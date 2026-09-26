@@ -7,6 +7,12 @@ import {
 } from "@/lib/reports/report-format";
 import type { PrimeReport } from "@/lib/reports/report-types";
 import type { SearchParams } from "@/lib/filters";
+import {
+  auditEventLabel,
+  auditEntityLabel,
+  auditRoleLabel,
+} from "@/lib/audit-display";
+import { resolveAuditContext } from "@/lib/supabase/audit-context";
 
 export const auditActions = [
   "CASH_IN_CREATED",
@@ -55,6 +61,11 @@ export const auditActions = [
   "WORKER_CREATED",
   "WORKER_UPDATED",
   "WORKER_ROLE_CREATED",
+  "WORKER_ROLE_UPDATED",
+  "WORK_CATALOG_CREATED",
+  "WORK_CATALOG_UPDATED",
+  "PART_CATALOG_CREATED",
+  "PART_CATALOG_UPDATED",
   "WORKER_ASSIGNED",
   "WORK_STATUS_CHANGED",
   "WORKER_COST_SET",
@@ -96,6 +107,7 @@ export type AuditLog = {
   summary: string;
   changes: Record<string, unknown>;
   metadata: Record<string, unknown>;
+  references?: Record<string, string>;
   created_at: string;
 };
 const auditDescriptions: Record<(typeof auditActions)[number], string> = {
@@ -136,7 +148,7 @@ const auditDescriptions: Record<(typeof auditActions)[number], string> = {
   SERVICE_JOB_ARCHIVED: "servis kartını arxivlədi",
   SERVICE_JOB_RESTORED: "servis kartını arxivdən bərpa etdi",
   WORK_QUOTE_ADDED: "iş üzrə qiymət təklifi əlavə etdi",
-  WORK_QUOTE_UPDATED: "iş üzrə qiymət təklifini yenilədi",
+  WORK_QUOTE_UPDATED: "iş məlumatlarını yenilədi",
   PART_QUOTE_ADDED: "detal üzrə qiymət təklifi əlavə etdi",
   PART_QUOTE_UPDATED: "detal üzrə qiymət təklifini yenilədi",
   PURCHASE_CREATED: "satınalma yaratdı",
@@ -146,6 +158,11 @@ const auditDescriptions: Record<(typeof auditActions)[number], string> = {
   WORKER_CREATED: "işçi əlavə etdi",
   WORKER_UPDATED: "işçi məlumatlarını yenilədi",
   WORKER_ROLE_CREATED: "işçi vəzifəsi əlavə etdi",
+  WORKER_ROLE_UPDATED: "işçi vəzifəsini yenilədi",
+  WORK_CATALOG_CREATED: "iş kataloquna əlavə etdi",
+  WORK_CATALOG_UPDATED: "iş kataloqunu yenilədi",
+  PART_CATALOG_CREATED: "detal kataloquna əlavə etdi",
+  PART_CATALOG_UPDATED: "detal kataloqunu yenilədi",
   WORKER_ASSIGNED: "işi ustaya təyin etdi",
   WORK_STATUS_CHANGED: "işin statusunu dəyişdi",
   WORKER_COST_SET: "usta mayasını yenilədi",
@@ -159,7 +176,8 @@ const auditDescriptions: Record<(typeof auditActions)[number], string> = {
 export function auditDescription(log: AuditLog) {
   const description =
     auditDescriptions[log.action as keyof typeof auditDescriptions];
-  if (!description) return log.summary;
+  if (!description)
+    return `${log.actor_username_snapshot}: ${auditEventLabel(log.action)}.`;
   const worker =
     log.action === "WORKER_PAYMENT_CREATED" &&
     typeof log.metadata.worker === "string"
@@ -216,7 +234,7 @@ export function auditQuery(
       .map(([key, value]) => [key, String(value)]),
   ).toString();
 }
-export async function getAudit(params: SearchParams) {
+export async function getAudit(params: SearchParams, resolveDetails = true) {
   const { supabase, profile } = await requireAccess(["ADMIN"]);
   const filters = parseAuditFilters(params);
   let query = supabase
@@ -234,6 +252,16 @@ export async function getAudit(params: SearchParams) {
   if (filters.plate) query = query.ilike("plate", `${filters.plate}%`);
   if (filters.financial)
     query = query.in("action", [
+      "CASH_IN_CREATED",
+      "CASH_OUT_CREATED",
+      "BANK_IN_CREATED",
+      "BANK_OUT_CREATED",
+      "GENERAL_INCOME_CREATED",
+      "GENERAL_EXPENSE_CREATED",
+      "INTERNAL_TRANSFER_CREATED",
+      "FINANCIAL_TRANSACTION_REVERSED",
+      "VEHICLE_FINANCE_CLOSED",
+      "VEHICLE_FINANCE_REOPENED",
       "WORKER_COST_SET",
       "CUSTOMER_PAYMENT_CREATED",
       "SUPPLIER_PAYMENT_CREATED",
@@ -247,23 +275,30 @@ export async function getAudit(params: SearchParams) {
     .order("id")
     .range(offset, offset + 49);
   if (error) throw new Error("Audit yüklənmədi.");
-  return { logs: (data ?? []) as AuditLog[], total: count ?? 0, filters };
+  const logs = (data ?? []) as AuditLog[];
+  return {
+    logs: resolveDetails
+      ? await resolveAuditContext(supabase, profile.organization_id, logs)
+      : logs,
+    total: count ?? 0,
+    filters,
+  };
 }
 export async function loadAuditReport(
   params: SearchParams,
 ): Promise<PrimeReport> {
-  const { logs, total, filters } = await getAudit(params);
+  const { logs, total, filters } = await getAudit(params, false);
   return {
     scope: "audit",
-    title: "Audit jurnalı",
+    title: "Audit hesabatı",
     generatedAt: formatReportDateTime(),
     orientation: "landscape",
     filters: [
       `Dövr: ${filters.from ? formatReportDate(filters.from) : "Əvvəldən"} - ${filters.to ? formatReportDate(filters.to) : "Bu günədək"}`,
       filters.actor && `İstifadəçi: ${filters.actor}`,
-      filters.role && `Rol: ${filters.role}`,
-      filters.action && `Əməliyyat: ${auditDescriptions[filters.action]}`,
-      filters.entity && `Obyekt: ${filters.entity}`,
+      filters.role && `Rol: ${auditRoleLabel(filters.role)}`,
+      filters.action && `Əməliyyat: ${auditEventLabel(filters.action)}`,
+      filters.entity && `Bölmə: ${auditEntityLabel(filters.entity)}`,
       filters.plate && `Avtomobil: ${filters.plate}`,
       filters.financial && "Yalnız maliyyə",
     ]
@@ -283,28 +318,31 @@ export async function loadAuditReport(
         table: {
           columns: [
             "Tarix/saat",
-            "İstifadəçi / rol",
+            "İstifadəçi",
+            "Rol",
             "Əməliyyat",
-            "Obyekt / avtomobil",
+            "Bölmə",
+            "Avtomobil",
+            "Qısa izah",
           ].map((label, i) => ({
             key: String(i),
             label,
-            width: [16, 17, 39, 28][i],
+            width: [13, 10, 11, 20, 13, 10, 23][i],
           })),
           rows: logs.map((log) => ({
             id: log.id,
             cells: {
               "0": formatReportDateTime(log.created_at),
-              "1": `${log.actor_username_snapshot} / ${log.actor_role_snapshot}`,
-              "2": auditDescription(log),
-              "3": `${log.entity_type} · ${log.plate || "-"}`,
+              "1": log.actor_username_snapshot,
+              "2": auditRoleLabel(log.actor_role_snapshot),
+              "3": auditEventLabel(log.action),
+              "4": auditEntityLabel(log.entity_type),
+              "5": log.plate || "-",
+              "6":
+                auditDescription(log).length > 120
+                  ? `${auditDescription(log).slice(0, 117)}...`
+                  : auditDescription(log),
             },
-            details: [
-              { label: "Hadisə kodu", value: log.action },
-              { label: "İstinad", value: log.entity_id },
-              { label: "Dəyişiklik", value: JSON.stringify(log.changes) },
-              { label: "Əlavə məlumat", value: JSON.stringify(log.metadata) },
-            ],
           })),
         },
       },

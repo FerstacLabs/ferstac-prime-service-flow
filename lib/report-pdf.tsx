@@ -115,6 +115,7 @@ const styles = StyleSheet.create({
     minHeight: 22,
   },
   cell: {
+    minWidth: 0,
     padding: 4.5,
     borderRight: "1px solid #e4e4e4",
     fontSize: 8.2,
@@ -253,7 +254,9 @@ export function ReportDocument({ report }: { report: PrimeReport }) {
         orientation={report.orientation ?? "portrait"}
         style={[
           styles.page,
-          ["quotation", "purchases", "finance"].includes(report.scope)
+          ["quotation", "purchases", "finance", "work", "audit"].includes(
+            report.scope,
+          )
             ? { paddingTop: 22 }
             : {},
         ]}
@@ -262,17 +265,23 @@ export function ReportDocument({ report }: { report: PrimeReport }) {
         <ReportHeader report={report} />
         <SummaryGrid
           items={report.summary}
-          band={["purchases", "finance"].includes(report.scope)}
+          band={["purchases", "finance", "work", "audit"].includes(
+            report.scope,
+          )}
         />
         {report.sections.map((section) => (
           <ReportSectionView
             key={section.title}
             section={section}
             landscape={report.orientation === "landscape"}
-            compact={["quotation", "purchases", "finance"].includes(
-              report.scope,
-            )}
-            denseLedger={report.scope === "finance"}
+            compact={[
+              "quotation",
+              "purchases",
+              "finance",
+              "work",
+              "audit",
+            ].includes(report.scope)}
+            denseLedger={["finance", "work", "audit"].includes(report.scope)}
           />
         ))}
         <View style={styles.footer} fixed>
@@ -300,7 +309,13 @@ export function ReportDocument({ report }: { report: PrimeReport }) {
 }
 
 function ReportHeader({ report }: { report: PrimeReport }) {
-  const compact = ["quotation", "purchases", "finance"].includes(report.scope);
+  const compact = [
+    "quotation",
+    "purchases",
+    "finance",
+    "work",
+    "audit",
+  ].includes(report.scope);
   return (
     <View
       style={[
@@ -341,7 +356,8 @@ function ReportHeader({ report }: { report: PrimeReport }) {
         {report.title}
       </Text>
       <Text style={[styles.meta, compact ? { marginTop: 2, fontSize: 8 } : {}]}>
-        Yaradılma tarixi: {report.generatedAt} | Valyuta: AZN
+        Yaradılma tarixi: {report.generatedAt}
+        {report.scope === "work" ? "" : " | Valyuta: AZN"}
       </Text>
       {report.filters ? (
         <Text style={styles.meta}>{report.filters}</Text>

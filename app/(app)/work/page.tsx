@@ -17,12 +17,9 @@ import {
   pageRows,
 } from "@/components/workshop-filters";
 import { parseFilters, filterQuery, type SearchParams } from "@/lib/filters";
-import { getWorkshop, selectWork } from "@/lib/supabase/workshop";
-import {
-  getMasterData,
-  workerDisplayName,
-  workTitle,
-} from "@/lib/supabase/queries";
+import { getWorkQueue } from "@/lib/supabase/work-queue";
+import { selectQueueWork } from "@/lib/work-queue";
+import { workerDisplayName } from "@/lib/supabase/queries";
 import { formatDate } from "@/lib/format";
 import { EmptyState } from "@/components/empty-state";
 export const dynamic = "force-dynamic";
@@ -31,11 +28,10 @@ export default async function WorkPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  await requireAccess(["ADMIN"]);
+  await requireAccess(["ADMIN", "INTAKE"]);
   const f = parseFilters(await searchParams),
-    data = await getWorkshop(),
-    master = await getMasterData(),
-    items = selectWork(data, f);
+    data = await getWorkQueue(),
+    items = selectQueueWork(data, f);
   const workers = data.workers.map((w) => ({
     id: w.id,
     name: workerDisplayName(w),
@@ -51,7 +47,15 @@ export default async function WorkPage({
         scope="work"
         filters={f}
         workers={workers}
-        works={master.workCatalog}
+        works={[
+          ...new Map(
+            data.work.flatMap((w) =>
+              w.work_catalog
+                ? [[w.work_catalog.id, w.work_catalog] as const]
+                : [],
+            ),
+          ).values(),
+        ]}
       />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {pageRows(items, f).map((item) => {
@@ -70,7 +74,9 @@ export default async function WorkPage({
               <p className="text-sm text-[var(--muted)]">
                 {job?.vehicles?.make} {job?.vehicles?.model}
               </p>
-              <h2 className="mt-4 font-semibold">{workTitle(item)}</h2>
+              <h2 className="mt-4 font-semibold">
+                {item.custom_title || item.work_catalog?.name || "Digər iş"}
+              </h2>
               <p className="mt-2 text-sm text-[var(--muted)]">
                 Plan: {formatDate(item.planned_at)}
               </p>
@@ -82,7 +88,11 @@ export default async function WorkPage({
                 <SearchSelect
                   name="assigned_worker_id"
                   label="Usta"
-                  options={workers}
+                  options={workers.filter(
+                    (w) =>
+                      data.workers.find((row) => row.id === w.id)?.active ||
+                      w.id === item.assigned_worker_id,
+                  )}
                   defaultValue={item.assigned_worker_id ?? ""}
                 />
                 <label className="text-xs text-[var(--muted)]">

@@ -180,17 +180,6 @@ a {
   letter-spacing: 0;
 }
 
-.sidebar-bot {
-  width: 16rem;
-  max-width: 100%;
-  height: auto;
-  aspect-ratio: 1;
-  object-fit: contain;
-  opacity: 0.92;
-  filter: drop-shadow(0 22px 28px rgba(0, 0, 0, 0.42))
-    drop-shadow(0 0 22px rgba(229, 193, 77, 0.13));
-}
-
 .print-report {
   min-height: 100vh;
   background: #fff;
@@ -1245,6 +1234,37 @@ select.field {
 }
 .print-finance.print-landscape {
   max-width: 297mm;
+}
+.print-operations.print-landscape {
+  max-width: 297mm;
+}
+.print-operations > .print-summary {
+  display: flex;
+  flex-wrap: wrap;
+  max-width: none;
+  margin: 6pt 0;
+  gap: 8pt;
+}
+.print-operations > .print-summary .print-summary-item {
+  flex: 1 1 100px;
+  padding: 3pt;
+  min-width: 0;
+}
+.print-operations.print-landscape .print-table-scroll .print-table {
+  min-width: 0;
+  width: 100%;
+  table-layout: fixed;
+}
+.print-operations .print-table th,
+.print-operations .print-table td {
+  padding: 3pt;
+  font-size: 8pt;
+  overflow-wrap: anywhere;
+}
+@media print {
+  .print-operations.print-landscape {
+    page: wide-report;
+  }
 }
 .print-finance > .print-summary {
   display: flex;

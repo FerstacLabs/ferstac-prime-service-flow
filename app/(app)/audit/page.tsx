@@ -12,6 +12,12 @@ import {
 } from "@/lib/audit";
 import { formatReportDateTime } from "@/lib/reports/report-format";
 import type { SearchParams } from "@/lib/filters";
+import {
+  auditEventLabel,
+  auditEntityLabel,
+  auditRoleLabel,
+} from "@/lib/audit-display";
+import { AuditDetail } from "@/components/audit-detail";
 
 export default async function AuditPage({
   searchParams,
@@ -30,7 +36,13 @@ export default async function AuditPage({
         <option value="">Hamısı</option>
         {values.map((v) => (
           <option key={v} value={v}>
-            {v}
+            {name === "action"
+              ? auditEventLabel(v)
+              : name === "entity"
+                ? auditEntityLabel(v)
+                : name === "role"
+                  ? auditRoleLabel(v)
+                  : v}
           </option>
         ))}
       </select>
@@ -134,7 +146,7 @@ export default async function AuditPage({
                 <td>
                   {log.actor_username_snapshot}
                   <p className="text-xs text-[var(--muted)]">
-                    {log.actor_role_snapshot}
+                    {auditRoleLabel(log.actor_role_snapshot)}
                   </p>
                 </td>
                 <td>
@@ -149,10 +161,10 @@ export default async function AuditPage({
                           : "neutral"
                     }
                   >
-                    {log.action}
+                    {auditEventLabel(log.action)}
                   </StatusBadge>
                 </td>
-                <td>{log.entity_type}</td>
+                <td>{auditEntityLabel(log.entity_type)}</td>
                 <td>
                   {log.service_job_id ? (
                     <Link
@@ -166,17 +178,7 @@ export default async function AuditPage({
                   )}
                 </td>
                 <td>
-                  <details>
-                    <summary className="cursor-pointer">Bax</summary>
-                    <p className="my-2 break-all">{log.entity_id}</p>
-                    <pre className="max-w-96 whitespace-pre-wrap break-words text-xs">
-                      {JSON.stringify(
-                        { changes: log.changes, metadata: log.metadata },
-                        null,
-                        2,
-                      )}
-                    </pre>
-                  </details>
+                  <AuditDetail log={log} />
                 </td>
               </tr>
             ))}

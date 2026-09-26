@@ -37,22 +37,6 @@ export function AppShell({
         </div>
 
         <SidebarNav role={role} />
-
-        <div
-          className="pointer-events-none mt-auto hidden w-full shrink-0 px-2 pb-5 pt-4 lg:block"
-          aria-hidden="true"
-        >
-          <div className="flex justify-center">
-            <Image
-              src="/brand/prime-bot-icon.png"
-              alt=""
-              width={256}
-              height={256}
-              className="sidebar-bot"
-              loading="eager"
-            />
-          </div>
-        </div>
       </aside>
 
       <main className="min-w-0">

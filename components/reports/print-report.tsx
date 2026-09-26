@@ -50,7 +50,7 @@ export function PrintReport({ report }: { report: PrimeReport }) {
     );
   return (
     <main
-      className={`print-report ${report.orientation === "landscape" ? "print-landscape" : ""} ${report.scope === "audit" ? "print-audit" : ""} ${["quotation", "purchases", "finance"].includes(report.scope) ? "print-quotation" : ""} ${report.scope === "purchases" ? "print-purchases" : ""} ${report.scope === "finance" ? "print-finance" : ""}`}
+      className={`print-report ${report.orientation === "landscape" ? "print-landscape" : ""} ${report.scope === "audit" ? "print-audit" : ""} ${["work", "audit"].includes(report.scope) ? "print-operations" : ""} ${["quotation", "purchases", "finance", "work", "audit"].includes(report.scope) ? "print-quotation" : ""} ${report.scope === "purchases" ? "print-purchases" : ""} ${report.scope === "finance" ? "print-finance" : ""}`}
     >
       <PrintTrigger />
       <header className="print-report-header">
@@ -64,7 +64,10 @@ export function PrintReport({ report }: { report: PrimeReport }) {
             </div>
           </div>
           <h1>{report.title}</h1>
-          <p>Yaradılma tarixi: {report.generatedAt} | Valyuta: AZN</p>
+          <p>
+            Yaradılma tarixi: {report.generatedAt}
+            {report.scope === "work" ? "" : " | Valyuta: AZN"}
+          </p>
           {report.filters ? <p>{report.filters}</p> : null}
         </div>
         <PrintButton />

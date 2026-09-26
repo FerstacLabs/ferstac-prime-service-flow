@@ -81,15 +81,15 @@ describe("audit descriptions and reports", () => {
     expect(table.columns.reduce((sum, column) => sum + column.width!, 0)).toBe(
       100,
     );
-    expect(table.rows[0].cells["2"]).toBe(auditDescription(log));
-    expect(table.rows[0].details).toContainEqual({
-      label: "Hadisə kodu",
-      value: log.action,
-    });
+    expect(table.rows[0].cells["6"]).toBe(auditDescription(log));
+    expect(table.rows[0].cells["3"]).toBe("Usta ödənişi yaradıldı");
+    expect(table.rows[0].details).toBeUndefined();
+    expect(JSON.stringify(report)).not.toContain(log.action);
+    expect(JSON.stringify(report)).not.toContain("cash_transactions");
   });
 
   it("paginates long Azerbaijani audit descriptions in A4 PDF", async () => {
-    db.rows = Array.from({ length: 20 }, (_, index) => ({
+    db.rows = Array.from({ length: 50 }, (_, index) => ({
       ...log,
       id: `audit-${index}`,
       metadata: {

@@ -9,7 +9,7 @@ const manrope = Manrope({
 
 export const metadata: Metadata = {
   title: "PRIME Flow",
-  icons: { icon: "/brand/prime-bot-icon.png" },
+  icons: { icon: "/brand/prime-logo.png" },
   description:
     "PRIME Tuning & Detailing üçün servis, satınalma, işçi və maliyyə idarəetməsi",
 };
