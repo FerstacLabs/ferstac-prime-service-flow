@@ -71,6 +71,12 @@ beforeAll(async () => {
   await db.exec(
     readFileSync("supabase/migrations/0008_operational_work_queue.sql", "utf8"),
   );
+  await db.exec(
+    readFileSync(
+      "supabase/migrations/0009_master_data_and_workflow_refinements.sql",
+      "utf8",
+    ),
+  );
   await user(admin);
   const wc = (
     await value<{ id: string }>(
@@ -138,6 +144,351 @@ beforeAll(async () => {
 }, 60000);
 afterAll(async () => {
   await db?.close();
+});
+
+describe("0009 master lifecycle and automatic assignment", () => {
+  const lifecycle = (
+    kind: string,
+    id: string,
+    action: string,
+    confirmation = "SİL",
+  ) =>
+    value("select manage_master_lifecycle($1,$2,$3,$4) v", [
+      kind,
+      id,
+      action,
+      confirmation,
+    ]);
+  const directory = (kind: string, id: string) =>
+    value<Record<string, unknown>>(
+      "select v from master_directory($1) v where v->>'id'=$2",
+      [kind, id],
+    );
+  const newWorker = () =>
+    value(
+      "insert into workers(owner_user_id,first_name,last_name,role_id) select auth.uid(),'Historical','Master',id from worker_roles limit 1 returning id v",
+    );
+  const master = (kind: string, data: Record<string, unknown>) =>
+    value("select save_financial_master($1,$2) v", [
+      kind,
+      JSON.stringify(data),
+    ]);
+  let historicalWorker: string,
+    historicalWork: string,
+    historicalJob: string,
+    historyPayment: string;
+  it("archives/restores/deletes unused workers and requires explicit confirmation", async () => {
+    await user(admin);
+    const id = await newWorker();
+    await lifecycle("worker", id, "archive");
+    expect((await directory("worker", id)).active).toBe(false);
+    await lifecycle("worker", id, "restore");
+    expect((await directory("worker", id)).active).toBe(true);
+    await expect(lifecycle("worker", id, "delete", "")).rejects.toThrow(/SİL/);
+    await lifecycle("worker", id, "delete");
+    expect((await directory("worker", id)).deleted_at).toBeTruthy();
+    expect(
+      await value("select count(*)::int v from workers where id=$1", [id]),
+    ).toBe(0);
+    expect((await directory("worker", id)).worker_roles).toBeTruthy();
+  });
+  it("automatically starts TODO on ADMIN costing assignment and blocks active worker deletion", async () => {
+    historicalWorker = await newWorker();
+    const catalog = (
+      await value<{ id: string }>(
+        "select create_catalog_entry('work','Lifecycle work') v",
+      )
+    ).id;
+    const unit = await value("select id v from unit_catalog limit 1");
+    historicalJob = await value(
+      "select create_workshop_job($1,$2,$3,$4,$5) v",
+      [
+        JSON.stringify({ plate: "99-MD-909", make: "BMW", model: "X5" }),
+        JSON.stringify({
+          funding_source: "CUSTOMER_FUNDED",
+          customer_name: "Master QA",
+        }),
+        JSON.stringify([
+          { catalogId: catalog, quotedPrice: 200, quantity: 1, unitId: unit },
+        ]),
+        "[]",
+        randomUUID(),
+      ],
+    );
+    historicalWork = await value(
+      "select id v from job_work_items where service_job_id=$1",
+      [historicalJob],
+    );
+    await value("select set_work_costing($1,$2,100) v", [
+      historicalWork,
+      historicalWorker,
+    ]);
+    expect(
+      await value("select status v from job_work_items where id=$1", [
+        historicalWork,
+      ]),
+    ).toBe("IN_PROGRESS");
+    expect(
+      await value("select started_at v from job_work_items where id=$1", [
+        historicalWork,
+      ]),
+    ).toBeTruthy();
+    expect(
+      await value("select status v from service_jobs where id=$1", [
+        historicalJob,
+      ]),
+    ).toBe("IN_PROGRESS");
+    await expect(
+      lifecycle("worker", historicalWorker, "delete"),
+    ).rejects.toThrow(/aktiv işlər/);
+    await lifecycle("worker", historicalWorker, "archive");
+    await lifecycle("worker", historicalWorker, "restore");
+    historyPayment = await post({
+      allocation_type: "WORKER_WORK_ITEM",
+      service_job_id: historicalJob,
+      target_id: historicalWork,
+      amount: 25,
+    });
+    await value("select update_work_assignment($1,$2,'DONE',null) v", [
+      historicalWork,
+      historicalWorker,
+    ]);
+  });
+  it("deletes a completed worker without mutating work/payment history and resolves future settlement", async () => {
+    const before = await value(
+      "select to_jsonb(t) v from cash_transactions t where id=$1",
+      [historyPayment],
+    );
+    await lifecycle("worker", historicalWorker, "delete");
+    expect(
+      await value("select to_jsonb(t) v from cash_transactions t where id=$1", [
+        historyPayment,
+      ]),
+    ).toEqual(before);
+    expect(
+      await value(
+        "select assigned_worker_id v from job_work_items where id=$1",
+        [historicalWork],
+      ),
+    ).toBe(historicalWorker);
+    expect(
+      await value(
+        "select v->>'worker' v from finance_data('work',$1) v where v->>'id'=$2",
+        [historicalJob, historicalWork],
+      ),
+    ).toBe("Historical Master");
+    const payment = await post({
+      allocation_type: "WORKER_WORK_ITEM",
+      service_job_id: historicalJob,
+      target_id: historicalWork,
+      amount: 25,
+    });
+    expect(
+      await value(
+        "select counterparty_name_snapshot v from cash_transactions where id=$1",
+        [payment],
+      ),
+    ).toBe("Historical Master");
+    expect(
+      await value(
+        "select count(*)::int v from audit_logs where action='WORKER_PERMANENTLY_DELETED' and entity_id=$1",
+        [historicalWorker],
+      ),
+    ).toBe(1);
+  });
+  it("starts TODO for INTAKE and leaves ongoing/terminal work unchanged on reassignment", async () => {
+    const first = await newWorker(),
+      second = await newWorker();
+    const catalog = (
+      await value<{ id: string }>(
+        "select create_catalog_entry('work','Intake lifecycle work') v",
+      )
+    ).id;
+    const id = await value(
+      "insert into job_work_items(owner_user_id,service_job_id,work_catalog_id,quoted_price) values(auth.uid(),$1,$2,10) returning id v",
+      [historicalJob, catalog],
+    );
+    await lifecycle("worker", first, "archive");
+    await user(intake);
+    await expect(
+      value("select update_work_assignment($1,$2,'TODO',null) v", [id, first]),
+    ).rejects.toThrow();
+    await value("select update_work_assignment($1,$2,'TODO',null) v", [
+      id,
+      second,
+    ]);
+    expect(
+      await value(
+        "select v->>'status' v from work_queue_data('work') v where v->>'id'=$1",
+        [id],
+      ),
+    ).toBe("IN_PROGRESS");
+    await user(admin);
+    await lifecycle("worker", first, "restore");
+    await db.query(
+      "update job_work_items set assigned_worker_id=$1 where id=$2",
+      [first, id],
+    );
+    expect(
+      await value("select status v from job_work_items where id=$1", [id]),
+    ).toBe("IN_PROGRESS");
+    await db.query(
+      "update job_work_items set assigned_worker_id=null where id=$1",
+      [id],
+    );
+    expect(
+      await value("select status v from job_work_items where id=$1", [id]),
+    ).toBe("IN_PROGRESS");
+    await db.query("update job_work_items set status='DONE' where id=$1", [id]);
+    await db.query(
+      "update job_work_items set assigned_worker_id=$1 where id=$2",
+      [second, id],
+    );
+    expect(
+      await value("select status v from job_work_items where id=$1", [id]),
+    ).toBe("DONE");
+    expect(
+      await value(
+        "select count(*)::int v from audit_logs where entity_id=$1 and actor_user_id=$2 and action='WORK_STATUS_CHANGED'",
+        [id, intake],
+      ),
+    ).toBeGreaterThan(0);
+  });
+  it("manages bank accounts, blocks nonzero balances, preserves zero-balanced history and IBAN", async () => {
+    const id = await master("account", {
+      name: "Lifecycle Bank",
+      iban: "AZLIFECYCLE",
+      bank_name: "QA Bank",
+    });
+    await master("account", {
+      id,
+      name: "Edited Bank",
+      iban: "AZLIFECYCLE",
+      bank_name: "QA Bank",
+    });
+    await lifecycle("account", id, "archive");
+    expect((await directory("account", id)).active).toBe(false);
+    await lifecycle("account", id, "restore");
+    const inCategory = await master("category", {
+      name: "Lifecycle bank income",
+      direction: "IN",
+    });
+    const outCategory = await master("category", {
+      name: "Lifecycle bank expense",
+      direction: "OUT",
+    });
+    const incoming = await post({
+      channel: "BANK",
+      financial_account_id: id,
+      payment_method: "TRANSFER",
+      allocation_type: "GENERAL_IN",
+      category_id: inCategory,
+      amount: 10,
+    });
+    await expect(lifecycle("account", id, "delete")).rejects.toThrow(
+      /qalığı sıfır/,
+    );
+    await post({
+      channel: "BANK",
+      financial_account_id: id,
+      payment_method: "TRANSFER",
+      allocation_type: "GENERAL_OUT",
+      category_id: outCategory,
+      amount: 10,
+    });
+    await lifecycle("account", id, "delete");
+    expect((await directory("account", id)).iban).toBe("AZLIFECYCLE");
+    expect((await directory("account", id)).name).toBe("Edited Bank");
+    expect(
+      await value(
+        "select financial_account_id v from cash_transactions where id=$1",
+        [incoming],
+      ),
+    ).toBe(id);
+    await expect(
+      post({
+        channel: "BANK",
+        financial_account_id: id,
+        payment_method: "TRANSFER",
+        allocation_type: "GENERAL_IN",
+        amount: 1,
+      }),
+    ).rejects.toThrow();
+    const unused = await master("account", { name: "Unused bank" });
+    await lifecycle("account", unused, "delete");
+    expect(
+      await value(
+        "select count(*)::int v from financial_accounts where id=$1",
+        [unused],
+      ),
+    ).toBe(0);
+  });
+  it("manages custom categories, preserves used labels and protects system categories", async () => {
+    const id = await master("category", {
+      name: "Lifecycle expense",
+      direction: "OUT",
+    });
+    await master("category", { id, name: "Edited expense", direction: "OUT" });
+    await lifecycle("category", id, "archive");
+    await expect(
+      post({ allocation_type: "GENERAL_OUT", category_id: id, amount: 1 }),
+    ).rejects.toThrow();
+    await lifecycle("category", id, "restore");
+    const movement = await post({
+      allocation_type: "GENERAL_OUT",
+      category_id: id,
+      amount: 1,
+    });
+    await expect(
+      master("category", { id, name: "Edited expense", direction: "IN" }),
+    ).rejects.toThrow();
+    await lifecycle("category", id, "delete");
+    expect((await directory("category", id)).name).toBe("Edited expense");
+    expect(
+      await value("select category_id v from cash_transactions where id=$1", [
+        movement,
+      ]),
+    ).toBe(id);
+    const system = await value(
+      "select id v from transaction_categories where is_system limit 1",
+    );
+    for (const action of ["archive", "restore", "delete"])
+      await expect(lifecycle("category", system, action)).rejects.toThrow(
+        /Sistem/,
+      );
+    await expect(
+      master("category", { id: system, name: "Overwrite", direction: "IN" }),
+    ).rejects.toThrow(/Sistem/);
+    const unused = await master("category", {
+      name: "Unused category",
+      direction: "IN",
+    });
+    await lifecycle("category", unused, "delete");
+  });
+  it("enforces master RBAC, private snapshots and organization isolation", async () => {
+    for (const actor of [cashier, intake, other]) {
+      await user(actor);
+      for (const kind of ["worker", "account", "category"])
+        await expect(
+          lifecycle(kind, historicalWorker, "delete"),
+        ).rejects.toThrow();
+      await expect(
+        value("select count(*) v from master_identities"),
+      ).rejects.toThrow();
+      if (actor !== other)
+        await expect(
+          master("category", { name: "Unauthorized", direction: "IN" }),
+        ).rejects.toThrow();
+    }
+    await user(intake);
+    for (const kind of ["worker", "account", "category"])
+      await expect(directory(kind, historicalWorker)).rejects.toThrow();
+    await user(cashier);
+    await expect(directory("worker", historicalWorker)).rejects.toThrow();
+    await user(other);
+    expect(await directory("worker", historicalWorker)).toBeUndefined();
+    await user(admin);
+  });
 });
 describe.sequential("unified cash and bank ledger", () => {
   it("exposes only operational fields to intake and restricts assignment mutations", async () => {
@@ -232,9 +583,11 @@ describe.sequential("unified cash and bank ledger", () => {
         legacyPayment,
       ]),
     ).toBe("25.50");
-    expect(await value("select count(*)::int v from cash_transactions")).toBe(
-      1,
-    );
+    expect(
+      await value("select count(*)::int v from cash_transactions where id=$1", [
+        legacyPayment,
+      ]),
+    ).toBe(1);
   });
   it("does not expose line prices to CASHIER but returns aggregate receivables", async () => {
     await user(cashier);

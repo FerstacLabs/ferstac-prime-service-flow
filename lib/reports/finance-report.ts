@@ -36,6 +36,21 @@ export function financeReport(
           fullWidth: label === "Order / əməliyyat №",
         }));
   const report: PrimeReport = {
+    documentContext: [
+      f.channel ? channelName(f.channel) : "",
+      data.accounts.find((a) => a.id === f.account)?.name || "",
+      data.jobs.find((j) => j.id === f.job)?.plate || "",
+      data.categories.find((c) => c.id === f.category)?.name || "",
+      f.supplier
+        ? data.purchases.find((p) => p.supplier_id === f.supplier)?.supplier ||
+          ""
+        : "",
+      f.worker
+        ? data.work.find((w) => w.worker_id === f.worker)?.worker || ""
+        : "",
+      f.from,
+      f.to,
+    ],
     scope: "finance",
     title: "Mədaxil / Məxaric hesabatı",
     generatedAt: formatReportDateTime(),
@@ -68,6 +83,15 @@ export function financeReport(
     const a = data.accounts.find((a) => a.id === t.financial_account_id),
       j = data.jobs.find((j) => j.id === t.service_job_id);
     report.orientation = "portrait";
+    report.documentContext = [
+      j?.plate || "",
+      a?.name || "",
+      t.counterparty_name_snapshot || "",
+      t.reference_number ||
+        t.payment_order_number ||
+        `Order-${t.id.slice(0, 8)}`,
+      t.transaction_date,
+    ];
     report.filters = undefined;
     report.title =
       t.channel === "CASH"

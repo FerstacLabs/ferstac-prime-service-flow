@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MasterLifecycle } from "@/components/master-lifecycle";
 import { financialCategoryLabel } from "@/lib/finance-labels";
 import {
   channelName,
@@ -38,14 +39,28 @@ export function FinancePage({
   admin: boolean;
 }) {
   const f = journalFilters(params),
-    view = typeof params.view === "string" ? params.view : "cash";
-  if (view === "cash") f.channel = "CASH";
-  if (view === "bank") f.channel = "BANK";
+    view =
+      typeof params.view === "string" &&
+      ["settlement", "workers", "accounts", "categories", "reports"].includes(
+        params.view,
+      )
+        ? params.view
+        : "operations";
+  const settlementJob =
+    typeof params.settlementJob === "string" ? params.settlementJob : "";
+  const listView = ["operations", "reports", "workers"].includes(view);
+  const resetQuery = new URLSearchParams({
+    view,
+    ...(settlementJob ? { settlementJob } : {}),
+  }).toString();
   const rows = filterLedger(data, f),
     cash = movementTotals(rows.filter((t) => t.channel === "CASH")),
     bank = movementTotals(rows.filter((t) => t.channel === "BANK")),
     total = movementTotals(rows),
-    selected = data.jobs.find((j) => j.id === f.job),
+    selected =
+      view === "settlement"
+        ? data.jobs.find((j) => j.id === settlementJob)
+        : undefined,
     query = new URLSearchParams(
       Object.entries(f).filter(([, v]) => v),
     ).toString();
@@ -89,21 +104,31 @@ export function FinancePage({
       <PageHeader
         title="Kassa"
         eyebrow="Pul hərəkətləri və hesablaşma"
-        actions={<ReportActions report="finance" query={query} />}
+        actions={
+          view === "reports" ? (
+            <ReportActions report="finance" query={query} />
+          ) : undefined
+        }
       />
       <nav
         aria-label="Maliyyə bölmələri"
         className="mb-5 flex flex-wrap gap-4 border-b border-[var(--border)] pb-3"
       >
         {[
-          ["cash", "Nağd Kassa"],
-          ["bank", "Bank / Hesab"],
-          ["journal", "Ümumi jurnal"],
+          ["operations", "Əməliyyatlar"],
+          ["settlement", "Avtomobil hesablaşması"],
           ["workers", "İşçilərlə hesablaşma"],
+          ...(admin
+            ? [
+                ["accounts", "Bank hesabları"],
+                ["categories", "Kateqoriyalar"],
+              ]
+            : []),
+          ["reports", "Hesabatlar"],
         ].map(([key, title]) => (
           <Link
             key={key}
-            href={`/kassa?view=${key}`}
+            href={`/kassa?${new URLSearchParams({ ...Object.fromEntries(Object.entries(params).filter((entry): entry is [string, string] => typeof entry[1] === "string")), view: key })}`}
             aria-current={view === key ? "page" : undefined}
             className={
               view === key
@@ -115,167 +140,166 @@ export function FinancePage({
           </Link>
         ))}
       </nav>
-      <section className="mb-6">
-        <h2 className="mb-3 text-lg font-semibold">Cari vəsait</h2>
-        <MoneyGrid
-          items={[
-            [
-              "Nağd qalıq",
-              ledgerBalance(data.ledger.filter((t) => t.channel === "CASH")),
-            ],
-            ...data.accounts.map(
-              (a) =>
+      {view === "operations" ? (
+        <>
+          <section className="mb-6">
+            <h2 className="mb-3 text-lg font-semibold">Cari vəsait</h2>
+            <MoneyGrid
+              items={[
                 [
-                  a.name + (a.active ? "" : " (arxiv)"),
+                  "Nağd qalıq",
                   ledgerBalance(
-                    data.ledger.filter((t) => t.financial_account_id === a.id),
+                    data.ledger.filter((t) => t.channel === "CASH"),
                   ),
-                ] as [string, number],
-            ),
-            ["Ümumi vəsait", ledgerBalance(data.ledger)],
-          ]}
-        />
-      </section>
-      <div className="mb-6 flex flex-wrap gap-3">
-        <NewMovement
-          data={data}
-          direction="IN"
-          channel={view === "bank" ? "BANK" : "CASH"}
-          account={f.account}
-        />
-        <NewMovement
-          data={data}
-          direction="OUT"
-          channel={view === "bank" ? "BANK" : "CASH"}
-          account={f.account}
-        />
-        <TransferForm accounts={data.accounts} />
-        {admin ? (
-          <NewMovement
-            data={data}
-            direction="IN"
-            channel={view === "bank" ? "BANK" : "CASH"}
-            account={f.account}
-            opening
-          />
-        ) : null}
-      </div>
-      <form className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <input type="hidden" name="view" value={view} />
-        {[
-          ["from", "Başlanğıc"],
-          ["to", "Son"],
-        ].map(([name, label]) => (
-          <label key={name} className="text-xs text-[var(--muted)]">
-            {label}
-            <input
-              type="date"
-              name={name}
-              defaultValue={f[name as "from" | "to"]}
-              className="field mt-1"
+                ],
+                ...data.accounts
+                  .filter((a) => !a.deleted_at)
+                  .map(
+                    (a) =>
+                      [
+                        a.name + (a.active ? "" : " (arxiv)"),
+                        ledgerBalance(
+                          data.ledger.filter(
+                            (t) => t.financial_account_id === a.id,
+                          ),
+                        ),
+                      ] as [string, number],
+                  ),
+                ["Ümumi vəsait", ledgerBalance(data.ledger)],
+              ]}
             />
-          </label>
-        ))}
-        {view === "journal"
-          ? select("channel", "Kanal", [
-              { id: "CASH", name: "Nağd" },
-              { id: "BANK", name: "Bank" },
-            ])
-          : null}
-        {select("direction", "İstiqamət", [
-          { id: "IN", name: "Mədaxil" },
-          { id: "OUT", name: "Məxaric" },
-        ])}
-        {select("account", "Bank hesabı", data.accounts)}
-        {select("category", "Kateqoriya", data.categories)}
-        {select(
-          "job",
-          "Avtomobil",
-          data.jobs.map((j) => ({
-            id: j.id,
-            name: `${j.plate} · ${j.job_no}`,
-          })),
-        )}
-        {select(
-          "supplier",
-          "Təchizatçı",
-          Array.from(
-            new Map(
-              data.purchases
-                .filter((p) => p.supplier_id)
-                .map((p) => [
-                  p.supplier_id!,
-                  { id: p.supplier_id!, name: p.supplier },
-                ]),
-            ).values(),
-          ),
-        )}
-        {select(
-          "worker",
-          "İşçi",
-          Array.from(
-            new Map(
-              data.work
-                .filter((w) => w.worker_id)
-                .map((w) => [
-                  w.worker_id!,
-                  { id: w.worker_id!, name: w.worker },
-                ]),
-            ).values(),
-          ),
-        )}
-        {select(
-          "actor",
-          "Daxil edən",
-          Array.from(
-            new Map(
-              data.ledger.map((t) => [
-                t.owner_user_id,
-                { id: t.owner_user_id, name: t.created_by_name || "-" },
-              ]),
-            ).values(),
-          ),
-        )}
-        <label className="text-xs text-[var(--muted)]">
-          Tərəf
-          <input name="party" defaultValue={f.party} className="field mt-1" />
-        </label>
-        <div className="flex items-end gap-2">
-          <button className="btn btn-primary">Tətbiq et</button>
-          <Link className="btn btn-secondary" href={`/kassa?view=${view}`}>
-            Sıfırla
-          </Link>
-        </div>
-      </form>
-      <MoneyGrid
-        items={[
-          ["Nağd mədaxil", cash.income],
-          ["Nağd məxaric", cash.expense],
-          ["Nağd net", cash.net],
-          ["Bank mədaxil", bank.income],
-          ["Bank məxaric", bank.expense],
-          ["Bank net", bank.net],
-          ["Ümumi mədaxil", total.income],
-          ["Ümumi məxaric", total.expense],
-          ["Net pul axını", total.net],
-        ]}
-      />
-      {view === "cash" || view === "bank" ? (
+          </section>
+          <div className="mb-6 flex flex-wrap gap-3">
+            <NewMovement data={data} direction="IN" channel="CASH" />
+            <NewMovement data={data} direction="OUT" channel="CASH" />
+            <TransferForm accounts={data.accounts} />
+            {admin ? (
+              <NewMovement data={data} direction="IN" channel="CASH" opening />
+            ) : null}
+          </div>
+        </>
+      ) : null}
+      {listView ? (
+        <>
+          <form
+            key={query}
+            className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+          >
+            <input type="hidden" name="view" value={view} />
+            {settlementJob ? (
+              <input type="hidden" name="settlementJob" value={settlementJob} />
+            ) : null}
+            {[
+              ["from", "Başlanğıc"],
+              ["to", "Son"],
+            ].map(([name, label]) => (
+              <label key={name} className="text-xs text-[var(--muted)]">
+                {label}
+                <input
+                  type="date"
+                  name={name}
+                  defaultValue={f[name as "from" | "to"]}
+                  className="field mt-1"
+                />
+              </label>
+            ))}
+            {listView
+              ? select("channel", "Kanal", [
+                  { id: "CASH", name: "Nağd" },
+                  { id: "BANK", name: "Bank" },
+                ])
+              : null}
+            {select("direction", "İstiqamət", [
+              { id: "IN", name: "Mədaxil" },
+              { id: "OUT", name: "Məxaric" },
+            ])}
+            {select("account", "Bank hesabı", data.accounts)}
+            {select("category", "Kateqoriya", data.categories)}
+            {select(
+              "job",
+              "Avtomobil",
+              data.jobs.map((j) => ({
+                id: j.id,
+                name: `${j.plate} · ${j.job_no}`,
+              })),
+            )}
+            {select(
+              "supplier",
+              "Təchizatçı",
+              Array.from(
+                new Map(
+                  data.purchases
+                    .filter((p) => p.supplier_id)
+                    .map((p) => [
+                      p.supplier_id!,
+                      { id: p.supplier_id!, name: p.supplier },
+                    ]),
+                ).values(),
+              ),
+            )}
+            {select(
+              "worker",
+              "İşçi",
+              Array.from(
+                new Map(
+                  data.work
+                    .filter((w) => w.worker_id)
+                    .map((w) => [
+                      w.worker_id!,
+                      { id: w.worker_id!, name: w.worker },
+                    ]),
+                ).values(),
+              ),
+            )}
+            {select(
+              "actor",
+              "Daxil edən",
+              Array.from(
+                new Map(
+                  data.ledger.map((t) => [
+                    t.owner_user_id,
+                    { id: t.owner_user_id, name: t.created_by_name || "-" },
+                  ]),
+                ).values(),
+              ),
+            )}
+            <label className="text-xs text-[var(--muted)]">
+              Tərəf
+              <input
+                name="party"
+                defaultValue={f.party}
+                className="field mt-1"
+              />
+            </label>
+            <div className="flex items-end gap-2">
+              <button className="btn btn-primary">Tətbiq et</button>
+              <Link className="btn btn-secondary" href={`/kassa?${resetQuery}`}>
+                Sıfırla
+              </Link>
+            </div>
+          </form>
+          <MoneyGrid
+            items={[
+              ["Nağd mədaxil", cash.income],
+              ["Nağd məxaric", cash.expense],
+              ["Nağd net", cash.net],
+              ["Bank mədaxil", bank.income],
+              ["Bank məxaric", bank.expense],
+              ["Bank net", bank.net],
+              ["Ümumi mədaxil", total.income],
+              ["Ümumi məxaric", total.expense],
+              ["Net pul axını", total.net],
+            ]}
+          />
+        </>
+      ) : null}
+      {view === "reports" ? (
         <section className="my-6">
           <h2 className="text-lg font-semibold">
             {start === end
               ? `Gündəlik qalıq · ${start}`
               : `Dövr qalığı · ${start} / ${end}`}
           </h2>
-          <ReportActions
-            report="finance"
-            query={new URLSearchParams({
-              channel: f.channel,
-              account: f.account,
-              from: start,
-              to: end,
-            }).toString()}
-          />
           <MoneyGrid
             items={[
               ["Əvvəl qalıq", opening],
@@ -286,122 +310,177 @@ export function FinancePage({
           />
         </section>
       ) : null}
-      {selected ? (
-        <section className="my-8 border-y border-[var(--border)] py-5">
-          <h2 className="text-lg font-semibold">
-            {selected.plate} · {selected.model}
-          </h2>
-          <p className="mt-1 text-sm text-[var(--muted)]">
-            {selected.customer_name} · {selected.job_no}
-          </p>
-          <MoneyGrid
-            items={[
-              [
-                selected.customer_due < 0
-                  ? "Müştəri artıq ödənişi"
-                  : "Müştəri qalıq borcu",
-                Math.abs(selected.customer_due),
-              ],
-              [
-                "Müştəridən alınıb",
-                moneySum(
-                  data.ledger
-                    .filter(
-                      (t) =>
-                        t.service_job_id === selected.id &&
-                        t.allocation_type.startsWith("CUSTOMER_") &&
-                        !t.voided_at,
-                    )
-                    .map((t) => t.amount),
-                ),
-              ],
-              ["Məlum maya", vehicleSettlement(data, selected.id).totalCost],
-              ["Qalan öhdəlik", vehicleSettlement(data, selected.id).remaining],
-              [
-                "Artıq ödəniş / uzlaşdırılacaq",
-                vehicleSettlement(data, selected.id).overpaid,
-              ],
-            ]}
-          />
-          {selected.inactive ? (
-            <p className="text-[var(--muted)]">Arxiv servis kartı</p>
-          ) : selected.closed_at ? (
-            <>
-              <p className="mb-3 text-[var(--success)]">Maliyyə bağlanıb</p>
-              {admin ? (
-                <ActionForm
-                  action={reopenVehicleAction}
-                  className="flex flex-wrap gap-3"
-                >
-                  <input
-                    type="hidden"
-                    name="service_job_id"
-                    value={selected.id}
-                  />
-                  <input
-                    name="reason"
-                    required
-                    maxLength={250}
-                    placeholder="Yenidən açılma səbəbi"
-                    aria-label="Yenidən açılma səbəbi"
-                    className="field max-w-md"
-                  />
-                  <SubmitButton>Yenidən aç</SubmitButton>
-                </ActionForm>
-              ) : null}
-            </>
-          ) : (
-            <div className="flex flex-wrap gap-3">
-              {selected.customer_due > 0 ? (
-                <NewMovement
-                  data={data}
-                  direction="IN"
-                  channel={view === "bank" ? "BANK" : "CASH"}
-                  job={selected}
+      {view === "settlement" ? (
+        <>
+          <form
+            key={settlementJob}
+            className="my-5 flex flex-wrap items-end gap-3"
+          >
+            {Object.entries(params)
+              .filter(
+                ([key, value]) =>
+                  key !== "settlementJob" &&
+                  key !== "view" &&
+                  typeof value === "string",
+              )
+              .map(([key, value]) => (
+                <input
+                  key={key}
+                  type="hidden"
+                  name={key}
+                  value={String(value)}
                 />
-              ) : null}
-              <SettlementDialog data={data} job={selected} />
-            </div>
-          )}
-        </section>
-      ) : (
-        <section className="my-6">
-          <h2 className="mb-3 text-lg font-semibold">Avtomobil balansları</h2>
-          <div className="table-scroll">
-            <table className="data-table w-full min-w-[640px] text-sm">
-              <thead>
-                <tr>
-                  <th>Avtomobil</th>
-                  <th>Müştəri</th>
-                  <th>Müştəri borcu</th>
-                  <th>Qalan öhdəlik</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
+              ))}
+            <input type="hidden" name="view" value="settlement" />
+            <label className="min-w-0 flex-1 text-sm">
+              Avtomobil / servis kartı
+              <select
+                name="settlementJob"
+                defaultValue={settlementJob}
+                required
+                className="field mt-1"
+              >
+                <option value="">Seçin</option>
                 {data.jobs.map((j) => (
-                  <tr key={j.id}>
-                    <td>
-                      <Link
-                        className="text-[var(--accent)]"
-                        href={`/kassa?view=${view}&job=${j.id}`}
-                      >
-                        {j.plate}
-                      </Link>
-                    </td>
-                    <td>{j.customer_name}</td>
-                    <td>{formatMoney(j.customer_due)}</td>
-                    <td>
-                      {formatMoney(vehicleSettlement(data, j.id).remaining)}
-                    </td>
-                    <td>{j.closed_at ? "Maliyyə bağlanıb" : "Açıq"}</td>
-                  </tr>
+                  <option key={j.id} value={j.id}>
+                    {j.plate} · {j.job_no}
+                  </option>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
+              </select>
+            </label>
+            <button className="btn btn-primary">Seç</button>
+          </form>
+          {selected ? (
+            <section className="my-8 border-y border-[var(--border)] py-5">
+              <h2 className="text-lg font-semibold">
+                {selected.plate} · {selected.model}
+              </h2>
+              <p className="mt-1 text-sm text-[var(--muted)]">
+                {selected.customer_name} · {selected.job_no}
+              </p>
+              <MoneyGrid
+                items={[
+                  [
+                    selected.customer_due < 0
+                      ? "Müştəri artıq ödənişi"
+                      : "Müştəri qalıq borcu",
+                    Math.abs(selected.customer_due),
+                  ],
+                  [
+                    "Müştəridən alınıb",
+                    moneySum(
+                      data.ledger
+                        .filter(
+                          (t) =>
+                            t.service_job_id === selected.id &&
+                            t.allocation_type.startsWith("CUSTOMER_") &&
+                            !t.voided_at,
+                        )
+                        .map((t) => t.amount),
+                    ),
+                  ],
+                  [
+                    "Məlum maya",
+                    vehicleSettlement(data, selected.id).totalCost,
+                  ],
+                  [
+                    "Qalan öhdəlik",
+                    vehicleSettlement(data, selected.id).remaining,
+                  ],
+                  [
+                    "Artıq ödəniş / uzlaşdırılacaq",
+                    vehicleSettlement(data, selected.id).overpaid,
+                  ],
+                ]}
+              />
+              {selected.inactive ? (
+                <p className="text-[var(--muted)]">Arxiv servis kartı</p>
+              ) : selected.closed_at ? (
+                <>
+                  <p className="mb-3 text-[var(--success)]">Maliyyə bağlanıb</p>
+                  {admin ? (
+                    <ActionForm
+                      action={reopenVehicleAction}
+                      className="flex flex-wrap gap-3"
+                    >
+                      <input
+                        type="hidden"
+                        name="service_job_id"
+                        value={selected.id}
+                      />
+                      <input
+                        name="reason"
+                        required
+                        maxLength={250}
+                        placeholder="Yenidən açılma səbəbi"
+                        aria-label="Yenidən açılma səbəbi"
+                        className="field max-w-md"
+                      />
+                      <SubmitButton>Yenidən aç</SubmitButton>
+                    </ActionForm>
+                  ) : null}
+                </>
+              ) : (
+                <div className="flex flex-wrap gap-3">
+                  {selected.customer_due > 0 ? (
+                    <NewMovement
+                      key={`payment-${selected.id}`}
+                      data={data}
+                      direction="IN"
+                      channel="CASH"
+                      job={selected}
+                    />
+                  ) : null}
+                  <SettlementDialog
+                    key={`settlement-${selected.id}`}
+                    data={data}
+                    job={selected}
+                  />
+                </div>
+              )}
+            </section>
+          ) : (
+            <section className="my-6">
+              <h2 className="mb-3 text-lg font-semibold">
+                Avtomobil balansları
+              </h2>
+              <div className="table-scroll">
+                <table className="data-table w-full min-w-[640px] text-sm">
+                  <thead>
+                    <tr>
+                      <th>Avtomobil</th>
+                      <th>Müştəri</th>
+                      <th>Müştəri borcu</th>
+                      <th>Qalan öhdəlik</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.jobs.map((j) => (
+                      <tr key={j.id}>
+                        <td>
+                          <Link
+                            className="text-[var(--accent)]"
+                            href={`/kassa?view=settlement&settlementJob=${j.id}`}
+                          >
+                            {j.plate}
+                          </Link>
+                        </td>
+                        <td>{j.customer_name}</td>
+                        <td>{formatMoney(j.customer_due)}</td>
+                        <td>
+                          {formatMoney(vehicleSettlement(data, j.id).remaining)}
+                        </td>
+                        <td>{j.closed_at ? "Maliyyə bağlanıb" : "Açıq"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+        </>
+      ) : null}
       {view === "workers" ? (
         <section className="my-6">
           <h2 className="mb-3 text-lg font-semibold">İşçilərlə hesablaşma</h2>
@@ -448,7 +527,7 @@ export function FinancePage({
                       <tr key={w.id}>
                         <td>
                           <Link
-                            href={`/kassa?view=workers&job=${w.service_job_id}`}
+                            href={`/kassa?view=settlement&settlementJob=${w.service_job_id}`}
                             className="text-[var(--accent)]"
                           >
                             {w.worker} · {w.title}
@@ -476,196 +555,302 @@ export function FinancePage({
           </div>
         </section>
       ) : null}
-      <section className="my-8">
-        <h2 className="mb-3 text-lg font-semibold">Ümumi jurnal</h2>
-        <div
-          className="table-scroll"
-          role="region"
-          aria-label="Maliyyə jurnalı"
-          tabIndex={0}
-        >
-          <table className="data-table w-full min-w-[1400px] text-sm">
-            <thead>
-              <tr>
-                {[
-                  "Tarix / vaxt",
-                  "Kanal / Hesab",
-                  "İstiqamət",
-                  "Kateqoriya",
-                  "Tərəf",
-                  "Avtomobil / İş №",
-                  "Təyinat",
-                  "Reference",
-                  "Mədaxil",
-                  "Məxaric",
-                  "Daxil edən",
-                  "Sənəd",
-                ].map((h) => (
-                  <th key={h}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((t) => (
-                <tr key={t.id} className={t.voided_at ? "opacity-50" : ""}>
-                  <td>
-                    {formatDate(t.transaction_date)}
-                    <br />
-                    {new Date(t.occurred_at).toLocaleTimeString("az-AZ", {
-                      timeZone: "Asia/Baku",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </td>
-                  <td>
-                    {channelName(t.channel)}
-                    <br />
-                    {
-                      data.accounts.find((a) => a.id === t.financial_account_id)
-                        ?.name
-                    }
-                  </td>
-                  <td>
-                    {t.voided_at
-                      ? "Ləğv edilib"
-                      : t.direction === "IN"
-                        ? "Mədaxil"
-                        : "Məxaric"}
-                  </td>
-                  <td>{financialCategoryLabel(t, data.categories)}</td>
-                  <td>{t.counterparty_name_snapshot || "-"}</td>
-                  <td>
-                    {data.jobs.find((j) => j.id === t.service_job_id)?.plate ||
-                      "-"}
-                    <br />
-                    {data.jobs.find((j) => j.id === t.service_job_id)?.job_no}
-                  </td>
-                  <td className="max-w-64 break-words">{t.purpose}</td>
-                  <td>{t.bank_reference || t.reference_number || "-"}</td>
-                  <td>{t.direction === "IN" ? formatMoney(t.amount) : "-"}</td>
-                  <td>{t.direction === "OUT" ? formatMoney(t.amount) : "-"}</td>
-                  <td>{t.created_by_name || "-"}</td>
-                  <td>
-                    <ReportActions
-                      report="finance"
-                      query={`transaction=${t.id}`}
-                    />
-                    {admin && !t.voided_at ? (
-                      <details className="mt-2">
-                        <summary className="cursor-pointer text-red-400">
-                          Ləğv et
-                        </summary>
-                        <ActionForm
-                          action={voidPaymentAction}
-                          className="mt-2 grid gap-2"
-                        >
-                          <input type="hidden" name="id" value={t.id} />
-                          <input
-                            name="void_reason"
-                            required
-                            maxLength={250}
-                            placeholder="Ləğv səbəbi"
-                            className="field"
-                          />
-                          <SubmitButton variant="danger">Ləğv et</SubmitButton>
-                        </ActionForm>
-                      </details>
-                    ) : null}
-                  </td>
+      {listView ? (
+        <section className="my-8">
+          <h2 className="mb-3 text-lg font-semibold">Ümumi jurnal</h2>
+          <div
+            className="table-scroll"
+            role="region"
+            aria-label="Maliyyə jurnalı"
+            tabIndex={0}
+          >
+            <table className="data-table w-full min-w-[1400px] text-sm">
+              <thead>
+                <tr>
+                  {[
+                    "Tarix / vaxt",
+                    "Kanal / Hesab",
+                    "İstiqamət",
+                    "Kateqoriya",
+                    "Tərəf",
+                    "Avtomobil / İş №",
+                    "Təyinat",
+                    "Reference",
+                    "Mədaxil",
+                    "Məxaric",
+                    "Daxil edən",
+                    "Sənəd",
+                  ].map((h) => (
+                    <th key={h}>{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {!rows.length ? (
-          <p className="py-5 text-[var(--muted)]">Əməliyyat yoxdur.</p>
-        ) : null}
-      </section>
-      {admin ? <FinancialSettings data={data} /> : null}
+              </thead>
+              <tbody>
+                {rows.map((t) => (
+                  <tr key={t.id} className={t.voided_at ? "opacity-50" : ""}>
+                    <td>
+                      {formatDate(t.transaction_date)}
+                      <br />
+                      {new Date(t.occurred_at).toLocaleTimeString("az-AZ", {
+                        timeZone: "Asia/Baku",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </td>
+                    <td>
+                      {channelName(t.channel)}
+                      <br />
+                      {
+                        data.accounts.find(
+                          (a) => a.id === t.financial_account_id,
+                        )?.name
+                      }
+                    </td>
+                    <td>
+                      {t.voided_at
+                        ? "Ləğv edilib"
+                        : t.direction === "IN"
+                          ? "Mədaxil"
+                          : "Məxaric"}
+                    </td>
+                    <td>{financialCategoryLabel(t, data.categories)}</td>
+                    <td>{t.counterparty_name_snapshot || "-"}</td>
+                    <td>
+                      {data.jobs.find((j) => j.id === t.service_job_id)
+                        ?.plate || "-"}
+                      <br />
+                      {data.jobs.find((j) => j.id === t.service_job_id)?.job_no}
+                    </td>
+                    <td className="max-w-64 break-words">{t.purpose}</td>
+                    <td>{t.bank_reference || t.reference_number || "-"}</td>
+                    <td>
+                      {t.direction === "IN" ? formatMoney(t.amount) : "-"}
+                    </td>
+                    <td>
+                      {t.direction === "OUT" ? formatMoney(t.amount) : "-"}
+                    </td>
+                    <td>{t.created_by_name || "-"}</td>
+                    <td>
+                      <ReportActions
+                        report="finance"
+                        query={`transaction=${t.id}`}
+                      />
+                      {admin && !t.voided_at ? (
+                        <details className="mt-2">
+                          <summary className="cursor-pointer text-red-400">
+                            Ləğv et
+                          </summary>
+                          <ActionForm
+                            action={voidPaymentAction}
+                            className="mt-2 grid gap-2"
+                          >
+                            <input type="hidden" name="id" value={t.id} />
+                            <input
+                              name="void_reason"
+                              required
+                              maxLength={250}
+                              placeholder="Ləğv səbəbi"
+                              className="field"
+                            />
+                            <SubmitButton variant="danger">
+                              Ləğv et
+                            </SubmitButton>
+                          </ActionForm>
+                        </details>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {!rows.length ? (
+            <p className="py-5 text-[var(--muted)]">Əməliyyat yoxdur.</p>
+          ) : null}
+        </section>
+      ) : null}
+      {admin && (view === "accounts" || view === "categories") ? (
+        <FinancialSettings data={data} view={view} />
+      ) : null}
     </>
   );
 }
-function FinancialSettings({ data }: { data: FinanceData }) {
+function FinancialSettings({
+  data,
+  view,
+}: {
+  data: FinanceData;
+  view: "accounts" | "categories";
+}) {
   return (
     <section className="mt-8 border-t border-[var(--border)] pt-5">
-      <h2 className="mb-4 text-lg font-semibold">Maliyyə parametrləri</h2>
-      <details>
-        <summary className="cursor-pointer">Bank hesabları</summary>
-        {[null, ...data.accounts].map((a) => (
-          <ActionForm
-            key={a?.id || "new"}
-            action={saveFinancialMasterAction}
-            className="my-4 grid gap-3 border-t border-[var(--border)] py-4 sm:grid-cols-2 xl:grid-cols-3"
-          >
-            <input type="hidden" name="kind" value="account" />
-            <input type="hidden" name="id" value={a?.id || ""} />
-            {[
-              ["name", "Hesab adı"],
-              ["bank_name", "Bankın adı"],
-              ["iban", "IBAN / Hesab №"],
-              ["account_holder", "Hesab sahibi"],
-              ["tax_id", "VÖEN"],
-              ["swift", "SWIFT/BIC"],
-              ["notes", "Qeyd"],
-            ].map(([name, label]) => (
-              <label key={name} className="text-sm">
-                {label}
-                <input
-                  name={name}
-                  defaultValue={(a?.[name as keyof typeof a] as string) || ""}
-                  required={name === "name"}
-                  maxLength={name === "notes" ? 250 : 120}
-                  className="field mt-1"
-                />
-              </label>
-            ))}
-            <label className="text-sm">
-              Valyuta
-              <input value="AZN" readOnly className="field mt-1" />
-            </label>
-            <label className="text-sm">
-              Status
-              <select
-                name="active"
-                defaultValue={String(a?.active ?? true)}
-                className="field mt-1"
+      <h2 className="mb-4 text-lg font-semibold">
+        {view === "accounts" ? "Bank hesabları" : "Kateqoriyalar"}
+      </h2>
+      {view === "accounts" ? (
+        <details open>
+          <summary className="cursor-pointer">Bank hesabları</summary>
+          {[null, ...data.accounts.filter((a) => !a.deleted_at)].map((a) => (
+            <div
+              key={a?.id || "new"}
+              className="border-t border-[var(--border)] py-4"
+            >
+              <h3 className="font-semibold">
+                {a
+                  ? `${a.name} · ${formatMoney(ledgerBalance(data.ledger.filter((t) => t.financial_account_id === a.id)))}`
+                  : "Yeni bank hesabı"}
+              </h3>
+              <ActionForm
+                key={a?.id || "new"}
+                action={saveFinancialMasterAction}
+                className="my-4 grid gap-3 border-t border-[var(--border)] py-4 sm:grid-cols-2 xl:grid-cols-3"
               >
-                <option value="true">Aktiv</option>
-                <option value="false">Arxiv</option>
+                <input type="hidden" name="kind" value="account" />
+                <input type="hidden" name="id" value={a?.id || ""} />
+                {[
+                  ["name", "Hesab adı"],
+                  ["bank_name", "Bankın adı"],
+                  ["iban", "IBAN / Hesab №"],
+                  ["account_holder", "Hesab sahibi"],
+                  ["tax_id", "VÖEN"],
+                  ["swift", "SWIFT/BIC"],
+                  ["notes", "Qeyd"],
+                ].map(([name, label]) => (
+                  <label key={name} className="text-sm">
+                    {label}
+                    <input
+                      name={name}
+                      defaultValue={
+                        (a?.[name as keyof typeof a] as string) || ""
+                      }
+                      required={name === "name"}
+                      maxLength={name === "notes" ? 250 : 120}
+                      className="field mt-1"
+                    />
+                  </label>
+                ))}
+                <label className="text-sm">
+                  Valyuta
+                  <input value="AZN" readOnly className="field mt-1" />
+                </label>
+                <label className="text-sm">
+                  Status
+                  <select
+                    name="active"
+                    defaultValue={String(a?.active ?? true)}
+                    className="field mt-1"
+                  >
+                    <option value="true">Aktiv</option>
+                    <option value="false">Arxiv</option>
+                  </select>
+                </label>
+                <SubmitButton>
+                  {a ? "Hesabı yenilə" : "Bank hesabı yarat"}
+                </SubmitButton>
+              </ActionForm>
+              {a ? (
+                <MasterLifecycle
+                  kind="account"
+                  id={a.id}
+                  name={a.name}
+                  active={a.active}
+                />
+              ) : null}
+            </div>
+          ))}
+        </details>
+      ) : null}
+      {view === "categories" ? (
+        <details open className="mt-4">
+          <summary className="cursor-pointer">Yeni kateqoriya</summary>
+          <ActionForm
+            action={saveFinancialMasterAction}
+            className="mt-4 grid gap-3 sm:grid-cols-3"
+          >
+            <input type="hidden" name="kind" value="category" />
+            <label>
+              Ad
+              <input
+                name="name"
+                required
+                maxLength={120}
+                className="field mt-1"
+              />
+            </label>
+            <label>
+              İstiqamət
+              <select name="direction" className="field mt-1">
+                <option value="IN">Mədaxil</option>
+                <option value="OUT">Məxaric</option>
               </select>
             </label>
-            <SubmitButton>
-              {a ? "Hesabı yenilə" : "Bank hesabı yarat"}
-            </SubmitButton>
+            <SubmitButton>Kateqoriya yarat</SubmitButton>
           </ActionForm>
-        ))}
-      </details>
-      <details className="mt-4">
-        <summary className="cursor-pointer">Yeni kateqoriya</summary>
-        <ActionForm
-          action={saveFinancialMasterAction}
-          className="mt-4 grid gap-3 sm:grid-cols-3"
-        >
-          <input type="hidden" name="kind" value="category" />
-          <label>
-            Ad
-            <input
-              name="name"
-              required
-              maxLength={120}
-              className="field mt-1"
-            />
-          </label>
-          <label>
-            İstiqamət
-            <select name="direction" className="field mt-1">
-              <option value="IN">Mədaxil</option>
-              <option value="OUT">Məxaric</option>
-            </select>
-          </label>
-          <SubmitButton>Kateqoriya yarat</SubmitButton>
-        </ActionForm>
-      </details>
+          {(["IN", "OUT"] as const).map((direction) => (
+            <section key={direction} className="mt-6">
+              <h3 className="text-lg font-semibold">
+                {direction === "IN"
+                  ? "Mədaxil kateqoriyaları"
+                  : "Məxaric kateqoriyaları"}
+              </h3>
+              {data.categories
+                .filter((c) => !c.deleted_at && c.direction === direction)
+                .map((c) => (
+                  <div
+                    key={c.id}
+                    className="border-b border-[var(--border)] py-4"
+                  >
+                    {c.is_system ? (
+                      <p>
+                        {c.name}{" "}
+                        <span className="text-xs text-[var(--muted)]">
+                          Sistem kateqoriyası
+                        </span>
+                      </p>
+                    ) : (
+                      <>
+                        <ActionForm
+                          action={saveFinancialMasterAction}
+                          className="grid items-end gap-3 sm:grid-cols-[minmax(0,1fr)_auto]"
+                        >
+                          <input type="hidden" name="kind" value="category" />
+                          <input type="hidden" name="id" value={c.id} />
+                          <input
+                            type="hidden"
+                            name="direction"
+                            value={c.direction}
+                          />
+                          <input
+                            type="hidden"
+                            name="active"
+                            value={String(c.active)}
+                          />
+                          <label className="text-sm">
+                            Ad · {c.active ? "Aktiv" : "Arxiv"}
+                            <input
+                              name="name"
+                              defaultValue={c.name}
+                              required
+                              maxLength={120}
+                              className="field mt-1"
+                            />
+                          </label>
+                          <SubmitButton>Yadda saxla</SubmitButton>
+                        </ActionForm>
+                        <MasterLifecycle
+                          kind="category"
+                          id={c.id}
+                          name={c.name}
+                          active={c.active}
+                        />
+                      </>
+                    )}
+                  </div>
+                ))}
+            </section>
+          ))}
+        </details>
+      ) : null}
     </section>
   );
 }

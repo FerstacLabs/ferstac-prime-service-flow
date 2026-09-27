@@ -47,6 +47,21 @@ const log: AuditLog = {
 };
 
 describe("audit descriptions and reports", () => {
+  it("explains assignment and its automatic status transition together", () => {
+    const description = auditDescription({
+      ...log,
+      action: "WORKER_ASSIGNED",
+      metadata: {},
+      changes: {
+        assigned_worker_id: { before: null, after: "worker" },
+        status: { before: "TODO", after: "IN_PROGRESS" },
+      },
+      references: { "assigned_worker_id:worker": "Kamran Həsənov" },
+    });
+    expect(description).toContain("Kamran Həsənov işə təyin edildi");
+    expect(description).toContain("İş gedir");
+    expect(description).not.toMatch(/TODO|IN_PROGRESS|WORKER_ASSIGNED/);
+  });
   it("describes actors, worker payments and account changes without secret values", () => {
     expect(auditDescription(log)).toBe(
       "kassa istifadəçisi Rauf Əliyev üçün 100,00 AZN usta ödənişi yaratdı.",

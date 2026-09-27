@@ -9,6 +9,7 @@ import {
 import type { CashTransaction, RequiredPart } from "@/lib/workshop";
 import { inPeriod, parseFilters, type WorkshopFilters } from "@/lib/filters";
 import { jobFinance } from "@/lib/workshop";
+import { masterDirectory } from "@/lib/supabase/master-directory";
 
 // Range through PostgREST's response cap on the server; reports never truncate at 1,000 rows.
 async function rows<T>(table: string, select: string, jobId?: string) {
@@ -71,7 +72,7 @@ export async function getWorkshop(jobId?: string) {
       rows<DbServiceJob>("service_jobs", "*,vehicles(*)", jobId),
       rows<DbWorkItem>(
         "job_work_items",
-        "*,work_catalog(id,name,category),workers(id,first_name,last_name,role_id),unit_catalog(id,name,short_name)",
+        "*,work_catalog(id,name,category),unit_catalog(id,name,short_name)",
         jobId,
       ),
       rows<RequiredPart>(
@@ -81,22 +82,26 @@ export async function getWorkshop(jobId?: string) {
       ),
       rows<DbPurchase>(
         "purchases",
-        "*,part_catalog(id,name,category),suppliers(id,company_name,shop_name,first_name,last_name,father_name),workers(id,first_name,last_name)",
+        "*,part_catalog(id,name,category),suppliers(id,company_name,shop_name,first_name,last_name,father_name)",
         jobId,
       ),
       rows<CashTransaction>("cash_transactions", "*", jobId),
-      rows<DbWorker>("workers", "*,worker_roles(id,name)"),
+      masterDirectory<DbWorker>("worker"),
       rows<DbSupplier>("suppliers", "*"),
     ]);
   return {
     jobs,
-    work,
+    work: work.map((w) => ({
+      ...w,
+      workers: workers.find((u) => u.id === w.assigned_worker_id) || null,
+    })),
     parts,
     purchases: purchases
       .filter((p) => !p.voided_at)
       .map((p) => ({
         ...p,
         suppliers: p.suppliers ?? p.supplier_snapshot ?? null,
+        workers: workers.find((w) => w.id === p.purchased_by_worker_id) || null,
       })),
     cash,
     workers,

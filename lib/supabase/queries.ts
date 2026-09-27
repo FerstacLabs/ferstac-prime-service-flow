@@ -1,4 +1,5 @@
 import { requireAccess } from "@/lib/supabase/auth";
+import { masterDirectory } from "@/lib/supabase/master-directory";
 import type { AppRole } from "@/lib/security";
 import type { QuoteMeasure } from "@/lib/workshop";
 import type {
@@ -132,6 +133,7 @@ export type DbSupplier = {
 };
 
 export type DbWorker = {
+  deleted_at?: string | null;
   id: string;
   first_name: string;
   last_name: string;
@@ -197,14 +199,16 @@ export async function getWorkItems(serviceJobId?: string) {
   const { supabase } = await getAuthedSupabase();
   let query = supabase
     .from("job_work_items")
-    .select(
-      "*, work_catalog(id, category, name), workers(id, first_name, last_name, role_id)",
-    )
+    .select("*, work_catalog(id, category, name)")
     .order("planned_at", { ascending: false });
   if (serviceJobId) query = query.eq("service_job_id", serviceJobId);
   const { data, error } = await query;
   if (error) throw error;
-  return (data ?? []) as DbWorkItem[];
+  const workers = await masterDirectory<DbWorker>("worker");
+  return ((data ?? []) as DbWorkItem[]).map((w) => ({
+    ...w,
+    workers: workers.find((u) => u.id === w.assigned_worker_id) || null,
+  }));
 }
 
 export async function getPurchases(serviceJobId?: string) {
@@ -212,13 +216,17 @@ export async function getPurchases(serviceJobId?: string) {
   let query = supabase
     .from("purchases")
     .select(
-      "*, part_catalog(id, name, category), suppliers(id, company_name, shop_name, first_name, last_name, father_name), workers(id, first_name, last_name)",
+      "*, part_catalog(id, name, category), suppliers(id, company_name, shop_name, first_name, last_name, father_name)",
     )
     .order("purchase_date", { ascending: false });
   if (serviceJobId) query = query.eq("service_job_id", serviceJobId);
   const { data, error } = await query;
   if (error) throw error;
-  return (data ?? []) as DbPurchase[];
+  const workers = await masterDirectory<DbWorker>("worker");
+  return ((data ?? []) as DbPurchase[]).map((p) => ({
+    ...p,
+    workers: workers.find((w) => w.id === p.purchased_by_worker_id) || null,
+  }));
 }
 
 export async function getSuppliers() {
@@ -232,13 +240,7 @@ export async function getSuppliers() {
 }
 
 export async function getWorkers() {
-  const { supabase } = await getAuthedSupabase();
-  const { data, error } = await supabase
-    .from("workers")
-    .select("*, worker_roles(id, name)")
-    .order("created_at", { ascending: false });
-  if (error) throw error;
-  return (data ?? []) as DbWorker[];
+  return masterDirectory<DbWorker>("worker");
 }
 
 export async function getMasterData() {

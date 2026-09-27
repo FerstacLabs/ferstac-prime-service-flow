@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { documentDisposition } from "@/lib/reports/document-filename";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { ReportDocument } from "@/lib/report-pdf";
 import { buildVehicleReportForJob } from "@/lib/reports/report-data";
@@ -34,7 +35,7 @@ export async function GET(
     headers: {
       "Content-Type": "application/pdf",
       "Cache-Control": "private, no-store",
-      "Content-Disposition": `attachment; filename="prime-flow-vehicle-${jobId}.pdf"`,
+      "Content-Disposition": documentDisposition(report),
     },
   });
 }

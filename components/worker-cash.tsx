@@ -216,7 +216,7 @@ export function WorkerCash({
                       href={
                         admin
                           ? `/vehicles/${work.service_job_id}`
-                          : `/kassa?job=${work.service_job_id}`
+                          : `/kassa?view=settlement&settlementJob=${work.service_job_id}`
                       }
                       className="font-mono font-semibold text-[var(--accent)]"
                     >
@@ -317,7 +317,7 @@ export function WorkerCash({
                             href={
                               admin
                                 ? `/vehicles/${item.service_job_id}`
-                                : `/kassa?job=${item.service_job_id}`
+                                : `/kassa?view=settlement&settlementJob=${item.service_job_id}`
                             }
                           >
                             {job?.vehicles?.plate}
@@ -328,7 +328,7 @@ export function WorkerCash({
                             href={
                               admin
                                 ? `/vehicles/${item.service_job_id}#work-${item.id}`
-                                : `/kassa?job=${item.service_job_id}#work-${item.id}`
+                                : `/kassa?view=settlement&settlementJob=${item.service_job_id}`
                             }
                             className="hover:underline"
                           >

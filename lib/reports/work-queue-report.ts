@@ -19,6 +19,14 @@ export function workQueueReport(
   };
   return {
     scope: "work",
+    documentContext: [
+      data.jobs.find((j) => j.id === f.job)?.vehicles?.plate || f.plate,
+      f.worker ? workerName(f.worker) : "",
+      reportWorkStatusLabels[f.status as keyof typeof reportWorkStatusLabels] ||
+        "",
+      f.from,
+      f.to,
+    ],
     title: "Görüləcək işlər hesabatı",
     generatedAt: formatReportDateTime(),
     orientation: "landscape",

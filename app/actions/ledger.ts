@@ -83,6 +83,22 @@ export async function saveFinancialMasterAction(f: FormData) {
   if (error) return { error: error.message };
   revalidatePath("/", "layout");
 }
+export async function manageMasterAction(f: FormData) {
+  const { supabase } = await getAuthedSupabase("ADMIN");
+  const kind = z.enum(["worker", "account", "category"]).parse(f.get("kind"));
+  const action = z
+    .enum(["archive", "restore", "delete"])
+    .parse(f.get("lifecycle_action"));
+  const { error } = await supabase.rpc("manage_master_lifecycle", {
+    p_kind: kind,
+    p_id: uuidValue(f, "id"),
+    p_action: action,
+    p_confirmation: text(f, "confirmation"),
+  });
+  if (error) return { error: error.message };
+  revalidatePath("/", "layout");
+  if (kind === "worker" && action === "delete") redirect("/workers");
+}
 export async function settleVehicleAction(f: FormData) {
   const { supabase } = await getAuthedSupabase("ADMIN", "CASHIER");
   const rows = f.getAll("obligation").map((v) => {

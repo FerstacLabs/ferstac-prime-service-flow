@@ -3,6 +3,7 @@ import type { FinanceData } from "@/lib/finance";
 import type { DbPurchase, DbWorkItem } from "@/lib/supabase/queries";
 import { multiplyMoney } from "@/lib/decimal";
 import { sumMoney, subtractMoney } from "@/lib/workshop";
+import { masterDirectory } from "@/lib/supabase/master-directory";
 export function dbPurchaseTotal(
   purchase: Pick<DbPurchase, "quantity" | "unit_price" | "total_price">,
 ) {
@@ -69,8 +70,8 @@ export async function getFinance(): Promise<FinanceData> {
       read<FinanceData["work"][number]>("work"),
       read<FinanceData["purchases"][number]>("purchases"),
       read<FinanceData["ledger"][number]>("ledger"),
-      read<FinanceData["accounts"][number]>("accounts"),
-      read<FinanceData["categories"][number]>("categories"),
+      masterDirectory<FinanceData["accounts"][number]>("account"),
+      masterDirectory<FinanceData["categories"][number]>("category"),
     ]);
   return { jobs, work, purchases, ledger, accounts, categories };
 }

@@ -99,10 +99,16 @@ export default async function VehicleDetailPage({
             Qeydiyyatı redaktə et
           </Link>
         ) : null}
-        <Link href={`/kassa?job=${job.id}`} className="btn btn-primary">
+        <Link
+          href={`/kassa?view=settlement&settlementJob=${job.id}`}
+          className="btn btn-primary"
+        >
           Kassa
         </Link>
-        <Link href={`/purchases?job=${job.id}`} className="btn btn-secondary">
+        <Link
+          href={`/purchases?purchaseJob=${job.id}`}
+          className="btn btn-secondary"
+        >
           Satınalma
         </Link>
         <Link href={`/work?job=${job.id}`} className="btn btn-secondary">

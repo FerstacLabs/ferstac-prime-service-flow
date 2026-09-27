@@ -51,6 +51,7 @@ export type ReportSection = {
 };
 
 export type PrimeReport = {
+  documentContext?: string[];
   filters?: string;
   subtitle?: string;
   scope: ReportScope;

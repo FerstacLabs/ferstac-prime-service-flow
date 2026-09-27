@@ -12,8 +12,9 @@ async function preparePrint() {
   );
 }
 
-export function PrintTrigger() {
+export function PrintTrigger({ title }: { title?: string }) {
   useEffect(() => {
+    if (title) document.title = title;
     let cancelled = false;
     const timer = window.setTimeout(async () => {
       await preparePrint();
@@ -23,7 +24,7 @@ export function PrintTrigger() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, []);
+  }, [title]);
 
   return null;
 }

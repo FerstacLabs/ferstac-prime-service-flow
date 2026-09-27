@@ -42,8 +42,7 @@ export async function saveWorkerAction(formData: FormData) {
     : supabase.from("workers").insert(payload);
   const { error } = await query;
   if (error) throw error;
-  revalidatePath("/workers");
-  revalidatePath("/work");
+  revalidatePath("/", "layout");
 }
 
 export async function updateWorkItemAction(formData: FormData) {

@@ -23,6 +23,21 @@ export function purchaseReport(
   const items = selectPurchases(data, f),
     supplier = data.suppliers.find((s) => s.id === f.supplier),
     job = data.jobs.find((j) => j.id === f.job);
+  report.documentContext = [
+    job?.vehicles?.plate || f.plate,
+    f.supplier
+      ? supplierDisplayName(
+          supplier ??
+            items.find(
+              (p) =>
+                p.supplier_id === f.supplier ||
+                p.historical_supplier_id === f.supplier,
+            )?.suppliers,
+        )
+      : "",
+    f.from,
+    f.to,
+  ];
   const money = (n: number) => formatReportMoney(n).replace(/ AZN$/, "");
   const columns: ReportTableColumn[] = [
     { key: "date", label: "Tarix", width: 8 },

@@ -5,17 +5,17 @@ import { parseFilters, type SearchParams } from "@/lib/filters";
 import type { ReportScope } from "@/lib/reports/report-types";
 import { loadAuditReport } from "@/lib/audit";
 import { loadFinanceReport } from "@/lib/reports/finance-report";
+import { cache } from "react";
+import { documentFilename } from "@/lib/reports/document-filename";
 
 export const dynamic = "force-dynamic";
 
-export default async function ReportPrintPage({
-  params,
-  searchParams,
-}: {
+type Props = {
   params: Promise<{ scope: string }>;
   searchParams: Promise<SearchParams>;
-}) {
-  const { scope } = await params;
+};
+const loadPrint = cache(async (scope: string, query: string) => {
+  const searchParams = JSON.parse(query) as SearchParams;
   if (
     ![
       "finance",
@@ -31,14 +31,28 @@ export default async function ReportPrintPage({
   )
     notFound();
   const report =
-    scope === "finance"
-      ? await loadFinanceReport(await searchParams)
+    scope === "finance" || scope === "kassa"
+      ? await loadFinanceReport(searchParams)
       : scope === "audit"
-        ? await loadAuditReport(await searchParams)
+        ? await loadAuditReport(searchParams)
         : await loadWorkshopReport(
             scope as ReportScope,
-            parseFilters(await searchParams),
+            parseFilters(searchParams),
           );
   if (!report) notFound();
+  return report;
+});
+export async function generateMetadata({ params, searchParams }: Props) {
+  const report = await loadPrint(
+    (await params).scope,
+    JSON.stringify(await searchParams),
+  );
+  return { title: documentFilename(report).replace(/\.pdf$/, "") };
+}
+export default async function ReportPrintPage({ params, searchParams }: Props) {
+  const report = await loadPrint(
+    (await params).scope,
+    JSON.stringify(await searchParams),
+  );
   return <PrintReport report={report} />;
 }

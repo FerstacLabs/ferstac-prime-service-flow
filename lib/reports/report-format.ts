@@ -20,7 +20,7 @@ export const reportJobStatusLabels: Record<JobStatus, string> = {
 
 export const reportWorkStatusLabels: Record<WorkStatus, string> = {
   TODO: "Gözləyir",
-  IN_PROGRESS: "İcra olunur",
+  IN_PROGRESS: "İş gedir",
   DONE: "Tamamlanıb",
   CANCELLED: "Ləğv edilib",
 };

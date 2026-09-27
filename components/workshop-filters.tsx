@@ -14,7 +14,12 @@ import { allocationLabels } from "@/lib/workshop";
 type Props = {
   filters: WorkshopFilters;
   scope:
-    "vehicles" | "work" | "purchases" | "workers" | "kassa" | "worker-cash";
+    | "vehicles"
+    | "work"
+    | "purchases"
+    | "workers"
+    | "kassa"
+    | "worker-cash";
   jobs?: SelectOption[];
   workers?: SelectOption[];
   works?: SelectOption[];
@@ -48,7 +53,7 @@ export function WorkshopFilters({
     </label>
   );
   return (
-    <FilterForm>
+    <FilterForm key={filterQuery(f, fixed)}>
       {Object.entries(fixed).map(([k, v]) => (
         <input key={k} type="hidden" name={k} value={v} />
       ))}
@@ -190,9 +195,11 @@ export const PAGE_SIZE = 24;
 export function Pagination({
   filters,
   total,
+  fixed = {},
 }: {
   filters: WorkshopFilters;
   total: number;
+  fixed?: Record<string, string>;
 }) {
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   return (
@@ -208,7 +215,7 @@ export function Pagination({
           className="btn btn-secondary"
           title="Əvvəlki"
           aria-label="Əvvəlki səhifə"
-          href={`?${filterQuery(filters)}&page=${filters.page - 1}`}
+          href={`?${filterQuery(filters, fixed)}&page=${filters.page - 1}`}
         >
           <ChevronLeft size={16} />
         </Link>
@@ -218,7 +225,7 @@ export function Pagination({
           className="btn btn-secondary"
           title="Növbəti"
           aria-label="Növbəti səhifə"
-          href={`?${filterQuery(filters)}&page=${filters.page + 1}`}
+          href={`?${filterQuery(filters, fixed)}&page=${filters.page + 1}`}
         >
           <ChevronRight size={16} />
         </Link>

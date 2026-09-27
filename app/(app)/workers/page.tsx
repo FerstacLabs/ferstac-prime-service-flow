@@ -27,7 +27,9 @@ export default async function WorkersPage({
   const f = parseFilters(await searchParams),
     data = await getWorkshop(),
     master = await getMasterData(),
-    workers = data.workers.filter((w) => !f.worker || w.id === f.worker);
+    workers = data.workers.filter((w) =>
+      f.worker ? w.id === f.worker : !w.deleted_at,
+    );
   return (
     <>
       <PageHeader

@@ -88,6 +88,7 @@ export function customerQuotation(
   });
   return {
     scope: "quotation",
+    documentContext: [car?.plate || ""],
     title: "AVTONƏQLİYYAT VASİTƏSİNİN TƏMİRİ ÜZRƏ QİYMƏT TƏKLİFİ",
     generatedAt: formatReportDateTime(),
     orientation: "portrait",

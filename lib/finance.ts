@@ -46,6 +46,7 @@ export function calculateFinancialSummary(
 }
 export type MoneyChannel = "CASH" | "BANK";
 export type FinanceAccount = {
+  deleted_at?: string | null;
   id: string;
   name: string;
   bank_name: string | null;
@@ -58,6 +59,8 @@ export type FinanceAccount = {
   active: boolean;
 };
 export type FinanceCategory = {
+  deleted_at?: string | null;
+  is_system?: boolean;
   id: string;
   name: string;
   direction: "IN" | "OUT";

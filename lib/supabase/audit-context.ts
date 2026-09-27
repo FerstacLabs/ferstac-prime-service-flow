@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AuditLog } from "@/lib/audit";
+import { masterDirectory } from "@/lib/supabase/master-directory";
 
 type Row = Record<string, unknown>;
 const uuid = (v: unknown): v is string =>
@@ -127,6 +128,23 @@ export async function resolveAuditContext(
       ...new Set(group.fields.flatMap((f) => [...(values.get(f) || [])])),
     ];
     if (!ids.length) continue;
+    const kind = (
+      {
+        workers: "worker",
+        financial_accounts: "account",
+        transaction_categories: "category",
+      } as const
+    )[
+      group.table as "workers" | "financial_accounts" | "transaction_categories"
+    ];
+    if (kind) {
+      for (const row of await masterDirectory<Row>(kind)) {
+        if (ids.includes(String(row.id)))
+          for (const field of group.fields)
+            refs[`${field}:${row.id}`] = name(row);
+      }
+      continue;
+    }
     for (let i = 0; i < ids.length; i += 100) {
       const { data, error } = await supabase
         .from(group.table)
@@ -136,7 +154,8 @@ export async function resolveAuditContext(
       if (error) throw error;
       for (const row of (data || []) as unknown as Row[]) {
         const catalog = (row.work_catalog || row.part_catalog) as
-          Row | undefined;
+          | Row
+          | undefined;
         const label = name({ ...row, name: catalog?.name || row.name });
         for (const field of group.fields) refs[`${field}:${row.id}`] = label;
       }

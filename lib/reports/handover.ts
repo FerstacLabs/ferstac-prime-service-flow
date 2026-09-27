@@ -9,6 +9,7 @@ export function handoverReport(plate: string): PrimeReport {
   const date = formatReportDate(bakuDate());
   return {
     scope: "handover",
+    documentContext: [plate],
     title: "TƏHVİL-TƏSLİM AKTI",
     subtitle:
       "(avtomobilin servisə təhvil verilməsi və geri götürülməsinə dair)",

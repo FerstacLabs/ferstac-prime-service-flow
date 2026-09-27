@@ -15,6 +15,7 @@ import { parseFilters, filterQuery, type SearchParams } from "@/lib/filters";
 import { workerFinance, workerWorkFinance } from "@/lib/worker-finance";
 import { formatDate } from "@/lib/format";
 import { EmptyState } from "@/components/empty-state";
+import { WorkerManagement } from "@/components/worker-management";
 export default async function WorkerPage({
   params,
   searchParams,
@@ -53,6 +54,7 @@ export default async function WorkerPage({
           </div>
         ))}
       </dl>
+      <WorkerManagement worker={worker} />
       <WorkshopFilters
         scope="workers"
         filters={f}

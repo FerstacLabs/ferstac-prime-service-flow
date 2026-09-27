@@ -189,7 +189,10 @@ export function JobFinance({
         </div>
       ) : null}
       {editable ? (
-        <Link href={`/kassa?job=${job.id}`} className="btn btn-secondary">
+        <Link
+          href={`/kassa?view=settlement&settlementJob=${job.id}`}
+          className="btn btn-secondary"
+        >
           Avtomobil üzrə hesablaşma
         </Link>
       ) : null}

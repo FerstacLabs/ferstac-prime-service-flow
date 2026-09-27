@@ -30,6 +30,12 @@ export default async function PurchasesPage({
   await requireAccess(["ADMIN"]);
   const params = await searchParams;
   const workTab = params.tab === "work";
+  const operations = {
+    purchaseJob:
+      typeof params.purchaseJob === "string" ? params.purchaseJob : "",
+    costingJob: typeof params.costingJob === "string" ? params.costingJob : "",
+  };
+  const operationKey = workTab ? "costingJob" : "purchaseJob";
   const f = parseFilters(params),
     data = await getWorkshop(),
     items = selectPurchases(data, f),
@@ -53,7 +59,7 @@ export default async function PurchasesPage({
         name: workerDisplayName(w),
       }));
   const selectedJob = data.jobs.find(
-    (j) => j.id === f.job && !j.archived_at && !j.deleted_at,
+    (j) => j.id === operations[operationKey] && !j.archived_at && !j.deleted_at,
   );
   const requirements = data.parts.filter(
     (p) => p.service_job_id === selectedJob?.id,
@@ -76,7 +82,7 @@ export default async function PurchasesPage({
               ? "font-semibold text-[var(--accent)]"
               : "text-[var(--muted)]"
           }
-          href={`/purchases?job=${f.job}`}
+          href={`/purchases?${filterQuery(f, operations)}`}
         >
           Detallar / alışlar
         </Link>
@@ -87,7 +93,7 @@ export default async function PurchasesPage({
               ? "font-semibold text-[var(--accent)]"
               : "text-[var(--muted)]"
           }
-          href={`/purchases?tab=work&job=${f.job}`}
+          href={`/purchases?${filterQuery(f, { ...operations, tab: "work" })}`}
         >
           İşçilik / usta maya
         </Link>
@@ -96,14 +102,27 @@ export default async function PurchasesPage({
         <h2 className="mb-3 text-lg font-semibold">
           {workTab ? "İşçilik / usta maya" : "Yeni alış"}
         </h2>
-        <form className="mb-4 grid max-w-3xl grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
+        <form
+          key={operationKey + operations[operationKey]}
+          className="mb-4 grid max-w-3xl grid-cols-[minmax(0,1fr)_auto] items-end gap-3"
+        >
+          {Object.entries(params)
+            .filter(
+              ([key, value]) =>
+                key !== operationKey &&
+                key !== "tab" &&
+                typeof value === "string",
+            )
+            .map(([key, value]) => (
+              <input key={key} type="hidden" name={key} value={String(value)} />
+            ))}
           {workTab ? <input type="hidden" name="tab" value="work" /> : null}
           <SearchSelect
-            name="job"
+            name={operationKey}
             label="Avtomobil / servis kartı"
             required
             options={jobs}
-            defaultValue={f.job}
+            defaultValue={operations[operationKey]}
           />
           <button className="btn btn-primary">Seç</button>
         </form>
@@ -207,7 +226,7 @@ export default async function PurchasesPage({
                 </summary>
                 <div className="mt-4">
                   <PurchaseEntry
-                    jobId={f.job}
+                    jobId={selectedJob.id}
                     catalog={master.partCatalog}
                     suppliers={suppliers}
                     workers={workers}
@@ -233,9 +252,10 @@ export default async function PurchasesPage({
             filters={f}
             jobs={jobs}
             suppliers={suppliers}
+            fixed={operations}
           />
           <PurchaseList data={data} items={pageRows(items, f)} editable />
-          <Pagination filters={f} total={items.length} />
+          <Pagination filters={f} total={items.length} fixed={operations} />
         </>
       ) : null}
     </>

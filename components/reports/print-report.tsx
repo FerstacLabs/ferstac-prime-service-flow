@@ -5,13 +5,14 @@ import type {
   ReportTable,
 } from "@/lib/reports/report-types";
 import { PrintButton, PrintTrigger } from "@/components/reports/print-trigger";
+import { documentFilename } from "@/lib/reports/document-filename";
 import { reportBrand, numericReportColumn } from "@/lib/reports/brand";
 
 export function PrintReport({ report }: { report: PrimeReport }) {
   if (report.scope === "handover")
     return (
       <main className="print-report handover">
-        <PrintTrigger />
+        <PrintTrigger title={documentFilename(report).replace(/\.pdf$/, "")} />
         <div className="no-print">
           <PrintButton />
         </div>
@@ -52,7 +53,7 @@ export function PrintReport({ report }: { report: PrimeReport }) {
     <main
       className={`print-report ${report.orientation === "landscape" ? "print-landscape" : ""} ${report.scope === "audit" ? "print-audit" : ""} ${["work", "audit"].includes(report.scope) ? "print-operations" : ""} ${["quotation", "purchases", "finance", "work", "audit"].includes(report.scope) ? "print-quotation" : ""} ${report.scope === "purchases" ? "print-purchases" : ""} ${report.scope === "finance" ? "print-finance" : ""}`}
     >
-      <PrintTrigger />
+      <PrintTrigger title={documentFilename(report).replace(/\.pdf$/, "")} />
       <header className="print-report-header">
         <div>
           <div className="print-identity">

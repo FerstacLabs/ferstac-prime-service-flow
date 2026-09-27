@@ -26,7 +26,7 @@ describe("report formatting", () => {
   });
 
   it("localizes database enums for Azerbaijani reports", () => {
-    expect(reportWorkStatusLabels.IN_PROGRESS).toBe("İcra olunur");
+    expect(reportWorkStatusLabels.IN_PROGRESS).toBe("İş gedir");
     expect(reportJobStatusLabels.WAITING_PARTS).toBe("Detal gözləyir");
     expect(reportFundingLabels.INSURANCE_CLAIM).toBe("Sığorta hadisəsi üzrə");
     expect(reportPaymentLabels.UNPAID).toBe("Ödənilməyib");

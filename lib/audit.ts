@@ -60,6 +60,15 @@ export const auditActions = [
   "SUPPLIER_UPDATED",
   "WORKER_CREATED",
   "WORKER_UPDATED",
+  "WORKER_ARCHIVED",
+  "WORKER_RESTORED",
+  "WORKER_PERMANENTLY_DELETED",
+  "BANK_ACCOUNT_RESTORED",
+  "BANK_ACCOUNT_PERMANENTLY_DELETED",
+  "TRANSACTION_CATEGORY_UPDATED",
+  "TRANSACTION_CATEGORY_ARCHIVED",
+  "TRANSACTION_CATEGORY_RESTORED",
+  "TRANSACTION_CATEGORY_PERMANENTLY_DELETED",
   "WORKER_ROLE_CREATED",
   "WORKER_ROLE_UPDATED",
   "WORK_CATALOG_CREATED",
@@ -157,6 +166,15 @@ const auditDescriptions: Record<(typeof auditActions)[number], string> = {
   SUPPLIER_UPDATED: "təchizatçı məlumatlarını yenilədi",
   WORKER_CREATED: "işçi əlavə etdi",
   WORKER_UPDATED: "işçi məlumatlarını yenilədi",
+  WORKER_ARCHIVED: "işçini arxivlədi",
+  WORKER_RESTORED: "işçini bərpa etdi",
+  WORKER_PERMANENTLY_DELETED: "işçini həmişəlik sildi",
+  BANK_ACCOUNT_RESTORED: "bank hesabını bərpa etdi",
+  BANK_ACCOUNT_PERMANENTLY_DELETED: "bank hesabını həmişəlik sildi",
+  TRANSACTION_CATEGORY_UPDATED: "kateqoriyanı yenilədi",
+  TRANSACTION_CATEGORY_ARCHIVED: "kateqoriyanı arxivlədi",
+  TRANSACTION_CATEGORY_RESTORED: "kateqoriyanı bərpa etdi",
+  TRANSACTION_CATEGORY_PERMANENTLY_DELETED: "kateqoriyanı həmişəlik sildi",
   WORKER_ROLE_CREATED: "işçi vəzifəsi əlavə etdi",
   WORKER_ROLE_UPDATED: "işçi vəzifəsini yenilədi",
   WORK_CATALOG_CREATED: "iş kataloquna əlavə etdi",
@@ -174,6 +192,23 @@ const auditDescriptions: Record<(typeof auditActions)[number], string> = {
 };
 
 export function auditDescription(log: AuditLog) {
+  const assignment = log.changes.assigned_worker_id as
+    | { before?: unknown; after?: unknown }
+    | undefined;
+  const status = log.changes.status as
+    | { before?: unknown; after?: unknown }
+    | undefined;
+  if (
+    log.action === "WORKER_ASSIGNED" &&
+    assignment?.before == null &&
+    typeof assignment?.after === "string" &&
+    status?.before === "TODO" &&
+    status.after === "IN_PROGRESS"
+  ) {
+    const name =
+      log.references?.[`assigned_worker_id:${assignment.after}`] || "Usta";
+    return `${log.actor_username_snapshot}: ${name} işə təyin edildi və status “İş gedir” olaraq dəyişdirildi.`;
+  }
   const description =
     auditDescriptions[log.action as keyof typeof auditDescriptions];
   if (!description)
@@ -287,9 +322,16 @@ export async function getAudit(params: SearchParams, resolveDetails = true) {
 export async function loadAuditReport(
   params: SearchParams,
 ): Promise<PrimeReport> {
-  const { logs, total, filters } = await getAudit(params, false);
+  const { logs, total, filters } = await getAudit(params);
   return {
     scope: "audit",
+    documentContext: [
+      filters.role,
+      filters.actor,
+      filters.plate,
+      filters.from,
+      filters.to,
+    ],
     title: "Audit hesabatı",
     generatedAt: formatReportDateTime(),
     orientation: "landscape",

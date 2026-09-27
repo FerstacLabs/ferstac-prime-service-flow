@@ -218,6 +218,19 @@ export function buildWorkshopReport(
     kassa: "Kassa hesabatı",
   }[scope];
   const report: PrimeReport = {
+    documentContext: [
+      data.jobs.find((j) => j.id === f.job)?.vehicles?.plate || f.plate,
+      f.worker
+        ? workerDisplayName(data.workers.find((w) => w.id === f.worker))
+        : "",
+      f.supplier
+        ? supplierDisplayName(data.suppliers.find((s) => s.id === f.supplier))
+        : "",
+      reportWorkStatusLabels[f.status as keyof typeof reportWorkStatusLabels] ||
+        "",
+      f.from,
+      f.to,
+    ],
     scope,
     title,
     generatedAt: formatReportDateTime(),

@@ -18,6 +18,7 @@ import {
   settleVehicleAction,
   transferLedgerAction,
   deleteSupplierPermanentlyAction,
+  manageMasterAction,
 } from "@/app/actions/ledger";
 import type {
   FinanceAccount,
@@ -529,6 +530,40 @@ export function DeleteSupplierDialog({
             required
             className="field mt-1"
             autoComplete="off"
+          />
+        </label>
+        <SubmitButton variant="danger">Həmişəlik sil</SubmitButton>
+      </ActionForm>
+    </FinanceDialog>
+  );
+}
+export function DeleteMasterDialog({
+  id,
+  name,
+  kind,
+}: {
+  id: string;
+  name: string;
+  kind: "worker" | "account" | "category";
+}) {
+  return (
+    <FinanceDialog label="Həmişəlik sil" danger>
+      <p className="mb-4 text-sm">
+        {name} silinəcək. İş və maliyyə tarixçəsi saxlanılacaq. Bu əməliyyat
+        geri qaytarılmır.
+      </p>
+      <ActionForm action={manageMasterAction} className="grid gap-4">
+        <input type="hidden" name="id" value={id} />
+        <input type="hidden" name="kind" value={kind} />
+        <input type="hidden" name="lifecycle_action" value="delete" />
+        <label>
+          Təsdiq üçün SİL yazın
+          <input
+            name="confirmation"
+            pattern="SİL"
+            required
+            autoComplete="off"
+            className="field mt-1"
           />
         </label>
         <SubmitButton variant="danger">Həmişəlik sil</SubmitButton>

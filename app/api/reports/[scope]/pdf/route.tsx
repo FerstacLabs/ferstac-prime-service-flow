@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { documentDisposition } from "@/lib/reports/document-filename";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { ReportDocument } from "@/lib/report-pdf";
 import { loadWorkshopReport } from "@/lib/reports/workshop-report";
@@ -46,7 +47,7 @@ export async function GET(
     );
   }
   const report =
-    scope === "finance"
+    scope === "finance" || scope === "kassa"
       ? await loadFinanceReport(
           Object.fromEntries(new URL(_request.url).searchParams),
         )
@@ -71,7 +72,7 @@ export async function GET(
     headers: {
       "Content-Type": "application/pdf",
       "Cache-Control": "private, no-store",
-      "Content-Disposition": `attachment; filename="prime-flow-${scope}.pdf"`,
+      "Content-Disposition": documentDisposition(report),
     },
   });
 }
