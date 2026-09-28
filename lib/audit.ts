@@ -15,6 +15,12 @@ import {
 import { resolveAuditContext } from "@/lib/supabase/audit-context";
 
 export const auditActions = [
+  "WORKER_ADVANCE_CREATED",
+  "WORKER_ADVANCE_ALLOCATED",
+  "WORKER_COMPENSATION_POLICY_UPDATED",
+  "WORK_COMPENSATION_UPDATED",
+  "CATALOG_MANAGED",
+  "VEHICLE_WORK_COMPLETED",
   "CASH_IN_CREATED",
   "CASH_OUT_CREATED",
   "BANK_IN_CREATED",
@@ -120,6 +126,12 @@ export type AuditLog = {
   created_at: string;
 };
 const auditDescriptions: Record<(typeof auditActions)[number], string> = {
+  WORKER_ADVANCE_CREATED: "ustaya avans verdi",
+  WORKER_ADVANCE_ALLOCATED: "ümumi avansı usta borcuna tətbiq etdi",
+  WORKER_COMPENSATION_POLICY_UPDATED: "ustanın faiz qaydasını yenilədi",
+  WORK_COMPENSATION_UPDATED: "işin usta hesablamasını yenilədi",
+  CATALOG_MANAGED: "məlumat kataloqunu yenilədi",
+  VEHICLE_WORK_COMPLETED: "maliyyə bağlanarkən işləri tamamladı",
   CASH_IN_CREATED: "nağd mədaxil qeydə aldı",
   CASH_OUT_CREATED: "nağd məxaric qeydə aldı",
   BANK_IN_CREATED: "bank mədaxili qeydə aldı",

@@ -5,6 +5,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { auditDescription, loadAuditReport, type AuditLog } from "@/lib/audit";
 import { ReportDocument } from "@/lib/report-pdf";
+import { auditDetail } from "@/lib/audit-display";
 
 const db = vi.hoisted(() => ({ rows: [] as unknown[], range: vi.fn() }));
 vi.mock("@/lib/supabase/auth", () => ({
@@ -47,6 +48,25 @@ const log: AuditLog = {
 };
 
 describe("audit descriptions and reports", () => {
+  it("shows date-only intake changes without adding a timezone clock", () => {
+    const result = auditDetail({
+      ...log,
+      changes: {
+        target_delivery_date: { before: "2026-10-01", after: "2026-10-05" },
+        notes: { before: "Old note", after: "New note" },
+      },
+    });
+    expect(result.changes).toContainEqual({
+      label: "Hədəf təhvil tarixi",
+      before: "01.10.2026",
+      after: "05.10.2026",
+    });
+    expect(result.changes).toContainEqual({
+      label: "Qeyd",
+      before: "Old note",
+      after: "New note",
+    });
+  });
   it("explains assignment and its automatic status transition together", () => {
     const description = auditDescription({
       ...log,

@@ -8,6 +8,7 @@ import {
   cleanup,
 } from "@testing-library/react";
 import { ActionForm } from "@/components/action-form";
+import { actionFailure } from "@/lib/action-errors";
 
 const { refresh } = vi.hoisted(() => ({ refresh: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
@@ -56,9 +57,7 @@ describe("action form payment validation", () => {
       </ActionForm>,
     );
     fireEvent.submit(screen.getByRole("button").closest("form")!);
-    expect((await screen.findByRole("alert")).textContent).toBe(
-      "Bağlantı xətası",
-    );
+    expect((await screen.findByRole("alert")).textContent).toBe(actionFailure);
     expect(refresh).not.toHaveBeenCalled();
     fireEvent.submit(screen.getByRole("button").closest("form")!);
     await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));

@@ -1,6 +1,7 @@
 "use client";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { actionFailure, visibleActionError } from "@/lib/action-errors";
 export function ActionForm({
   action,
   children,
@@ -33,7 +34,7 @@ export function ActionForm({
         try {
           const result = await action(form);
           if (result?.error) {
-            setError(result.error);
+            setError(visibleActionError(result.error));
             return;
           }
           key.current = null;
@@ -47,7 +48,7 @@ export function ActionForm({
         } catch (e) {
           if (e instanceof Error && e.message.includes("NEXT_REDIRECT"))
             throw e;
-          setError(e instanceof Error ? e.message : "Əməliyyat alınmadı.");
+          setError(actionFailure);
         }
       }}
     >

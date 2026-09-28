@@ -10,6 +10,7 @@ import type { CashTransaction, RequiredPart } from "@/lib/workshop";
 import { inPeriod, parseFilters, type WorkshopFilters } from "@/lib/filters";
 import { jobFinance } from "@/lib/workshop";
 import { masterDirectory } from "@/lib/supabase/master-directory";
+import { workerAdvanceTotals } from "@/lib/supabase/worker-advance-totals";
 
 // Range through PostgREST's response cap on the server; reports never truncate at 1,000 rows.
 async function rows<T>(table: string, select: string, jobId?: string) {
@@ -89,10 +90,12 @@ export async function getWorkshop(jobId?: string) {
       masterDirectory<DbWorker>("worker"),
       rows<DbSupplier>("suppliers", "*"),
     ]);
+  const applied = await workerAdvanceTotals();
   return {
     jobs,
     work: work.map((w) => ({
       ...w,
+      applied_advance: applied.get(w.id) ?? 0,
       workers: workers.find((u) => u.id === w.assigned_worker_id) || null,
     })),
     parts,

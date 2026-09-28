@@ -78,6 +78,8 @@ export type FinanceJob = {
   inactive?: boolean;
 };
 export type FinanceWork = {
+  applied_advance?: number;
+  compensation_mode?: "FIXED" | "PERCENTAGE";
   id: string;
   service_job_id: string;
   title: string;
@@ -129,6 +131,27 @@ export type LedgerEntry = {
   created_by_name: string | null;
 };
 export type FinanceData = {
+  workers?: Array<{ id: string; name: string; active: boolean }>;
+  advances?: Array<{
+    id: string;
+    worker_id: string;
+    worker: string;
+    amount: number;
+    remaining: number;
+    occurred_at: string;
+    voided_at: string | null;
+    channel: MoneyChannel;
+    reference_number: string | null;
+  }>;
+  advanceAllocations?: Array<{
+    id: string;
+    advance_id: string;
+    work_item_id: string;
+    service_job_id: string;
+    worker_id: string;
+    amount: number;
+    created_at: string;
+  }>;
   jobs: FinanceJob[];
   work: FinanceWork[];
   purchases: FinancePurchase[];
@@ -255,7 +278,7 @@ export function vehicleSettlement(data: FinanceData, jobId: string) {
       party: w.worker,
       title: w.title,
       cost: Number(w.labor_cost),
-      paid: paid("WORKER_WORK_ITEM", w.id),
+      paid: moneySum([paid("WORKER_WORK_ITEM", w.id), w.applied_advance ?? 0]),
       known: w.labor_cost_known && !!w.worker_id,
     })),
   ].map((o) => ({ ...o, remaining: moneyDiff(o.cost, o.paid) }));

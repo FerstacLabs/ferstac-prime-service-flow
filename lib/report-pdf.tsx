@@ -254,9 +254,14 @@ export function ReportDocument({ report }: { report: PrimeReport }) {
         orientation={report.orientation ?? "portrait"}
         style={[
           styles.page,
-          ["quotation", "purchases", "finance", "work", "audit"].includes(
-            report.scope,
-          )
+          [
+            "overview",
+            "quotation",
+            "purchases",
+            "finance",
+            "work",
+            "audit",
+          ].includes(report.scope)
             ? { paddingTop: 22 }
             : {},
         ]}
@@ -265,7 +270,8 @@ export function ReportDocument({ report }: { report: PrimeReport }) {
         <ReportHeader report={report} />
         <SummaryGrid
           items={report.summary}
-          band={["purchases", "finance", "work", "audit"].includes(
+          columns={report.scope === "overview" ? 4 : undefined}
+          band={["overview", "purchases", "finance", "work", "audit"].includes(
             report.scope,
           )}
         />
@@ -275,13 +281,16 @@ export function ReportDocument({ report }: { report: PrimeReport }) {
             section={section}
             landscape={report.orientation === "landscape"}
             compact={[
+              "overview",
               "quotation",
               "purchases",
               "finance",
               "work",
               "audit",
             ].includes(report.scope)}
-            denseLedger={["finance", "work", "audit"].includes(report.scope)}
+            denseLedger={["overview", "finance", "work", "audit"].includes(
+              report.scope,
+            )}
           />
         ))}
         <View style={styles.footer} fixed>
@@ -310,6 +319,7 @@ export function ReportDocument({ report }: { report: PrimeReport }) {
 
 function ReportHeader({ report }: { report: PrimeReport }) {
   const compact = [
+    "overview",
     "quotation",
     "purchases",
     "finance",
@@ -371,11 +381,13 @@ function SummaryGrid({
   stacked = false,
   compact = false,
   band = false,
+  columns,
 }: {
   items?: Array<{ label: string; value: string }>;
   stacked?: boolean;
   compact?: boolean;
   band?: boolean;
+  columns?: number;
 }) {
   if (!items.length) return null;
   return (
@@ -385,7 +397,7 @@ function SummaryGrid({
           key={`${item.label}-${item.value}`}
           style={
             band
-              ? { width: `${100 / items.length}%` }
+              ? { width: `${100 / (columns ?? items.length)}%` }
               : stacked
                 ? { width: "100%", paddingLeft: "35%" }
                 : styles.summaryBox

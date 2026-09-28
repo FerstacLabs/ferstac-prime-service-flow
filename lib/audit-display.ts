@@ -1,6 +1,7 @@
 import type { AuditLog } from "@/lib/audit";
 import { financialLabel } from "@/lib/finance-labels";
 import {
+  formatReportDate,
   formatReportDateTime,
   formatReportMoney,
   reportWorkStatusLabels,
@@ -10,6 +11,12 @@ import {
 } from "@/lib/reports/report-format";
 
 export const auditEventLabels: Record<string, string> = {
+  WORKER_ADVANCE_CREATED: "Ustaya avans verildi",
+  WORKER_ADVANCE_ALLOCATED: "Ümumi avans işə tətbiq edildi",
+  WORKER_COMPENSATION_POLICY_UPDATED: "Ustanın faiz qaydası yeniləndi",
+  WORK_COMPENSATION_UPDATED: "İşin usta hesablaması yeniləndi",
+  CATALOG_MANAGED: "Məlumat kataloqu yeniləndi",
+  VEHICLE_WORK_COMPLETED: "Maliyyə bağlanarkən işlər tamamlandı",
   CASH_IN_CREATED: "Nağd mədaxil qeydə alındı",
   CASH_OUT_CREATED: "Nağd məxaric qeydə alındı",
   BANK_IN_CREATED: "Bank mədaxili qeydə alındı",
@@ -23,7 +30,7 @@ export const auditEventLabels: Record<string, string> = {
   BANK_ACCOUNT_CREATED: "Bank hesabı yaradıldı",
   BANK_ACCOUNT_UPDATED: "Bank hesabı yeniləndi",
   BANK_ACCOUNT_ARCHIVED: "Bank hesabı arxivləndi",
-  TRANSACTION_CATEGORY_CREATED: "Maliyyə kateqoriyası yaradıldı",
+  TRANSACTION_CATEGORY_CREATED: "Maliyyə təyinatı yaradıldı",
   SUPPLIER_PERMANENTLY_DELETED: "Təchizatçı birdəfəlik silindi",
   SUPPLIER_ARCHIVED: "Təchizatçı arxivləndi",
   SUPPLIER_RESTORED: "Təchizatçı bərpa edildi",
@@ -60,10 +67,10 @@ export const auditEventLabels: Record<string, string> = {
   WORKER_PERMANENTLY_DELETED: "İşçi həmişəlik silindi",
   BANK_ACCOUNT_RESTORED: "Bank hesabı bərpa edildi",
   BANK_ACCOUNT_PERMANENTLY_DELETED: "Bank hesabı həmişəlik silindi",
-  TRANSACTION_CATEGORY_UPDATED: "Kateqoriya yeniləndi",
-  TRANSACTION_CATEGORY_ARCHIVED: "Kateqoriya arxivləndi",
-  TRANSACTION_CATEGORY_RESTORED: "Kateqoriya bərpa edildi",
-  TRANSACTION_CATEGORY_PERMANENTLY_DELETED: "Kateqoriya həmişəlik silindi",
+  TRANSACTION_CATEGORY_UPDATED: "Təyinat yeniləndi",
+  TRANSACTION_CATEGORY_ARCHIVED: "Təyinat arxivləndi",
+  TRANSACTION_CATEGORY_RESTORED: "Təyinat bərpa edildi",
+  TRANSACTION_CATEGORY_PERMANENTLY_DELETED: "Təyinat həmişəlik silindi",
   WORKER_ROLE_CREATED: "İşçi vəzifəsi yaradıldı",
   WORKER_ROLE_UPDATED: "İşçi vəzifəsi yeniləndi",
   WORK_CATALOG_CREATED: "İş kataloquna əlavə edildi",
@@ -82,8 +89,8 @@ export const auditEventLabels: Record<string, string> = {
 export const auditEntityLabels: Record<string, string> = {
   account: "Bank hesabı",
   financial_accounts: "Bank hesabı",
-  category: "Maliyyə kateqoriyası",
-  transaction_categories: "Maliyyə kateqoriyası",
+  category: "Maliyyə təyinatı",
+  transaction_categories: "Maliyyə təyinatı",
   unit_catalog: "Ölçü vahidi",
   vehicles: "Avtomobil",
   service_jobs: "Servis kartı",
@@ -115,6 +122,16 @@ export const auditRoleLabel = (code: string) =>
 
 // Explicit allowlist: credentials, tokens and unknown metadata never reach display.
 const fields: Record<string, string> = {
+  applied_advance: "Tətbiq edilmiş ümumi avans",
+  eligible: "Faizlə işləyə bilər",
+  worker_percentage: "Usta payı (%)",
+  compensation_mode: "Hesablama rejimi",
+  worker_percentage_snapshot: "Razılaşdırılmış usta payı (%)",
+  earning_basis_snapshot: "Qazancın hesablandığı məbləğ",
+  earning_snapshot: "Sabitlənmiş qazanc",
+  earning_finalized_at: "Qazancın sabitləndiyi vaxt",
+  completed_count: "Tamamlanan işlərin sayı",
+  catalog_action: "Kataloq əməliyyatı",
   current_voided: "Hazırda ləğv edilib",
   current_void_reason: "Cari ləğv səbəbi",
   from: "Çıxan hesab",
@@ -123,6 +140,8 @@ const fields: Record<string, string> = {
   labor_cost: "Usta mayası",
   quoted_price: "Satış qiyməti",
   unit_price: "Vahid qiyməti",
+  customer_unit_price: "Müştəri üçün vahid qiyməti",
+  cost_note: "Maya qeydi",
   total_price: "Ümumi məbləğ",
   agreed_budget: "Razılaşdırılmış məbləğ",
   paid_amount: "Ödənilən məbləğ",
@@ -140,7 +159,7 @@ const fields: Record<string, string> = {
   supplier_id: "Təchizatçı",
   financial_account_id: "Hesab",
   account_id: "Hesab",
-  category_id: "Kateqoriya",
+  category_id: "Təyinat",
   service_job_id: "Servis kartı",
   work_item_id: "İş",
   work_catalog_id: "İş",
@@ -183,7 +202,7 @@ const fields: Record<string, string> = {
   started_at: "Başlama vaxtı",
   completed_at: "Tamamlanma vaxtı",
   received_at: "Qəbul vaxtı",
-  target_delivery_date: "Planlaşdırılan təhvil",
+  target_delivery_date: "Hədəf təhvil tarixi",
   voided_at: "Ləğv vaxtı",
   archived_at: "Arxiv vaxtı",
   deleted_at: "Silinmə vaxtı",
@@ -206,10 +225,14 @@ const fields: Record<string, string> = {
   insurance_approved_amount: "Təsdiqlənmiş sığorta məbləği",
 };
 const moneyFields = new Set([
+  "applied_advance",
+  "earning_basis_snapshot",
+  "earning_snapshot",
   "amount",
   "labor_cost",
   "quoted_price",
   "unit_price",
+  "customer_unit_price",
   "total_price",
   "agreed_budget",
   "paid_amount",
@@ -225,6 +248,12 @@ const moneyFields = new Set([
   "insurance_approved_amount",
 ]);
 const codes: Record<string, string> = {
+  FIXED: "Sabit",
+  PERCENTAGE: "Faizli",
+  rename: "Ad dəyişdirildi",
+  archive: "Arxivləndi",
+  restore: "Bərpa edildi",
+  delete: "Silindi",
   ...reportWorkStatusLabels,
   ...reportJobStatusLabels,
   ...reportFundingLabels,
@@ -269,6 +298,8 @@ export function auditValue(
   )
     return formatReportMoney(Number(value));
   if (field === "allocation_type") return financialLabel(String(value));
+  if (field.endsWith("_date") && /^\d{4}-\d{2}-\d{2}$/.test(String(value)))
+    return formatReportDate(String(value));
   if (
     (field.endsWith("_at") || field.endsWith("_date")) &&
     /^\d{4}-\d{2}-\d{2}/.test(String(value))
@@ -284,6 +315,8 @@ export function auditValue(
       "direction",
       "role",
       "payment_method",
+      "catalog_action",
+      "compensation_mode",
     ].includes(field)
   )
     return codes[String(value)] || "Digər";

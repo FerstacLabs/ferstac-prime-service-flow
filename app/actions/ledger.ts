@@ -1,9 +1,11 @@
 "use server";
+import { databaseActionError } from "@/lib/action-errors";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getAuthedSupabase } from "@/lib/supabase/queries";
 import { moneySchema, uuidValue } from "@/lib/workshop-validation";
 import { z } from "zod";
+import { serverMutation } from "@/lib/server-mutation";
 const text = (f: FormData, k: string) => String(f.get(k) || "").trim();
 const optionalId = (f: FormData, k: string) =>
   text(f, k) ? uuidValue(f, k) : null;
@@ -20,7 +22,11 @@ function details(f: FormData) {
             .parse(f.get("payment_method"))
         : "CASH",
     occurred_at: new Date(text(f, "occurred_at") + "+04:00").toISOString(),
-    purpose: z.string().trim().min(1).max(500).parse(f.get("purpose")),
+    purpose: z
+      .string()
+      .trim()
+      .max(500)
+      .parse(f.get("purpose") ?? ""),
     notes: z.string().max(250).parse(text(f, "notes")),
     reference_number: text(f, "reference_number"),
     bank_reference: text(f, "bank_reference"),
@@ -33,20 +39,62 @@ function details(f: FormData) {
   };
 }
 export async function recordLedgerAction(f: FormData) {
-  const { supabase } = await getAuthedSupabase("ADMIN", "CASHIER");
-  const { error } = await supabase.rpc("record_financial_transaction", {
-    p_key: uuidValue(f, "idempotency_key"),
-    p_data: {
-      ...details(f),
-      amount: moneySchema.parse(f.get("amount")),
-      allocation_type: text(f, "allocation_type"),
-      service_job_id: optionalId(f, "service_job_id"),
-      target_id: optionalId(f, "target_id"),
-      category_id: optionalId(f, "category_id"),
-    },
+  return serverMutation(async () => {
+    const { supabase } = await getAuthedSupabase("ADMIN", "CASHIER");
+    const type = text(f, "allocation_type");
+    const workerFlow = type === "WORKER_PAYMENT" || type === "WORKER_ADVANCE";
+    const { error } = await supabase.rpc(
+      workerFlow
+        ? type === "WORKER_ADVANCE"
+          ? "record_worker_advance"
+          : "record_worker_payment"
+        : "record_financial_transaction",
+      {
+        ...(workerFlow ? { p_worker: uuidValue(f, "worker_id") } : {}),
+        p_key: uuidValue(f, "idempotency_key"),
+        p_data: {
+          ...details(f),
+          amount: moneySchema.parse(f.get("amount")),
+          allocation_type: text(f, "allocation_type"),
+          service_job_id: optionalId(f, "service_job_id"),
+          target_id: optionalId(f, "target_id"),
+          category_id: optionalId(f, "category_id"),
+        },
+      },
+    );
+    if (error) return { error: databaseActionError(error) };
+    revalidatePath("/", "layout");
   });
-  if (error) return { error: error.message };
-  revalidatePath("/", "layout");
+}
+export async function recordWorkerAdvanceAction(f: FormData) {
+  return serverMutation(async () => {
+    const { supabase } = await getAuthedSupabase("ADMIN", "CASHIER");
+    const { error } = await supabase.rpc("record_worker_advance", {
+      p_worker: uuidValue(f, "worker_id"),
+      p_key: uuidValue(f, "idempotency_key"),
+      p_data: {
+        ...details(f),
+        amount: moneySchema.parse(f.get("amount")),
+        service_job_id: optionalId(f, "service_job_id"),
+        target_id: optionalId(f, "target_id"),
+      },
+    });
+    if (error) return { error: databaseActionError(error) };
+    revalidatePath("/", "layout");
+  });
+}
+export async function allocateWorkerAdvanceAction(f: FormData) {
+  return serverMutation(async () => {
+    const { supabase } = await getAuthedSupabase("ADMIN", "CASHIER");
+    const { error } = await supabase.rpc("allocate_worker_advance", {
+      p_advance: uuidValue(f, "advance_id"),
+      p_work: uuidValue(f, "work_item_id"),
+      p_amount: moneySchema.parse(f.get("amount")),
+      p_key: uuidValue(f, "idempotency_key"),
+    });
+    if (error) return { error: databaseActionError(error) };
+    revalidatePath("/", "layout");
+  });
 }
 export async function transferLedgerAction(f: FormData) {
   const { supabase } = await getAuthedSupabase("ADMIN", "CASHIER");
@@ -58,7 +106,7 @@ export async function transferLedgerAction(f: FormData) {
     p_note: text(f, "notes"),
     p_key: uuidValue(f, "idempotency_key"),
   });
-  if (error) return { error: error.message };
+  if (error) return { error: databaseActionError(error) };
   revalidatePath("/", "layout");
 }
 export async function saveFinancialMasterAction(f: FormData) {
@@ -80,7 +128,7 @@ export async function saveFinancialMasterAction(f: FormData) {
       ].map((k) => [k, text(f, k) || null]),
     ),
   });
-  if (error) return { error: error.message };
+  if (error) return { error: databaseActionError(error) };
   revalidatePath("/", "layout");
 }
 export async function manageMasterAction(f: FormData) {
@@ -95,7 +143,7 @@ export async function manageMasterAction(f: FormData) {
     p_action: action,
     p_confirmation: text(f, "confirmation"),
   });
-  if (error) return { error: error.message };
+  if (error) return { error: databaseActionError(error) };
   revalidatePath("/", "layout");
   if (kind === "worker" && action === "delete") redirect("/workers");
 }
@@ -116,7 +164,7 @@ export async function settleVehicleAction(f: FormData) {
     p_close: f.get("close") === "on",
     p_key: uuidValue(f, "idempotency_key"),
   });
-  if (error) return { error: error.message };
+  if (error) return { error: databaseActionError(error) };
   revalidatePath("/", "layout");
 }
 export async function reopenVehicleAction(f: FormData) {
@@ -126,7 +174,7 @@ export async function reopenVehicleAction(f: FormData) {
     p_close: false,
     p_reason: text(f, "reason"),
   });
-  if (error) return { error: error.message };
+  if (error) return { error: databaseActionError(error) };
   revalidatePath("/", "layout");
 }
 export async function deleteSupplierPermanentlyAction(f: FormData) {
@@ -135,7 +183,7 @@ export async function deleteSupplierPermanentlyAction(f: FormData) {
     p_id: uuidValue(f, "id"),
     p_confirmation: text(f, "confirmation"),
   });
-  if (error) return { error: error.message };
+  if (error) return { error: databaseActionError(error) };
   revalidatePath("/", "layout");
   redirect("/suppliers");
 }

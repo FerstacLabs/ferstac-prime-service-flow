@@ -4,7 +4,7 @@ const labels: Record<string, string> = {
   ...allocationLabels,
   SUPPLIER_PURCHASE: "Təchizatçı ödənişi",
   SUPPLIER_PAYMENT: "Təchizatçı ödənişi",
-  WORKER_WORK_ITEM: "Usta işi üzrə ödəniş",
+  WORKER_WORK_ITEM: "Usta ödənişi",
   CASH_IN: "Nağd mədaxil",
   CASH_OUT: "Nağd məxaric",
   BANK_IN: "Bank mədaxili",

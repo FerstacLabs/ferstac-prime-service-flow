@@ -69,7 +69,7 @@ describe("operational branding and Azerbaijani display", () => {
     ).toBe("Təchizatçı ödənişi");
     expect(
       financialCategoryLabel({ allocation_type: "WORKER_WORK_ITEM" }, []),
-    ).toBe("Usta işi üzrə ödəniş");
+    ).toBe("Usta ödənişi");
     expect(
       financialCategoryLabel(
         { allocation_type: "GENERAL_INCOME", category_id: "cat" },

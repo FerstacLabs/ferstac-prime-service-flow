@@ -8,7 +8,7 @@ import {
   statusLabels,
 } from "@/components/app-shell";
 import { ActionForm } from "@/components/action-form";
-import { SearchSelect } from "@/components/search-select";
+import { WorkAssignmentFields } from "@/components/work-assignment-fields";
 import { SubmitButton } from "@/components/submit-button";
 import { ReportActions } from "@/components/report-actions";
 import {
@@ -35,6 +35,7 @@ export default async function WorkPage({
   const workers = data.workers.map((w) => ({
     id: w.id,
     name: workerDisplayName(w),
+    percentage_eligible: w.percentage_eligible,
   }));
   return (
     <>
@@ -46,6 +47,17 @@ export default async function WorkPage({
       <WorkshopFilters
         scope="work"
         filters={f}
+        jobs={data.jobs.map((job) => ({
+          id: job.id,
+          name: [
+            job.vehicles?.plate,
+            job.vehicles?.make,
+            job.vehicles?.model,
+            job.job_no,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        }))}
         workers={workers}
         works={[
           ...new Map(
@@ -85,15 +97,15 @@ export default async function WorkPage({
                 className="mt-4 grid gap-3"
               >
                 <input type="hidden" name="id" value={item.id} />
-                <SearchSelect
-                  name="assigned_worker_id"
-                  label="Usta"
-                  options={workers.filter(
+                <WorkAssignmentFields
+                  key={`${item.assigned_worker_id}-${item.compensation_mode}`}
+                  workers={workers.filter(
                     (w) =>
                       data.workers.find((row) => row.id === w.id)?.active ||
                       w.id === item.assigned_worker_id,
                   )}
-                  defaultValue={item.assigned_worker_id ?? ""}
+                  workerId={item.assigned_worker_id ?? ""}
+                  percentage={item.compensation_mode === "PERCENTAGE"}
                 />
                 <label className="text-xs text-[var(--muted)]">
                   Status

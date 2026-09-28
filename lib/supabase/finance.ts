@@ -64,14 +64,38 @@ export async function getFinance(): Promise<FinanceData> {
       if (!data || data.length < 500) return rows;
     }
   }
-  const [jobs, work, purchases, ledger, accounts, categories] =
-    await Promise.all([
-      read<FinanceData["jobs"][number]>("jobs"),
-      read<FinanceData["work"][number]>("work"),
-      read<FinanceData["purchases"][number]>("purchases"),
-      read<FinanceData["ledger"][number]>("ledger"),
-      masterDirectory<FinanceData["accounts"][number]>("account"),
-      masterDirectory<FinanceData["categories"][number]>("category"),
-    ]);
-  return { jobs, work, purchases, ledger, accounts, categories };
+  const [
+    jobs,
+    work,
+    purchases,
+    ledger,
+    accounts,
+    categories,
+    workers,
+    advances,
+    advanceAllocations,
+  ] = await Promise.all([
+    read<FinanceData["jobs"][number]>("jobs"),
+    read<FinanceData["work"][number]>("work"),
+    read<FinanceData["purchases"][number]>("purchases"),
+    read<FinanceData["ledger"][number]>("ledger"),
+    masterDirectory<FinanceData["accounts"][number]>("account"),
+    masterDirectory<FinanceData["categories"][number]>("category"),
+    read<NonNullable<FinanceData["workers"]>[number]>("workers"),
+    read<NonNullable<FinanceData["advances"]>[number]>("advances"),
+    read<NonNullable<FinanceData["advanceAllocations"]>[number]>(
+      "advance_allocations",
+    ),
+  ]);
+  return {
+    jobs,
+    work,
+    purchases,
+    ledger,
+    accounts,
+    categories,
+    workers,
+    advances,
+    advanceAllocations,
+  };
 }

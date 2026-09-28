@@ -4,9 +4,11 @@ import { SubmitButton } from "@/components/submit-button";
 import { MasterLifecycle } from "@/components/master-lifecycle";
 import {
   getMasterData,
+  getAuthedSupabase,
   workerDisplayName,
   type DbWorker,
 } from "@/lib/supabase/queries";
+import { WorkerPercentagePolicy } from "@/components/worker-percentage-policy";
 
 export async function WorkerManagement({ worker }: { worker: DbWorker }) {
   if (worker.deleted_at)
@@ -16,6 +18,13 @@ export async function WorkerManagement({ worker }: { worker: DbWorker }) {
       </p>
     );
   const { workerRoles } = await getMasterData();
+  const { supabase } = await getAuthedSupabase("ADMIN");
+  const { data: policy, error } = await supabase
+    .from("worker_compensation_policies")
+    .select("eligible,worker_percentage")
+    .eq("worker_id", worker.id)
+    .maybeSingle();
+  if (error) throw new Error("Ustanın faiz qaydası yüklənmədi.");
   return (
     <section className="my-5 border-y border-[var(--border)] py-4">
       <details>
@@ -66,6 +75,11 @@ export async function WorkerManagement({ worker }: { worker: DbWorker }) {
           <SubmitButton>Yadda saxla</SubmitButton>
         </ActionForm>
       </details>
+      <WorkerPercentagePolicy
+        workerId={worker.id}
+        eligible={policy?.eligible}
+        percentage={String(policy?.worker_percentage ?? 60)}
+      />
       <MasterLifecycle
         id={worker.id}
         name={workerDisplayName(worker)}

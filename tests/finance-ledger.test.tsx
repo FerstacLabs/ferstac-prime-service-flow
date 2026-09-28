@@ -158,6 +158,43 @@ function fixture(): FinanceData {
   };
 }
 describe("finance reconciliation and reports", () => {
+  it("applies a general advance to debt without duplicating reported cash outflow", () => {
+    const d = fixture();
+    const before = movementTotals(d.ledger).expense;
+    d.work[0].status = "DONE";
+    d.work[0].applied_advance = 10;
+    d.ledger.push(
+      entry("advance", {
+        allocation_type: "GENERAL_OUT",
+        direction: "OUT",
+        amount: 10,
+        worker_identity_id: "worker",
+        counterparty_name_snapshot: "Rauf",
+        purpose: "Usta avansı",
+      }),
+    );
+    d.advanceAllocations = [
+      {
+        id: "allocation",
+        advance_id: "advance",
+        work_item_id: "work",
+        service_job_id: "job",
+        worker_id: "worker",
+        amount: 10,
+        created_at: "2026-09-28T10:00:00Z",
+      },
+    ];
+    expect(vehicleSettlement(d, "job").remaining).toBe(690);
+    expect(movementTotals(d.ledger).expense).toBe(before + 10);
+    const report = financeReport(d, journalFilters({ transaction: "advance" }));
+    expect(
+      report?.sections.some(
+        (s) => s.title === "Ümumi avansın tətbiqi (pul çıxışı deyil)",
+      ),
+    ).toBe(true);
+    expect(JSON.stringify(report)).toContain("Rəngsaz işi");
+    expect(report?.summary).toHaveLength(1);
+  });
   it("keeps source balances and business cashflow independent of transfers", () => {
     const d = fixture();
     expect(ledgerBalance(d.ledger.filter((t) => t.channel === "CASH"))).toBe(

@@ -29,6 +29,10 @@ import {
 } from "@/app/actions/ledger";
 import { voidPaymentAction } from "@/app/actions/finance";
 import { ReportActions } from "@/components/report-actions";
+import {
+  WorkerAdvanceButton,
+  AdvanceAllocationButton,
+} from "@/components/worker-advance-forms";
 export function FinancePage({
   data,
   params,
@@ -121,7 +125,7 @@ export function FinancePage({
           ...(admin
             ? [
                 ["accounts", "Bank hesabları"],
-                ["categories", "Kateqoriyalar"],
+                ["categories", "Təyinatlar"],
               ]
             : []),
           ["reports", "Hesabatlar"],
@@ -214,7 +218,7 @@ export function FinancePage({
               { id: "OUT", name: "Məxaric" },
             ])}
             {select("account", "Bank hesabı", data.accounts)}
-            {select("category", "Kateqoriya", data.categories)}
+            {select("category", "Təyinat", data.categories)}
             {select(
               "job",
               "Avtomobil",
@@ -484,6 +488,33 @@ export function FinancePage({
       {view === "workers" ? (
         <section className="my-6">
           <h2 className="mb-3 text-lg font-semibold">İşçilərlə hesablaşma</h2>
+          <div className="mb-4">
+            <WorkerAdvanceButton data={data} />
+          </div>
+          <h3 className="mb-2 font-semibold">Ümumi avanslar</h3>
+          <div className="mb-6 divide-y divide-[var(--border)]">
+            {(data.advances ?? [])
+              .filter(
+                (a) => !a.voided_at && (!f.worker || a.worker_id === f.worker),
+              )
+              .map((a) => (
+                <div
+                  key={a.id}
+                  className="flex flex-wrap items-center justify-between gap-3 py-3"
+                >
+                  <div>
+                    <p>{a.worker}</p>
+                    <p className="text-sm text-[var(--muted)]">
+                      Verilib: {formatMoney(a.amount)} · Ümumi avans qalığı:{" "}
+                      {formatMoney(a.remaining)}
+                    </p>
+                  </div>
+                  {a.remaining > 0 && (
+                    <AdvanceAllocationButton data={data} advance={a} />
+                  )}
+                </div>
+              ))}
+          </div>
           <div className="table-scroll">
             <table className="data-table w-full min-w-[850px] text-sm">
               <thead>
@@ -493,7 +524,7 @@ export function FinancePage({
                     "Maya",
                     "Qazanılmış",
                     "Ödənilib",
-                    "Avans",
+                    "İşə bağlı avans",
                     "Qazanılmış qalıq",
                     "Qalan maya",
                   ].map((h) => (
@@ -509,8 +540,9 @@ export function FinancePage({
                       (!f.job || w.service_job_id === f.job),
                   )
                   .map((w) => {
-                    const paid = moneySum(
-                        data.ledger
+                    const paid = moneySum([
+                        w.applied_advance ?? 0,
+                        ...data.ledger
                           .filter(
                             (t) =>
                               t.work_item_id === w.id &&
@@ -518,7 +550,7 @@ export function FinancePage({
                               !t.voided_at,
                           )
                           .map((t) => t.amount),
-                      ),
+                      ]),
                       earned =
                         w.status === "DONE" && w.labor_cost_known
                           ? Number(w.labor_cost)
@@ -531,6 +563,9 @@ export function FinancePage({
                             className="text-[var(--accent)]"
                           >
                             {w.worker} · {w.title}
+                            {w.compensation_mode === "PERCENTAGE"
+                              ? " · Faizli"
+                              : ""}
                           </Link>
                         </td>
                         <td>
@@ -571,10 +606,10 @@ export function FinancePage({
                     "Tarix / vaxt",
                     "Kanal / Hesab",
                     "İstiqamət",
-                    "Kateqoriya",
+                    "Təyinat",
                     "Tərəf",
                     "Avtomobil / İş №",
-                    "Təyinat",
+                    "Əlavə izah",
                     "Reference",
                     "Mədaxil",
                     "Məxaric",
@@ -685,7 +720,7 @@ function FinancialSettings({
   return (
     <section className="mt-8 border-t border-[var(--border)] pt-5">
       <h2 className="mb-4 text-lg font-semibold">
-        {view === "accounts" ? "Bank hesabları" : "Kateqoriyalar"}
+        {view === "accounts" ? "Bank hesabları" : "Təyinatlar"}
       </h2>
       {view === "accounts" ? (
         <details open>
@@ -762,7 +797,7 @@ function FinancialSettings({
       ) : null}
       {view === "categories" ? (
         <details open className="mt-4">
-          <summary className="cursor-pointer">Yeni kateqoriya</summary>
+          <summary className="cursor-pointer">Yeni təyinat</summary>
           <ActionForm
             action={saveFinancialMasterAction}
             className="mt-4 grid gap-3 sm:grid-cols-3"
@@ -784,14 +819,14 @@ function FinancialSettings({
                 <option value="OUT">Məxaric</option>
               </select>
             </label>
-            <SubmitButton>Kateqoriya yarat</SubmitButton>
+            <SubmitButton>Təyinat yarat</SubmitButton>
           </ActionForm>
           {(["IN", "OUT"] as const).map((direction) => (
             <section key={direction} className="mt-6">
               <h3 className="text-lg font-semibold">
                 {direction === "IN"
-                  ? "Mədaxil kateqoriyaları"
-                  : "Məxaric kateqoriyaları"}
+                  ? "Mədaxil təyinatları"
+                  : "Məxaric təyinatları"}
               </h3>
               {data.categories
                 .filter((c) => !c.deleted_at && c.direction === direction)
@@ -804,7 +839,7 @@ function FinancialSettings({
                       <p>
                         {c.name}{" "}
                         <span className="text-xs text-[var(--muted)]">
-                          Sistem kateqoriyası
+                          Sistem təyinatı
                         </span>
                       </p>
                     ) : (

@@ -77,6 +77,12 @@ beforeAll(async () => {
       "utf8",
     ),
   );
+  await db.exec(
+    readFileSync(
+      "supabase/migrations/0010_worker_compensation_audit_and_ledger_refinements.sql",
+      "utf8",
+    ),
+  );
   await user(admin);
   const wc = (
     await value<{ id: string }>(
@@ -144,6 +150,743 @@ beforeAll(async () => {
 }, 60000);
 afterAll(async () => {
   await db?.close();
+});
+
+describe("0010 traceability and catalog revisions", () => {
+  it("records exact notes/name/date changes, excludes unchanged fields and secrets", async () => {
+    await user(admin);
+    await db.query(
+      "update service_jobs set customer_name='Updated customer',notes='Specific note',received_at='2026-09-28' where id=$1",
+      [job],
+    );
+    const changes = await value<
+      Record<string, { before: unknown; after: unknown }>
+    >(
+      "select changes v from audit_logs where entity_id=$1 and action='SERVICE_JOB_UPDATED' order by created_at desc,id desc limit 1",
+      [job],
+    );
+    expect(changes.customer_name).toEqual({
+      before: "Customer",
+      after: "Updated customer",
+    });
+    expect(changes.notes.after).toBe("Specific note");
+    expect(changes.received_at.after).toContain("2026-09-28");
+    expect(changes.funding_source).toBeUndefined();
+    await db.exec("reset role");
+    const safe = await value(
+      'select prime_private.business_diff(\'{"token":"old","notes":null}\', \'{"token":"secret","password":"secret","notes":"new"}\') v',
+    );
+    expect(safe).toEqual({ notes: { before: null, after: "new" } });
+    await user(admin);
+  });
+  it("renames future catalog choices without changing existing work, part or unit labels", async () => {
+    for (const kind of ["work", "part", "unit"]) {
+      const id = await value(
+        kind === "work"
+          ? "select work_catalog_id v from job_work_items where id=$1"
+          : kind === "part"
+            ? "select part_catalog_id v from purchases where id=$1"
+            : "select unit_id v from job_work_items where id=$1",
+        [kind === "part" ? purchase : work],
+      );
+      const oldName = await value(
+        `select name v from ${kind}_catalog where id=$1`,
+        [id],
+      );
+      const newId = await value("select manage_catalog($1,$2,'rename',$3) v", [
+        kind,
+        id,
+        `New ${kind} revision`,
+      ]);
+      expect(newId).not.toBe(id);
+      expect(
+        await value(`select name v from ${kind}_catalog where id=$1`, [id]),
+      ).toBe(oldName);
+      expect(
+        await value(
+          `select ${kind === "unit" ? "is_active" : "active"} v from ${kind}_catalog where id=$1`,
+          [id],
+        ),
+      ).toBe(false);
+      await expect(
+        value("select manage_catalog($1,$2,'delete',null,'','SİL') v", [
+          kind,
+          id,
+        ]),
+      ).rejects.toThrow(/tarixçədə/);
+      await value("select manage_catalog($1,$2,'restore') v", [kind, id]);
+      await value("select manage_catalog($1,$2,'delete',null,'','SİL') v", [
+        kind,
+        newId,
+      ]);
+      await expect(
+        db.query(
+          `update ${kind}_catalog set name='Rewrite history' where id=$1`,
+          [id],
+        ),
+      ).rejects.toThrow(kind === "unit" ? /permission denied/ : /kataloqları/);
+    }
+  });
+  it("denies global catalog mutation to INTAKE/CASHIER and inline restoration to INTAKE", async () => {
+    const id = (
+      await value<{ id: string }>(
+        "select create_catalog_entry('work','Archived revision') v",
+      )
+    ).id;
+    await value("select manage_catalog('work',$1,'archive') v", [id]);
+    for (const actor of [intake, cashier, other]) {
+      await user(actor);
+      await expect(
+        value("select manage_catalog('work',$1,'rename','Forbidden') v", [id]),
+      ).rejects.toThrow();
+    }
+    await user(intake);
+    await expect(
+      value("select create_catalog_entry('work','Archived revision') v"),
+    ).rejects.toThrow(/arxivdədir/);
+    expect(
+      (
+        await value<{ id: string }>(
+          "select create_catalog_entry('work','New intake catalog') v",
+        )
+      ).id,
+    ).toBeTruthy();
+    await user(admin);
+  });
+  it("rejects duplicate additional purchase with a domain message and no partial inserts", async () => {
+    const catalog = await value(
+      "select part_catalog_id v from purchases where id=$1",
+      [purchase],
+    );
+    const count = await value("select count(*)::int v from purchases");
+    await expect(
+      value("select save_workshop_purchase($1,$2) v", [
+        JSON.stringify({
+          service_job_id: job,
+          part_catalog_id: catalog,
+          additional: true,
+        }),
+        randomUUID(),
+      ]),
+    ).rejects.toThrow(/Bu detal bu servis kartında artıq mövcuddur/);
+    expect(await value("select count(*)::int v from purchases")).toBe(count);
+  });
+  it("closes unfinished additional work atomically for CASHIER without inventing payments", async () => {
+    await db.exec("begin");
+    const catalog = (
+      await value<{ id: string }>(
+        "select create_catalog_entry('work','Close workflow QA') v",
+      )
+    ).id;
+    const unit = await value(
+      "select id v from unit_catalog where is_active limit 1",
+    );
+    const initialCatalog = (
+      await value<{ id: string }>(
+        "select create_catalog_entry('work','Initial close QA') v",
+      )
+    ).id;
+    const jid = await value("select create_workshop_job($1,$2,$3,'[]',$4) v", [
+      JSON.stringify({ plate: "99-CL-010", make: "BMW", model: "X5" }),
+      JSON.stringify({
+        funding_source: "CUSTOMER_FUNDED",
+        customer_name: "Close QA",
+      }),
+      JSON.stringify([
+        {
+          catalogId: initialCatalog,
+          quotedPrice: 0,
+          quantity: 1,
+          unitId: unit,
+        },
+      ]),
+      randomUUID(),
+    ]);
+    const initialWork = await value(
+      "select id v from job_work_items where service_job_id=$1",
+      [jid],
+    );
+    await value("select set_work_costing($1,$2,0) v", [initialWork, worker]);
+    const wid = await value("select create_additional_work($1,$2) v", [
+      JSON.stringify({
+        service_job_id: jid,
+        catalog_id: catalog,
+        quantity: 1,
+        unit_id: unit,
+        customer_unit_price: 100,
+        worker_id: worker,
+        labor_cost: 0,
+      }),
+      randomUUID(),
+    ]);
+    await user(cashier);
+    await db.exec("savepoint rejected_close");
+    await expect(
+      value("select set_vehicle_financial_state($1,true) v", [jid]),
+    ).rejects.toThrow(/borcu/);
+    await db.exec("rollback to savepoint rejected_close");
+    await user(admin);
+    expect(
+      await value("select status v from job_work_items where id=$1", [wid]),
+    ).toBe("IN_PROGRESS");
+    expect(
+      await value("select completed_at v from job_work_items where id=$1", [
+        wid,
+      ]),
+    ).toBeNull();
+    await user(cashier);
+    await post({
+      allocation_type: "CUSTOMER_VEHICLE",
+      service_job_id: jid,
+      amount: 100,
+    });
+    await value("select set_vehicle_financial_state($1,true) v", [jid]);
+    await value("select set_vehicle_financial_state($1,true) v", [jid]);
+    await user(admin);
+    expect(
+      await value("select status v from job_work_items where id=$1", [wid]),
+    ).toBe("DONE");
+    expect(
+      await value(
+        "select completed_at is not null v from job_work_items where id=$1",
+        [wid],
+      ),
+    ).toBe(true);
+    expect(
+      await value("select status v from service_jobs where id=$1", [jid]),
+    ).toBe("READY");
+    expect(
+      await value(
+        "select count(*)::int v from cash_transactions where service_job_id=$1 and direction='OUT'",
+        [jid],
+      ),
+    ).toBe(0);
+    expect(
+      await value(
+        "select count(*)::int v from audit_logs where entity_id=$1 and action='VEHICLE_WORK_COMPLETED'",
+        [jid],
+      ),
+    ).toBe(1);
+    await db.exec("rollback");
+  });
+});
+
+describe("0010 percentage compensation", () => {
+  let percentageWorker: string,
+    percentageJob: string,
+    percentageWork: string,
+    percentageCatalog: string,
+    percentageUnit: string;
+  const policy = (percent: number, eligible = true) =>
+    value("select save_worker_compensation_policy($1,$2,$3) v", [
+      percentageWorker,
+      eligible,
+      percent,
+    ]);
+  it("defaults existing work to FIXED and restricts policies to ADMIN", async () => {
+    await user(admin);
+    expect(
+      await value(
+        "select compensation_mode v from job_work_items where id=$1",
+        [work],
+      ),
+    ).toBe("FIXED");
+    percentageWorker = await value(
+      "insert into workers(owner_user_id,first_name,last_name,role_id) select auth.uid(),'Percentage','QA',id from worker_roles limit 1 returning id v",
+    );
+    for (const actor of [intake, cashier, other]) {
+      await user(actor);
+      await expect(policy(60)).rejects.toThrow();
+    }
+    await user(admin);
+    for (const percent of [0, 100, -1, 60.001])
+      await expect(policy(percent)).rejects.toThrow(/Usta payı/);
+    await policy(60);
+    percentageCatalog = (
+      await value<{ id: string }>(
+        "select create_catalog_entry('work','Percentage QA work') v",
+      )
+    ).id;
+    percentageUnit = await value(
+      "select id v from unit_catalog where is_active limit 1",
+    );
+    percentageJob = await value(
+      "select create_workshop_job($1,$2,$3,'[]',$4) v",
+      [
+        JSON.stringify({ plate: "99-PC-010", make: "BMW", model: "X5" }),
+        JSON.stringify({
+          funding_source: "CUSTOMER_FUNDED",
+          customer_name: "Percentage QA",
+        }),
+        JSON.stringify([
+          {
+            catalogId: percentageCatalog,
+            quotedPrice: 1000,
+            quantity: 1,
+            unitId: percentageUnit,
+          },
+        ]),
+        randomUUID(),
+      ],
+    );
+    percentageWork = await value(
+      "select id v from job_work_items where service_job_id=$1",
+      [percentageJob],
+    );
+  });
+  it("lets INTAKE choose percentage mode without receiving percentages or money", async () => {
+    await user(intake);
+    await value(
+      "select update_work_assignment($1,$2,'IN_PROGRESS',null,true) v",
+      [percentageWork, percentageWorker],
+    );
+    const queue = await value<Record<string, unknown>>(
+      "select r v from work_queue_data('work') r where r->>'id'=$1",
+      [percentageWork],
+    );
+    expect(queue.compensation_mode).toBe("PERCENTAGE");
+    for (const key of [
+      "worker_percentage_snapshot",
+      "earning_snapshot",
+      "labor_cost",
+      "quoted_price",
+      "customer_unit_price",
+    ])
+      expect(queue).not.toHaveProperty(key);
+    const eligible = await value<Record<string, unknown>>(
+      "select r v from work_queue_data('workers') r where r->>'id'=$1",
+      [percentageWorker],
+    );
+    expect(eligible.percentage_eligible).toBe(true);
+    expect(eligible).not.toHaveProperty("worker_percentage");
+    expect(
+      await value("select count(*)::int v from worker_compensation_policies"),
+    ).toBe(0);
+    await user(admin);
+    expect(
+      await value("select labor_cost::text v from job_work_items where id=$1", [
+        percentageWork,
+      ]),
+    ).toBe("600.00");
+  });
+  it("keeps the assignment snapshot when worker defaults change", async () => {
+    await policy(65);
+    await value(
+      "select update_work_assignment($1,$2,'IN_PROGRESS','Same agreement',true) v",
+      [percentageWork, percentageWorker],
+    );
+    expect(
+      await value(
+        "select worker_percentage_snapshot::text v from job_work_items where id=$1",
+        [percentageWork],
+      ),
+    ).toBe("60.00");
+  });
+  it("freezes earning once at DONE and never changes it on later price edits", async () => {
+    await user(intake);
+    await value("select update_work_assignment($1,$2,'DONE',null,true) v", [
+      percentageWork,
+      percentageWorker,
+    ]);
+    await user(admin);
+    const frozen = await value<Record<string, unknown>>(
+      "select jsonb_build_object('basis',earning_basis_snapshot,'earning',earning_snapshot,'at',earning_finalized_at) v from job_work_items where id=$1",
+      [percentageWork],
+    );
+    expect(frozen.basis).toBe(1000);
+    expect(frozen.earning).toBe(600);
+    await value("select update_work_assignment($1,$2,'DONE',null,true) v", [
+      percentageWork,
+      percentageWorker,
+    ]);
+    await db.query(
+      "update job_work_items set customer_unit_price=1200 where id=$1",
+      [percentageWork],
+    );
+    const after = await value<Record<string, unknown>>(
+      "select jsonb_build_object('basis',earning_basis_snapshot,'earning',earning_snapshot,'at',earning_finalized_at) v from job_work_items where id=$1",
+      [percentageWork],
+    );
+    expect(after).toEqual(frozen);
+    expect(
+      await value("select labor_cost::text v from job_work_items where id=$1", [
+        percentageWork,
+      ]),
+    ).toBe("600.00");
+    await expect(
+      value("select update_work_assignment($1,$2,'IN_PROGRESS',null,true) v", [
+        percentageWork,
+        percentageWorker,
+      ]),
+    ).rejects.toThrow(/sabitlənib/);
+    await expect(
+      value("select set_work_compensation($1,$2,false,500) v", [
+        percentageWork,
+        percentageWorker,
+      ]),
+    ).rejects.toThrow(/sabitlənib/);
+  });
+  it("exposes only the resulting cost and mode to CASHIER", async () => {
+    await user(cashier);
+    const projection = await value<Record<string, unknown>>(
+      "select r v from finance_data('work',$1) r where r->>'id'=$2",
+      [percentageJob, percentageWork],
+    );
+    expect(projection.labor_cost).toBe(600);
+    expect(projection.compensation_mode).toBe("PERCENTAGE");
+    for (const key of [
+      "worker_percentage_snapshot",
+      "earning_basis_snapshot",
+      "quoted_price",
+      "customer_unit_price",
+    ])
+      expect(projection).not.toHaveProperty(key);
+    expect(
+      await value("select count(*)::int v from worker_compensation_policies"),
+    ).toBe(0);
+    await user(admin);
+  });
+  it("supports percentage additional work with decimal rounding and one-time creation", async () => {
+    const catalog = (
+      await value<{ id: string }>(
+        "select create_catalog_entry('work','Percentage additional QA') v",
+      )
+    ).id;
+    const key = randomUUID();
+    const payload = JSON.stringify({
+      service_job_id: percentageJob,
+      catalog_id: catalog,
+      quantity: 0.333,
+      unit_id: percentageUnit,
+      customer_unit_price: 10.01,
+      worker_id: percentageWorker,
+      percentage: true,
+    });
+    const id = await value("select create_additional_work($1,$2) v", [
+      payload,
+      key,
+    ]);
+    expect(
+      await value("select create_additional_work($1,$2) v", [payload, key]),
+    ).toBe(id);
+    await user(intake);
+    await value("select update_work_assignment($1,$2,'DONE',null,true) v", [
+      id,
+      percentageWorker,
+    ]);
+    await user(admin);
+    expect(
+      await value(
+        "select earning_basis_snapshot::text v from job_work_items where id=$1",
+        [id],
+      ),
+    ).toBe("3.33");
+    expect(
+      await value(
+        "select earning_snapshot::text v from job_work_items where id=$1",
+        [id],
+      ),
+    ).toBe("2.16");
+    expect(
+      await value(
+        "select worker_percentage_snapshot::text v from job_work_items where id=$1",
+        [id],
+      ),
+    ).toBe("65.00");
+  });
+});
+
+describe("0010 percentage financial close", () => {
+  it("rolls back completion and earning on failure, then finalizes once on paid close", async () => {
+    await user(admin);
+    await db.exec("begin");
+    try {
+      await value("select save_worker_compensation_policy($1,true,60) v", [
+        worker,
+      ]);
+      const catalog = (
+        await value<{ id: string }>(
+          "select create_catalog_entry('work','Percentage close QA') v",
+        )
+      ).id;
+      const unit = await value(
+        "select id v from unit_catalog where is_active limit 1",
+      );
+      const jid = await value(
+        "select create_workshop_job($1,$2,$3,'[]',$4) v",
+        [
+          JSON.stringify({ plate: "99-PC-011", make: "BMW", model: "X5" }),
+          JSON.stringify({
+            funding_source: "CUSTOMER_FUNDED",
+            customer_name: "Close QA",
+          }),
+          JSON.stringify([
+            {
+              catalogId: catalog,
+              quotedPrice: 1000,
+              quantity: 1,
+              unitId: unit,
+            },
+          ]),
+          randomUUID(),
+        ],
+      );
+      const wid = await value(
+        "select id v from job_work_items where service_job_id=$1",
+        [jid],
+      );
+      await value(
+        "select update_work_assignment($1,$2,'IN_PROGRESS',null,true) v",
+        [wid, worker],
+      );
+      await user(cashier);
+      await db.exec("savepoint failed_close");
+      await expect(
+        value("select set_vehicle_financial_state($1,true) v", [jid]),
+      ).rejects.toThrow();
+      await db.exec("rollback to savepoint failed_close");
+      await user(admin);
+      expect(
+        await value("select status v from job_work_items where id=$1", [wid]),
+      ).toBe("IN_PROGRESS");
+      expect(
+        await value(
+          "select earning_finalized_at v from job_work_items where id=$1",
+          [wid],
+        ),
+      ).toBeNull();
+      expect(
+        await value(
+          "select earning_snapshot v from job_work_items where id=$1",
+          [wid],
+        ),
+      ).toBeNull();
+      await user(cashier);
+      await post({
+        allocation_type: "CUSTOMER_VEHICLE",
+        service_job_id: jid,
+        amount: 1000,
+      });
+      await post({
+        allocation_type: "WORKER_WORK_ITEM",
+        service_job_id: jid,
+        target_id: wid,
+        amount: 600,
+      });
+      const count = await value(
+        "select count(*)::int v from cash_transactions",
+      );
+      await value("select set_vehicle_financial_state($1,true) v", [jid]);
+      await user(admin);
+      const frozen = await value(
+        "select jsonb_build_object('status',status,'earning',earning_snapshot,'basis',earning_basis_snapshot,'at',earning_finalized_at) v from job_work_items where id=$1",
+        [wid],
+      );
+      expect(frozen).toMatchObject({
+        status: "DONE",
+        earning: 600,
+        basis: 1000,
+      });
+      await value("select set_vehicle_financial_state($1,true) v", [jid]);
+      expect(
+        await value(
+          "select jsonb_build_object('status',status,'earning',earning_snapshot,'basis',earning_basis_snapshot,'at',earning_finalized_at) v from job_work_items where id=$1",
+          [wid],
+        ),
+      ).toEqual(frozen);
+      expect(await value("select count(*)::int v from cash_transactions")).toBe(
+        count,
+      );
+      expect(
+        await value("select status v from service_jobs where id=$1", [jid]),
+      ).toBe("READY");
+      expect(
+        await value(
+          "select count(*)::int v from audit_logs where entity_id=$1 and action='VEHICLE_FINANCE_CLOSED'",
+          [jid],
+        ),
+      ).toBe(1);
+    } finally {
+      await db.exec("rollback");
+      await user(admin);
+    }
+  });
+});
+
+describe("0010 general worker advance allocation", () => {
+  it("records one real OUT, allocates explicitly once, protects boundaries and closes with applied money", async () => {
+    await user(admin);
+    await db.exec("begin");
+    const reject = async (operation: () => Promise<unknown>) => {
+      await db.exec("savepoint rejection");
+      await expect(operation()).rejects.toThrow();
+      await db.exec("rollback to savepoint rejection");
+    };
+    try {
+      const catalog = (
+        await value<{ id: string }>(
+          "select create_catalog_entry('work','Advance allocation QA') v",
+        )
+      ).id;
+      const unit = await value(
+        "select id v from unit_catalog where is_active limit 1",
+      );
+      const jid = await value(
+        "select create_workshop_job($1,$2,$3,'[]',$4) v",
+        [
+          JSON.stringify({ plate: "99-AV-010", make: "BMW", model: "X5" }),
+          JSON.stringify({
+            funding_source: "CUSTOMER_FUNDED",
+            customer_name: "Advance QA",
+          }),
+          JSON.stringify([
+            { catalogId: catalog, quotedPrice: 200, quantity: 1, unitId: unit },
+          ]),
+          randomUUID(),
+        ],
+      );
+      const wid = await value(
+        "select id v from job_work_items where service_job_id=$1",
+        [jid],
+      );
+      await value("select set_work_costing($1,$2,100) v", [wid, worker]);
+      const key = randomUUID(),
+        payload = JSON.stringify({
+          amount: 10,
+          channel: "CASH",
+          purpose: "Usta avansı",
+        });
+      await user(intake);
+      await reject(() =>
+        value("select record_worker_advance($1,$2,$3) v", [
+          worker,
+          payload,
+          key,
+        ]),
+      );
+      expect(await value("select count(*)::int v from worker_advances")).toBe(
+        0,
+      );
+      await user(cashier);
+      const before = await value<number>(
+        "select count(*)::int v from cash_transactions",
+      );
+      const advance = await value("select record_worker_advance($1,$2,$3) v", [
+        worker,
+        payload,
+        key,
+      ]);
+      expect(
+        await value("select record_worker_advance($1,$2,$3) v", [
+          worker,
+          payload,
+          key,
+        ]),
+      ).toBe(advance);
+      expect(await value("select count(*)::int v from cash_transactions")).toBe(
+        before + 1,
+      );
+      expect(
+        await value("select direction v from cash_transactions where id=$1", [
+          advance,
+        ]),
+      ).toBe("OUT");
+      expect(
+        await value(
+          "select r->>'remaining' v from finance_data('advances') r where r->>'id'=$1",
+          [advance],
+        ),
+      ).toBe("10.00");
+      await reject(() =>
+        value("select allocate_worker_advance($1,$2,10,$3) v", [
+          advance,
+          wid,
+          randomUUID(),
+        ]),
+      );
+      await user(admin);
+      await value("select update_work_assignment($1,$2,'DONE',null) v", [
+        wid,
+        worker,
+      ]);
+      await user(cashier);
+      const allocKey = randomUUID();
+      await value("select allocate_worker_advance($1,$2,10,$3) v", [
+        advance,
+        wid,
+        allocKey,
+      ]);
+      await value("select allocate_worker_advance($1,$2,10,$3) v", [
+        advance,
+        wid,
+        allocKey,
+      ]);
+      expect(await value("select count(*)::int v from cash_transactions")).toBe(
+        before + 1,
+      );
+      expect(
+        await value(
+          "select r->>'remaining' v from finance_data('advances') r where r->>'id'=$1",
+          [advance],
+        ),
+      ).toBe("0.00");
+      expect(
+        await value(
+          "select (r->>'applied_advance')::numeric v from finance_data('work',$1) r where r->>'id'=$2",
+          [jid, wid],
+        ),
+      ).toBe("10.00");
+      await reject(() =>
+        value("select allocate_worker_advance($1,$2,1,$3) v", [
+          advance,
+          wid,
+          randomUUID(),
+        ]),
+      );
+      await reject(() =>
+        post({
+          allocation_type: "WORKER_WORK_ITEM",
+          service_job_id: jid,
+          target_id: wid,
+          amount: 91,
+        }),
+      );
+      await post({
+        allocation_type: "WORKER_WORK_ITEM",
+        service_job_id: jid,
+        target_id: wid,
+        amount: 90,
+      });
+      await post({
+        allocation_type: "CUSTOMER_VEHICLE",
+        service_job_id: jid,
+        amount: 200,
+      });
+      await value("select set_vehicle_financial_state($1,true) v", [jid]);
+      await user(admin);
+      expect(
+        await value("select status v from service_jobs where id=$1", [jid]),
+      ).toBe("READY");
+      await reject(() =>
+        value("select void_cash_payment($1,'QA reversal') v", [advance]),
+      );
+      expect(
+        await value(
+          "select count(*)::int v from audit_logs where entity_id=$1 and action='WORKER_ADVANCE_CREATED'",
+          [advance],
+        ),
+      ).toBe(1);
+      expect(
+        await value(
+          "select count(*)::int v from audit_logs where entity_id=$1 and action='WORKER_ADVANCE_ALLOCATED'",
+          [wid],
+        ),
+      ).toBe(1);
+    } finally {
+      await db.exec("rollback");
+      await user(admin);
+    }
+  });
 });
 
 describe("0009 master lifecycle and automatic assignment", () => {

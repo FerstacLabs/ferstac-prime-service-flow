@@ -47,6 +47,10 @@ const state = vi.hoisted(() => ({
   rpc: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({
+  unstable_rethrow: (error: unknown) => {
+    if (error instanceof Error && error.message.startsWith("REDIRECT:"))
+      throw error;
+  },
   redirect: (path: string) => {
     throw new Error(`REDIRECT:${path}`);
   },

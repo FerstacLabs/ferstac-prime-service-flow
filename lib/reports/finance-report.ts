@@ -121,10 +121,16 @@ export function financeReport(
             }[t.payment_method],
           ],
           [
-            t.direction === "IN" ? "Kimdən" : "Kimə / Verilsin",
+            t.direction === "IN" ? "Kimdən" : "Kimə",
             t.counterparty_name_snapshot,
           ],
-          ["Təyinat", t.purpose],
+          ["Əlavə izah", t.purpose],
+          [
+            "İş / detal",
+            t.counterparty_details.item_name ||
+              data.work.find((w) => w.id === t.work_item_id)?.title ||
+              data.purchases.find((p) => p.id === t.purchase_id)?.title,
+          ],
           ["Avtomobil / İş №", j ? `${j.plate} · ${j.job_no}` : null],
           ["Bizim hesab", a?.name],
           ["Bank", a?.bank_name],
@@ -139,11 +145,13 @@ export function financeReport(
           ["Sənəd / qəbz №", t.reference_number],
           ["Bank reference", t.bank_reference],
           ["Ödəniş tapşırığı №", t.payment_order_number],
-          ["Əlavə sənəd", t.supporting_reference],
           [
-            "Kateqoriya",
-            data.categories.find((c) => c.id === t.category_id)?.name,
+            "Əlavə sənəd",
+            t.supporting_reference !== t.reference_number
+              ? t.supporting_reference
+              : null,
           ],
+          ["Təyinat", financialCategoryLabel(t, data.categories)],
           ["Daxil edən", t.created_by_name],
           ["Qeyd", t.notes],
           ["Ləğv səbəbi", t.void_reason],
@@ -161,6 +169,11 @@ export function financeReport(
         ],
       },
     ];
+    const allocations = (data.advanceAllocations ?? []).filter(
+      (a) => a.advance_id === t.id,
+    );
+    if (allocations.length)
+      report.sections.splice(1, 0, advanceAllocationSection(data, allocations));
     return report;
   }
   const cash = movementTotals(rows.filter((t) => t.channel === "CASH")),
@@ -308,10 +321,10 @@ export function financeReport(
     ["date", "Tarix", 9],
     ["channel", "Kanal / hesab", 10],
     ["direction", "İstiqamət", 8],
-    ["category", "Kateqoriya", 10],
+    ["category", "Təyinat", 10],
     ["party", "Tərəf", 12],
     ["vehicle", "Avtomobil", 8],
-    ["purpose", "Təyinat", 15],
+    ["purpose", "Əlavə izah", 15],
     ["reference", "Reference", 10],
     ["in", "Mədaxil", 9],
     ["out", "Məxaric", 9],
@@ -352,5 +365,43 @@ export function financeReport(
     },
   };
   report.sections.push(section);
+  if (f.worker || f.job) {
+    const allocations = (data.advanceAllocations ?? []).filter(
+      (a) =>
+        (!f.worker || a.worker_id === f.worker) &&
+        (!f.job || a.service_job_id === f.job),
+    );
+    if (allocations.length)
+      report.sections.push(advanceAllocationSection(data, allocations));
+  }
   return report;
+}
+
+function advanceAllocationSection(
+  data: FinanceData,
+  rows: NonNullable<FinanceData["advanceAllocations"]>,
+): ReportSection {
+  return {
+    title: "Ümumi avansın tətbiqi (pul çıxışı deyil)",
+    table: {
+      columns: [
+        { key: "date", label: "Tətbiq tarixi", width: 20 },
+        { key: "worker", label: "Usta", width: 20 },
+        { key: "work", label: "Avtomobil / iş", width: 45 },
+        { key: "amount", label: "Tətbiq (AZN)", width: 15, align: "right" },
+      ],
+      rows: rows.map((a) => ({
+        id: a.id,
+        cells: {
+          date: formatReportDateTime(a.created_at),
+          worker:
+            data.workers?.find((w) => w.id === a.worker_id)?.name ??
+            data.work.find((w) => w.id === a.work_item_id)?.worker ??
+            "Usta",
+          work: `${data.jobs.find((j) => j.id === a.service_job_id)?.plate ?? ""} · ${data.work.find((w) => w.id === a.work_item_id)?.title ?? "İş"}`,
+          amount: money(a.amount),
+        },
+      })),
+    },
+  };
 }

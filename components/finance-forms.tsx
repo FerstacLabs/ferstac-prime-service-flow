@@ -35,6 +35,7 @@ function ActionForm(props: React.ComponentProps<typeof BaseActionForm>) {
   const close = useContext(CloseFinanceDialog);
   return <BaseActionForm {...props} onSuccess={close} />;
 }
+export { ActionForm as FinanceActionForm };
 export function FinanceDialog({
   label,
   children,
@@ -149,9 +150,13 @@ export function PaymentSource({
 export function MovementDetails({
   purpose,
   party = "",
+  direction,
+  hideParty = false,
 }: {
   purpose: string;
   party?: string;
+  direction: "IN" | "OUT";
+  hideParty?: boolean;
 }) {
   return (
     <>
@@ -166,24 +171,25 @@ export function MovementDetails({
         />
       </label>
       <label className="text-sm">
-        Təyinat
+        Əlavə izah
         <input
           name="purpose"
           defaultValue={purpose}
-          required
           maxLength={500}
           className="field mt-1"
         />
       </label>
-      <label className="text-sm">
-        Kimdən / Kimə
-        <input
-          name="counterparty_name"
-          defaultValue={party}
-          maxLength={250}
-          className="field mt-1"
-        />
-      </label>
+      {!hideParty && (
+        <label className="text-sm">
+          {direction === "IN" ? "Kimdən" : "Kimə"}
+          <input
+            name="counterparty_name"
+            defaultValue={party}
+            maxLength={250}
+            className="field mt-1"
+          />
+        </label>
+      )}
       <label className="text-sm">
         Sənəd / qəbz №
         <input name="reference_number" maxLength={120} className="field mt-1" />
@@ -234,6 +240,15 @@ export function NewMovement({
   opening?: boolean;
 }) {
   const [selected, setSelected] = useState(job?.id || "");
+  const [category, setCategory] = useState("");
+  const [worker, setWorker] = useState("");
+  const [target, setTarget] = useState("");
+  const purposeName = data.categories.find((c) => c.id === category)?.name;
+  const workerMovement =
+    !opening &&
+    !job &&
+    direction === "OUT" &&
+    (purposeName === "Usta ödənişi" || purposeName === "Usta avansı");
   const linked = data.jobs.find((j) => j.id === selected);
   return (
     <FinanceDialog
@@ -256,13 +271,17 @@ export function NewMovement({
           type="hidden"
           name="allocation_type"
           value={
-            opening
-              ? "OPENING_" + direction
-              : job
-                ? "CUSTOMER_VEHICLE"
-                : direction === "OUT" && selected
-                  ? "VEHICLE_EXPENSE"
-                  : "GENERAL_" + direction
+            workerMovement
+              ? purposeName === "Usta avansı"
+                ? "WORKER_ADVANCE"
+                : "WORKER_PAYMENT"
+              : opening
+                ? "OPENING_" + direction
+                : job
+                  ? "CUSTOMER_VEHICLE"
+                  : direction === "OUT" && selected
+                    ? "VEHICLE_EXPENSE"
+                    : "GENERAL_" + direction
           }
         />
         {job ? (
@@ -274,7 +293,10 @@ export function NewMovement({
               name="service_job_id"
               className="field mt-1"
               value={selected}
-              onChange={(e) => setSelected(e.target.value)}
+              onChange={(e) => {
+                setSelected(e.target.value);
+                setTarget("");
+              }}
             >
               <option value="">Ümumi / avtomobilsiz</option>
               {data.jobs
@@ -304,15 +326,69 @@ export function NewMovement({
         />
         {!opening && !job ? (
           <SearchSelect
-            label="Kateqoriya"
+            label="Təyinat"
             name="category_id"
+            value={category}
+            onChange={setCategory}
             required
             options={data.categories
               .filter((c) => c.active && c.direction === direction)
               .map((c) => ({ id: c.id, name: c.name }))}
           />
         ) : null}
+        {workerMovement && (
+          <>
+            <label className="text-sm">
+              Tərəf tipi
+              <select
+                className="field mt-1"
+                name="counterparty_type"
+                defaultValue="WORKER"
+              >
+                <option value="WORKER">İşçi / Usta</option>
+              </select>
+            </label>
+            <SearchSelect
+              label="Kimə"
+              name="worker_id"
+              required
+              options={(data.workers ?? []).filter((w) => w.active)}
+              value={worker}
+              onChange={(id) => {
+                setWorker(id);
+                setTarget("");
+              }}
+            />
+            <SearchSelect
+              label="İş"
+              name="target_id"
+              value={target}
+              onChange={setTarget}
+              options={data.work
+                .filter(
+                  (w) =>
+                    w.worker_id === worker &&
+                    (!selected || w.service_job_id === selected) &&
+                    w.status !== "CANCELLED" &&
+                    (purposeName === "Usta avansı" || w.status === "DONE") &&
+                    data.jobs.some(
+                      (j) =>
+                        j.id === w.service_job_id &&
+                        !j.closed_at &&
+                        !j.inactive,
+                    ),
+                )
+                .map((w) => ({
+                  id: w.id,
+                  name: `${data.jobs.find((j) => j.id === w.service_job_id)?.plate} · ${w.title}`,
+                }))}
+            />
+            {!target && <p className="text-sm">Ümumi avans</p>}
+          </>
+        )}
         <MovementDetails
+          hideParty={workerMovement}
+          direction={direction}
           key={selected}
           purpose={
             linked
@@ -431,7 +507,8 @@ export function SettlementDialog({
           <>
             <PaymentSource accounts={data.accounts} />
             <MovementDetails
-              purpose={`${job.plate} avtomobili üzrə hesablaşma`}
+              direction="OUT"
+              purpose=""
             />
           </>
         ) : null}

@@ -1,5 +1,6 @@
 import { requireAccess } from "@/lib/supabase/auth";
 import { masterDirectory } from "@/lib/supabase/master-directory";
+import { workerAdvanceTotals } from "@/lib/supabase/worker-advance-totals";
 import type { AppRole } from "@/lib/security";
 import type { QuoteMeasure } from "@/lib/workshop";
 import type {
@@ -58,6 +59,12 @@ export type DbServiceJob = {
 };
 
 export type DbWorkItem = QuoteMeasure & {
+  applied_advance?: number;
+  compensation_mode?: "FIXED" | "PERCENTAGE";
+  worker_percentage_snapshot?: number | null;
+  earning_basis_snapshot?: number | null;
+  earning_snapshot?: number | null;
+  earning_finalized_at?: string | null;
   quoted_price?: number | null;
   labor_cost_known?: boolean;
   display_order?: number;
@@ -205,8 +212,10 @@ export async function getWorkItems(serviceJobId?: string) {
   const { data, error } = await query;
   if (error) throw error;
   const workers = await masterDirectory<DbWorker>("worker");
+  const applied = await workerAdvanceTotals();
   return ((data ?? []) as DbWorkItem[]).map((w) => ({
     ...w,
+    applied_advance: applied.get(w.id) ?? 0,
     workers: workers.find((u) => u.id === w.assigned_worker_id) || null,
   }));
 }

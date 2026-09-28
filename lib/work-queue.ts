@@ -5,7 +5,7 @@ import type {
 } from "@/lib/supabase/queries";
 import { inPeriod, type WorkshopFilters } from "@/lib/filters";
 
-export type QueueWork = Pick<
+export type QueueWork = { compensation_mode?: "FIXED" | "PERCENTAGE" } & Pick<
   DbWorkItem,
   | "id"
   | "service_job_id"
@@ -35,7 +35,11 @@ export type WorkQueue = {
     > & { vehicles?: { plate: string; make: string; model: string } }
   >;
   work: QueueWork[];
-  workers: Array<Pick<DbWorker, "id" | "first_name" | "last_name" | "active">>;
+  workers: Array<
+    Pick<DbWorker, "id" | "first_name" | "last_name" | "active"> & {
+      percentage_eligible?: boolean;
+    }
+  >;
 };
 export function selectQueueWork(data: WorkQueue, f: WorkshopFilters) {
   const jobs = new Map(data.jobs.map((j) => [j.id, j]));

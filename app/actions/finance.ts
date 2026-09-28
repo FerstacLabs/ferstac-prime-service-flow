@@ -1,4 +1,5 @@
 "use server";
+import { databaseActionError } from "@/lib/action-errors";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { decimalMinor } from "@/lib/decimal";
@@ -30,7 +31,7 @@ export async function createCatalogAction(
           p_kind: z.enum(["work", "part", "role"]).parse(kind),
           p_name: name,
         });
-  if (error) return { error: error.message };
+  if (error) return { error: databaseActionError(error) };
   await refreshWorkshop();
   return { item: data as { id: string; name: string } };
 }
@@ -59,7 +60,7 @@ export async function recordPaymentAction(form: FormData) {
     p_key: uuidValue(form, "idempotency_key"),
   });
   // Expected payment validation must survive production Server Action error redaction.
-  if (error) return { error: error.message };
+  if (error) return { error: databaseActionError(error) };
   await refreshWorkshop();
 }
 export async function setWorkerCostAction(form: FormData) {
@@ -68,7 +69,7 @@ export async function setWorkerCostAction(form: FormData) {
     p_cost: moneySchema.parse(form.get("labor_cost")),
     p_id: uuidValue(form, "id"),
   });
-  if (error) throw new Error(error.message);
+  if (error) return { error: databaseActionError(error) };
   await refreshWorkshop();
 }
 export async function voidPaymentAction(form: FormData) {
@@ -79,7 +80,7 @@ export async function voidPaymentAction(form: FormData) {
     p_id: uuidValue(form, "id"),
     p_reason: reason,
   });
-  if (error) throw new Error(error.message);
+  if (error) return { error: databaseActionError(error) };
   await refreshWorkshop();
 }
 

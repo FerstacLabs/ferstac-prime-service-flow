@@ -7,6 +7,7 @@ import { getMasterData } from "@/lib/supabase/queries";
 import { ActionForm } from "@/components/action-form";
 import { manageUnitAction } from "@/app/actions/finance";
 import { Save } from "lucide-react";
+import Link from "next/link";
 
 export default async function SecurityPage() {
   const { supabase, profile } = await requireAccess(["ADMIN"]);
@@ -23,6 +24,9 @@ export default async function SecurityPage() {
   return (
     <>
       <PageHeader title="Təhlükəsizlik" eyebrow="Hesablar" />
+      <Link href="/security/catalogs" className="btn btn-secondary mb-4">
+        Məlumat kataloqları
+      </Link>
       <div className="divide-y divide-[var(--border)]">
         {(data as AccessProfile[]).map((member) => (
           <section key={member.auth_user_id} className="py-6">

@@ -86,6 +86,9 @@ export function WorkerCostForm({
   paid: number;
   workers?: SelectOption[];
 }) {
+  const [percentage, setPercentage] = useState(
+    work.compensation_mode === "PERCENTAGE",
+  );
   return (
     <ActionForm
       action={saveWorkCostingAction}
@@ -127,12 +130,45 @@ export function WorkerCostForm({
         Usta maya dəyəri
         <DecimalInput
           name="labor_cost"
+          disabled={percentage}
           min={0}
           required
           defaultValue={costKnown(work) ? work.labor_cost : ""}
           className="field mt-1"
         />
       </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          name="percentage"
+          checked={percentage}
+          onChange={(e) => setPercentage(e.target.checked)}
+        />
+        Faizlə hesablanır
+      </label>
+      {work.compensation_mode === "PERCENTAGE" && (
+        <div className="sm:col-span-2 text-sm">
+          <p>
+            Usta payı: {work.worker_percentage_snapshot}% · Servis payı:{" "}
+            {100 - Number(work.worker_percentage_snapshot)}%
+          </p>
+          <p>
+            {work.earning_finalized_at
+              ? "Sabitlənmiş qazanc"
+              : "Gözlənilən qazanc"}
+            : {formatMoney(work.earning_snapshot ?? work.labor_cost)}
+          </p>
+          {work.earning_finalized_at &&
+            Number(work.earning_basis_snapshot) !==
+              Number(work.quoted_price) && (
+              <p role="status" className="text-[var(--warning)]">
+                Müştəri məbləği dəyişib. Qazancın hesablandığı məbləğ:{" "}
+                {formatMoney(Number(work.earning_basis_snapshot))}. Uzlaşdırma
+                tələb olunur; əvvəlki qazanc saxlanılıb.
+              </p>
+            )}
+        </div>
+      )}
       {paid > Number(work.labor_cost) ? (
         <p className="sm:col-span-2 text-sm text-[var(--warning)]">
           Artıq ödəniş: {formatMoney(paid - Number(work.labor_cost))}.
@@ -157,6 +193,7 @@ export function AdditionalWorkForm({
   units: SelectOption[];
   workers: SelectOption[];
 }) {
+  const [percentage, setPercentage] = useState(false);
   return (
     <ActionForm
       action={createAdditionalWorkAction}
@@ -179,7 +216,21 @@ export function AdditionalWorkForm({
       />
       <label className="text-xs text-[var(--muted)]">
         Usta maya dəyəri
-        <DecimalInput name="labor_cost" required className="field mt-1" />
+        <DecimalInput
+          name="labor_cost"
+          disabled={percentage}
+          required={!percentage}
+          className="field mt-1"
+        />
+      </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          name="percentage"
+          checked={percentage}
+          onChange={(e) => setPercentage(e.target.checked)}
+        />
+        Faizlə hesablanır
       </label>
       <label className="text-xs text-[var(--muted)] sm:col-span-2">
         Qeyd

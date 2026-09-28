@@ -143,3 +143,9 @@ pnpm build
 ## Operational Work Queue (0008)
 
 INTAKE can assign workers and update operational status/notes from `/work` without receiving financial fields. Work/audit PDF and Print use compact tables; Audit and Kassa share Azerbaijani display labels, and robot branding has been removed. Apply the new forward migration before deployment; see [manual 0008 rollout](docs/operational-work-queue-rollout.md). Production migrations are manual, never part of the build.
+
+## Worker Compensation and General Advances (0010)
+
+ADMIN configures percentage eligibility on the worker detail. Each percentage assignment retains its agreement and freezes its qapik-safe earning at DONE. Kassa supports general worker advances and explicit application to completed obligations without duplicate cash outflow. Financial close completes applicable work atomically; audit differences and payment references remain traceable. Catalog management is under `/security/catalogs`.
+
+Apply 0010 manually before deploying this revision; see [rollout, financial rules and QA](docs/worker-compensation-rollout.md). Existing intake quotation-entry permissions are unchanged; the operational Work Queue projection remains financial-free. Production migration is never automatic.
