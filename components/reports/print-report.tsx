@@ -51,9 +51,15 @@ export function PrintReport({ report }: { report: PrimeReport }) {
     );
   return (
     <main
-      className={`print-report ${report.scope === "overview" ? "print-overview" : ""} ${report.orientation === "landscape" ? "print-landscape" : ""} ${report.scope === "audit" ? "print-audit" : ""} ${["work", "audit"].includes(report.scope) ? "print-operations" : ""} ${["overview", "quotation", "purchases", "finance", "work", "audit"].includes(report.scope) ? "print-quotation" : ""} ${report.scope === "purchases" ? "print-purchases" : ""} ${report.scope === "finance" ? "print-finance" : ""}`}
+      className={`print-report ${["overview", "workers", "suppliers"].includes(report.scope) ? "print-overview" : ""} ${report.orientation === "landscape" ? "print-landscape" : ""} ${report.scope === "audit" ? "print-audit" : ""} ${["work", "audit"].includes(report.scope) ? "print-operations" : ""} ${["overview", "workers", "suppliers", "quotation", "purchases", "finance", "work", "audit"].includes(report.scope) ? "print-quotation" : ""} ${report.scope === "purchases" ? "print-purchases" : ""} ${report.scope === "finance" ? "print-finance" : ""}`}
     >
-      <PrintTrigger title={documentFilename(report).replace(/\.pdf$/, "")} />
+      <PrintTrigger
+        title={
+          ["workers", "suppliers"].includes(report.scope)
+            ? `PRIME ${report.title}`
+            : documentFilename(report).replace(/\.pdf$/, "")
+        }
+      />
       <header className="print-report-header">
         <div>
           <div className="print-identity">
@@ -70,6 +76,7 @@ export function PrintReport({ report }: { report: PrimeReport }) {
             {report.scope === "work" ? "" : " | Valyuta: AZN"}
           </p>
           {report.filters ? <p>{report.filters}</p> : null}
+          {report.subtitle ? <p>{report.subtitle}</p> : null}
         </div>
         <PrintButton />
       </header>

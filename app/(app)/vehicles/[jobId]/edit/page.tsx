@@ -17,6 +17,7 @@ import { EditQuoteFields } from "@/components/quote-editor";
 import { FundingFields } from "@/components/funding-fields";
 import { IntakeDateInput } from "@/components/intake-date-input";
 import { bakuDate } from "@/lib/filters";
+import { RemoveServiceRow } from "@/components/remove-service-row";
 
 export default async function EditIntakePage({
   params,
@@ -150,49 +151,60 @@ export default async function EditIntakePage({
                     costNote: "",
                   },
                 ].map((row) => (
-                  <ActionForm
-                    key={row.id}
-                    action={saveQuoteLineAction}
-                    className="grid items-end gap-3 border-b border-[var(--border)] py-4 sm:grid-cols-2 xl:grid-cols-4"
-                  >
-                    <input type="hidden" name="service_job_id" value={jobId} />
-                    <input type="hidden" name="kind" value={kind} />
-                    {row.catalog ? (
-                      <div className="sm:col-span-2 xl:col-span-4">
-                        <input
-                          type="hidden"
-                          name="catalog_id"
-                          value={row.catalog}
-                        />
-                        <strong>{row.title}</strong>
-                      </div>
-                    ) : (
-                      <SearchSelect
-                        label={kind === "work" ? "Yeni iş" : "Yeni detal"}
-                        name="catalog_id"
-                        required
-                        createKind={kind}
-                        options={(kind === "work"
-                          ? master.workCatalog
-                          : master.partCatalog
-                        ).filter((c) => !rows.some((r) => r.catalog === c.id))}
+                  <div key={row.id}>
+                    <ActionForm
+                      key={row.id}
+                      action={saveQuoteLineAction}
+                      className="grid items-end gap-3 border-b border-[var(--border)] py-4 sm:grid-cols-2 xl:grid-cols-4"
+                    >
+                      <input
+                        type="hidden"
+                        name="service_job_id"
+                        value={jobId}
                       />
+                      <input type="hidden" name="kind" value={kind} />
+                      {row.catalog ? (
+                        <div className="sm:col-span-2 xl:col-span-4">
+                          <input
+                            type="hidden"
+                            name="catalog_id"
+                            value={row.catalog}
+                          />
+                          <strong>{row.title}</strong>
+                        </div>
+                      ) : (
+                        <SearchSelect
+                          label={kind === "work" ? "Yeni iş" : "Yeni detal"}
+                          name="catalog_id"
+                          required
+                          createKind={kind}
+                          options={(kind === "work"
+                            ? master.workCatalog
+                            : master.partCatalog
+                          ).filter(
+                            (c) => !rows.some((r) => r.catalog === c.id),
+                          )}
+                        />
+                      )}
+                      <EditQuoteFields
+                        units={master.units}
+                        initial={{
+                          catalogId: row.catalog,
+                          quotedPrice: String(row.price ?? ""),
+                          quantity: String(row.quantity),
+                          unitId: row.unitId,
+                          note: row.note ?? "",
+                          costNote: row.costNote ?? "",
+                        }}
+                      />
+                      <SubmitButton variant="secondary">
+                        {row.catalog ? "Təklifi saxla" : "Əlavə et"}
+                      </SubmitButton>
+                    </ActionForm>
+                    {row.id !== "new" && !job.financially_closed_at && (
+                      <RemoveServiceRow job={jobId} id={row.id} kind={kind} />
                     )}
-                    <EditQuoteFields
-                      units={master.units}
-                      initial={{
-                        catalogId: row.catalog,
-                        quotedPrice: String(row.price ?? ""),
-                        quantity: String(row.quantity),
-                        unitId: row.unitId,
-                        note: row.note ?? "",
-                        costNote: row.costNote ?? "",
-                      }}
-                    />
-                    <SubmitButton variant="secondary">
-                      {row.catalog ? "Təklifi saxla" : "Əlavə et"}
-                    </SubmitButton>
-                  </ActionForm>
+                  </div>
                 ))}
               </section>
             );

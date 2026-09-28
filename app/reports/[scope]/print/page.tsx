@@ -22,6 +22,7 @@ const loadPrint = cache(async (scope: string, query: string) => {
       "overview",
       "purchases",
       "workers",
+      "suppliers",
       "work",
       "quotation",
       "handover",
@@ -47,7 +48,11 @@ export async function generateMetadata({ params, searchParams }: Props) {
     (await params).scope,
     JSON.stringify(await searchParams),
   );
-  return { title: documentFilename(report).replace(/\.pdf$/, "") };
+  return {
+    title: ["workers", "suppliers"].includes(report.scope)
+      ? `PRIME ${report.title}`
+      : documentFilename(report).replace(/\.pdf$/, ""),
+  };
 }
 export default async function ReportPrintPage({ params, searchParams }: Props) {
   const report = await loadPrint(

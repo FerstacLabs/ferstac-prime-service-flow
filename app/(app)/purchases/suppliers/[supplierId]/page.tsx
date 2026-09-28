@@ -12,9 +12,10 @@ import {
   pageRows,
 } from "@/components/workshop-filters";
 import { parseFilters, filterQuery, type SearchParams } from "@/lib/filters";
-import { getWorkshop, selectPurchases } from "@/lib/supabase/workshop";
+import { getWorkshop } from "@/lib/supabase/workshop";
+import { supplierFinance } from "@/lib/supplier-finance";
 import { supplierDisplayName } from "@/lib/supabase/queries";
-import { purchaseCost, paidFor, sumMoney, subtractMoney } from "@/lib/workshop";
+import { subtractMoney } from "@/lib/workshop";
 import { formatMoney, formatDate } from "@/lib/format";
 import { SupplierForm } from "@/components/supplier-form";
 import { DeleteSupplierDialog } from "@/components/finance-forms";
@@ -31,11 +32,7 @@ export default async function SupplierPage({
     data = await getWorkshop(),
     supplier = data.suppliers.find((s) => s.id === supplierId);
   if (!supplier) notFound();
-  const items = selectPurchases(data, f),
-    cost = sumMoney(items.map(purchaseCost)),
-    paid = sumMoney(
-      items.map((p) => paidFor(data.cash, "SUPPLIER_PURCHASE", p.id)),
-    );
+  const { items, cost, paid } = supplierFinance(data, f);
   return (
     <>
       <PageHeader

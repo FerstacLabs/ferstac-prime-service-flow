@@ -1,5 +1,5 @@
 import type { WorkshopData } from "@/lib/supabase/workshop";
-import { selectPurchases } from "@/lib/supabase/workshop";
+import { supplierFinance } from "@/lib/supplier-finance";
 import {
   partTitle,
   supplierDisplayName,
@@ -20,7 +20,12 @@ export function purchaseReport(
   data: WorkshopData,
   f: WorkshopFilters,
 ): PrimeReport {
-  const items = selectPurchases(data, f),
+  const {
+      items,
+      cost: totalCost,
+      paid: totalPaid,
+      remaining,
+    } = supplierFinance(data, f),
     supplier = data.suppliers.find((s) => s.id === f.supplier),
     job = data.jobs.find((j) => j.id === f.job);
   report.documentContext = [
@@ -65,29 +70,27 @@ export function purchaseReport(
     { label: "Alış sayı", value: String(items.length) },
     {
       label: "Faktiki maya",
-      value: formatReportMoney(sumMoney(items.map(purchaseCost))),
+      value: formatReportMoney(totalCost),
     },
     {
       label: "Ödənilib",
-      value: formatReportMoney(
-        sumMoney(
-          items.map((p) => paidFor(data.cash, "SUPPLIER_PURCHASE", p.id)),
-        ),
-      ),
+      value: formatReportMoney(totalPaid),
     },
     {
       label: "Qalıq borc",
       value: formatReportMoney(
-        sumMoney(
-          items
-            .filter((p) => p.source_type === "SUPPLIER")
-            .map((p) =>
-              subtractMoney(
-                purchaseCost(p),
-                paidFor(data.cash, "SUPPLIER_PURCHASE", p.id),
-              ),
+        f.supplier
+          ? remaining
+          : sumMoney(
+              items
+                .filter((p) => p.source_type === "SUPPLIER")
+                .map((p) =>
+                  subtractMoney(
+                    purchaseCost(p),
+                    paidFor(data.cash, "SUPPLIER_PURCHASE", p.id),
+                  ),
+                ),
             ),
-        ),
       ),
     },
   ];

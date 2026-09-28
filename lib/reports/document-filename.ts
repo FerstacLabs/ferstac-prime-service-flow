@@ -58,9 +58,13 @@ export function documentFilename(
       .map((v) => v.value),
     report.filters || "",
   ];
-  const parts = ["PRIME", report.title, ...context]
-    .map(filenamePart)
-    .filter(Boolean);
+  const title =
+    report.title === "İşçilər üzrə ümumi hesabat"
+      ? "İşçilər-Ümumi"
+      : report.title === "Təchizatçılar üzrə ümumi hesabat"
+        ? "Təchizatçılar-Ümumi"
+        : report.title;
+  const parts = ["PRIME", title, ...context].map(filenamePart).filter(Boolean);
   return (
     Array.from(new Set(parts))
       .join("_")

@@ -6,6 +6,8 @@ import { normalizeAzPlate, isValidAzPlate } from "@/lib/plate";
 import { getAuthedSupabase } from "@/lib/supabase/queries";
 import { vehicleIntakeFields, jobIntakeFields } from "@/lib/intake-fields";
 import { z } from "zod";
+import { serverMutation } from "@/lib/server-mutation";
+import { databaseActionError } from "@/lib/action-errors";
 import { parseIntakeDate } from "@/lib/intake-date";
 import {
   moneySchema,
@@ -18,6 +20,19 @@ import {
 function nullable(value: FormDataEntryValue | null) {
   const text = String(value ?? "").trim();
   return text ? text : null;
+}
+
+export async function removeServiceRowAction(form: FormData) {
+  return serverMutation(async () => {
+    const { supabase } = await getAuthedSupabase("ADMIN", "INTAKE");
+    const { error } = await supabase.rpc("remove_service_row", {
+      p_job: uuidValue(form, "service_job_id"),
+      p_kind: z.enum(["work", "part"]).parse(form.get("kind")),
+      p_id: uuidValue(form, "id"),
+    });
+    if (error) return { error: databaseActionError(error) };
+    revalidatePath("/", "layout");
+  });
 }
 
 function numberOrNull(value: FormDataEntryValue | null) {

@@ -15,7 +15,7 @@ import {
 import { getWorkshop } from "@/lib/supabase/workshop";
 import { getMasterData, workerDisplayName } from "@/lib/supabase/queries";
 import { parseFilters, filterQuery, type SearchParams } from "@/lib/filters";
-import { workerFinance } from "@/lib/worker-finance";
+import { workerFinance, selectWorkerFinances } from "@/lib/worker-finance";
 import { formatMoney } from "@/lib/format";
 export const dynamic = "force-dynamic";
 export default async function WorkersPage({
@@ -27,9 +27,7 @@ export default async function WorkersPage({
   const f = parseFilters(await searchParams),
     data = await getWorkshop(),
     master = await getMasterData(),
-    workers = data.workers.filter((w) =>
-      f.worker ? w.id === f.worker : !w.deleted_at,
-    );
+    workers = selectWorkerFinances(data, f).map((n) => n.worker);
   return (
     <>
       <PageHeader
@@ -91,6 +89,7 @@ export default async function WorkersPage({
       </details>
       <WorkshopFilters
         scope="workers"
+        roles={master.workerRoles}
         filters={f}
         workers={data.workers.map((w) => ({
           id: w.id,

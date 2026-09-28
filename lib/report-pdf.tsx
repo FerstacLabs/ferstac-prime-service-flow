@@ -256,6 +256,8 @@ export function ReportDocument({ report }: { report: PrimeReport }) {
           styles.page,
           [
             "overview",
+            "workers",
+            "suppliers",
             "quotation",
             "purchases",
             "finance",
@@ -270,10 +272,20 @@ export function ReportDocument({ report }: { report: PrimeReport }) {
         <ReportHeader report={report} />
         <SummaryGrid
           items={report.summary}
-          columns={report.scope === "overview" ? 4 : undefined}
-          band={["overview", "purchases", "finance", "work", "audit"].includes(
-            report.scope,
-          )}
+          columns={
+            ["overview", "workers", "suppliers"].includes(report.scope)
+              ? 4
+              : undefined
+          }
+          band={[
+            "overview",
+            "workers",
+            "suppliers",
+            "purchases",
+            "finance",
+            "work",
+            "audit",
+          ].includes(report.scope)}
         />
         {report.sections.map((section) => (
           <ReportSectionView
@@ -282,15 +294,22 @@ export function ReportDocument({ report }: { report: PrimeReport }) {
             landscape={report.orientation === "landscape"}
             compact={[
               "overview",
+              "workers",
+              "suppliers",
               "quotation",
               "purchases",
               "finance",
               "work",
               "audit",
             ].includes(report.scope)}
-            denseLedger={["overview", "finance", "work", "audit"].includes(
-              report.scope,
-            )}
+            denseLedger={[
+              "overview",
+              "workers",
+              "suppliers",
+              "finance",
+              "work",
+              "audit",
+            ].includes(report.scope)}
           />
         ))}
         <View style={styles.footer} fixed>
@@ -320,6 +339,8 @@ export function ReportDocument({ report }: { report: PrimeReport }) {
 function ReportHeader({ report }: { report: PrimeReport }) {
   const compact = [
     "overview",
+    "workers",
+    "suppliers",
     "quotation",
     "purchases",
     "finance",
@@ -371,6 +392,9 @@ function ReportHeader({ report }: { report: PrimeReport }) {
       </Text>
       {report.filters ? (
         <Text style={styles.meta}>{report.filters}</Text>
+      ) : null}
+      {report.subtitle ? (
+        <Text style={styles.meta}>{report.subtitle}</Text>
       ) : null}
     </View>
   );

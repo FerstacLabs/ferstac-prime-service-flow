@@ -1,11 +1,9 @@
 import { saveWorkerAction } from "@/app/actions/workers";
 import { ActionForm } from "@/components/action-form";
 import { SubmitButton } from "@/components/submit-button";
-import { MasterLifecycle } from "@/components/master-lifecycle";
 import {
   getMasterData,
   getAuthedSupabase,
-  workerDisplayName,
   type DbWorker,
 } from "@/lib/supabase/queries";
 import { WorkerPercentagePolicy } from "@/components/worker-percentage-policy";
@@ -27,7 +25,7 @@ export async function WorkerManagement({ worker }: { worker: DbWorker }) {
   if (error) throw new Error("Ustanın faiz qaydası yüklənmədi.");
   return (
     <section className="my-5 border-y border-[var(--border)] py-4">
-      <details>
+      <details id="worker-edit">
         <summary className="cursor-pointer font-semibold">Redaktə et</summary>
         <ActionForm
           action={saveWorkerAction}
@@ -75,17 +73,19 @@ export async function WorkerManagement({ worker }: { worker: DbWorker }) {
           <SubmitButton>Yadda saxla</SubmitButton>
         </ActionForm>
       </details>
-      <WorkerPercentagePolicy
-        workerId={worker.id}
-        eligible={policy?.eligible}
-        percentage={String(policy?.worker_percentage ?? 60)}
-      />
-      <MasterLifecycle
-        id={worker.id}
-        name={workerDisplayName(worker)}
-        kind="worker"
-        active={worker.active}
-      />
+      <section
+        aria-labelledby="worker-payment-policy"
+        className="mt-5 border-t border-[var(--border)] pt-4"
+      >
+        <h2 id="worker-payment-policy" className="font-semibold">
+          Ödəniş qaydası
+        </h2>
+        <WorkerPercentagePolicy
+          workerId={worker.id}
+          eligible={policy?.eligible}
+          percentage={String(policy?.worker_percentage ?? 60)}
+        />
+      </section>
     </section>
   );
 }

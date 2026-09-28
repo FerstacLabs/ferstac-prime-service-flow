@@ -34,6 +34,7 @@ export async function GET(
       "overview",
       "purchases",
       "workers",
+      "suppliers",
       "work",
       "quotation",
       "handover",

@@ -149,3 +149,7 @@ INTAKE can assign workers and update operational status/notes from `/work` witho
 ADMIN configures percentage eligibility on the worker detail. Each percentage assignment retains its agreement and freezes its qapik-safe earning at DONE. Kassa supports general worker advances and explicit application to completed obligations without duplicate cash outflow. Financial close completes applicable work atomically; audit differences and payment references remain traceable. Catalog management is under `/security/catalogs`.
 
 Apply 0010 manually before deploying this revision; see [rollout, financial rules and QA](docs/worker-compensation-rollout.md). Existing intake quotation-entry permissions are unchanged; the operational Work Queue projection remains financial-free. Production migration is never automatic.
+
+## Service Rows and Compact Directory Reports (0011)
+
+ADMIN/INTAKE can remove safe accidental service-card rows with audited, database-enforced history protection. Worker exports are compact summaries or individual settlement reports; supplier filters and exports share the same totals as supplier detail. Overview shows known partial profit with explicit incomplete-data reasons. See [manual 0011 rollout and reporting rules](docs/service-row-removal-reporting-rollout.md). Production migration remains manual.

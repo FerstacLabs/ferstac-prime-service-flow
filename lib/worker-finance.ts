@@ -1,6 +1,11 @@
 import type { WorkshopData } from "@/lib/supabase/workshop";
 import { inPeriod, type WorkshopFilters } from "@/lib/filters";
-import { costKnown, sumMoney, workerWorkFinance } from "@/lib/workshop";
+import {
+  costKnown,
+  sumMoney,
+  subtractMoney,
+  workerWorkFinance,
+} from "@/lib/workshop";
 import type { DbWorkItem } from "@/lib/supabase/queries";
 
 export { workerWorkFinance } from "@/lib/workshop";
@@ -22,6 +27,20 @@ export function workerFinance(
   const lines = items.map((w) => workerWorkFinance(w, data.cash));
   const earned = sumMoney(lines.map((w) => w.earned)),
     paid = sumMoney(lines.map((w) => w.paid));
+  const generalAdvances = data.cash.filter(
+    (t) =>
+      t.allocation_type === "GENERAL_OUT" &&
+      t.worker_identity_id === workerId &&
+      !t.voided_at,
+  );
+  const generalAvailable = subtractMoney(
+    sumMoney(generalAdvances.map((t) => t.amount)),
+    sumMoney(
+      data.work
+        .filter((w) => w.assigned_worker_id === workerId)
+        .map((w) => w.applied_advance ?? 0),
+    ),
+  );
   return {
     items,
     done,
@@ -29,7 +48,11 @@ export function workerFinance(
     cancelled,
     earned,
     paid,
-    advance: sumMoney(lines.map((w) => w.advance)),
+    advance: sumMoney([
+      ...lines.map((w) => w.advance),
+      Math.max(0, generalAvailable),
+    ]),
+    generalAvailable,
     outstanding: sumMoney(lines.map((w) => w.outstanding)),
     remaining: sumMoney(
       items
@@ -45,6 +68,16 @@ export function workerFinance(
 export function selectWorkerFinances(data: WorkshopData, f: WorkshopFilters) {
   return data.workers
     .filter((w) => !f.worker || w.id === f.worker)
+    .filter(
+      (w) =>
+        f.detail === "worker" ||
+        ((!w.deleted_at || !!f.worker) &&
+          (!f.status || w.active === (f.status === "active")) &&
+          (!f.role || w.role_id === f.role) &&
+          `${w.first_name} ${w.last_name}`
+            .toLocaleLowerCase("az")
+            .includes((f.q || "").toLocaleLowerCase("az"))),
+    )
     .map((worker) => ({ worker, ...workerFinance(data, worker.id, f) }))
     .filter((n) =>
       f.balance === "outstanding"

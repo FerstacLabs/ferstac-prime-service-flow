@@ -38,6 +38,10 @@ export type AllocationType =
   | "SUPPLIER_PURCHASE"
   | "WORKER_WORK_ITEM";
 export type CashTransaction = {
+  worker_identity_id?: string | null;
+  reference_number?: string | null;
+  purpose?: string;
+  counterparty_details?: Record<string, string>;
   id: string;
   service_job_id: string;
   allocation_type: AllocationType;

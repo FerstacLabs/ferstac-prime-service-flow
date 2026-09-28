@@ -37,6 +37,7 @@ export type DbVehicle = {
 };
 
 export type DbServiceJob = {
+  financially_closed_at?: string | null;
   deleted_at?: string | null;
   has_line_quotes?: boolean;
   id: string;

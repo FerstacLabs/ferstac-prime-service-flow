@@ -4,6 +4,7 @@ export type ReportScope =
   | "overview"
   | "purchases"
   | "workers"
+  | "suppliers"
   | "work"
   | "vehicle"
   | "quotation"

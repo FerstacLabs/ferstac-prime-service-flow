@@ -83,6 +83,12 @@ beforeAll(async () => {
       "utf8",
     ),
   );
+  await db.exec(
+    readFileSync(
+      "supabase/migrations/0011_safe_service_row_removal.sql",
+      "utf8",
+    ),
+  );
   await user(admin);
   const wc = (
     await value<{ id: string }>(
@@ -150,6 +156,206 @@ beforeAll(async () => {
 }, 60000);
 afterAll(async () => {
   await db?.close();
+});
+
+let removalNumber = 0;
+async function removalFixture() {
+  await user(admin);
+  const wc = (
+    await value<{ id: string }>("select create_catalog_entry('work',$1) v", [
+      `Removal work ${randomUUID()}`,
+    ])
+  ).id;
+  const pc = (
+    await value<{ id: string }>("select create_catalog_entry('part',$1) v", [
+      `Removal part ${randomUUID()}`,
+    ])
+  ).id;
+  const unit = await value(
+    "select id v from unit_catalog where name='Ədəd' limit 1",
+  );
+  const jid = await value("select create_workshop_job($1,$2,$3,$4,$5) v", [
+    JSON.stringify({
+      plate: `98-RM-${String(++removalNumber).padStart(3, "0")}`,
+      make: "BMW",
+      model: "QA",
+    }),
+    JSON.stringify({ funding_source: "CUSTOMER_FUNDED" }),
+    JSON.stringify([
+      { catalogId: wc, quotedPrice: "100", quantity: 1, unitId: unit },
+    ]),
+    JSON.stringify([
+      { catalogId: pc, quotedPrice: "200", quantity: 1, unitId: unit },
+    ]),
+    randomUUID(),
+  ]);
+  const wid = await value(
+    "select id v from job_work_items where service_job_id=$1",
+    [jid],
+  );
+  const pid = await value(
+    "select id v from job_required_parts where service_job_id=$1",
+    [jid],
+  );
+  return { jid, wid, pid, wc, pc };
+}
+describe("0011 safe service row removal", () => {
+  it.each(["ADMIN", "INTAKE"])(
+    "allows %s safe work/part removal with catalog retention, totals and audit",
+    async (role) => {
+      const { jid, wid, pid, wc, pc } = await removalFixture();
+      await user(role === "ADMIN" ? admin : intake);
+      await value("select remove_service_row($1,'work',$2) v", [jid, wid]);
+      const queue = (
+        await db.query<{ v: { id: string } }>(
+          "select work_queue_data('work') v",
+        )
+      ).rows;
+      expect(queue.some((r) => r.v.id === wid)).toBe(false);
+      await value("select remove_service_row($1,'part',$2) v", [jid, pid]);
+      await user(admin);
+      expect(
+        Number(
+          await value("select prime_private.vehicle_receivable($1) v", [
+            jid,
+          ]).catch(() => -1),
+        ),
+      ).toBe(-1); // Private helpers remain inaccessible.
+      expect(
+        await value("select count(*)::int v from work_catalog where id=$1", [
+          wc,
+        ]),
+      ).toBe(1);
+      expect(
+        await value("select count(*)::int v from part_catalog where id=$1", [
+          pc,
+        ]),
+      ).toBe(1);
+      expect(
+        await value(
+          "select count(*)::int v from audit_logs where service_job_id=$1 and action in ('SERVICE_WORK_REMOVED','SERVICE_PART_REMOVED') and metadata->>'name' like 'Removal%'",
+          [jid],
+        ),
+      ).toBe(2);
+      await db.exec("reset role");
+      expect(
+        Number(
+          await value("select prime_private.vehicle_receivable($1) v", [jid]),
+        ),
+      ).toBe(0);
+    },
+  );
+  it("rejects cashier, cross-org and direct deletes", async () => {
+    const { jid, wid } = await removalFixture();
+    for (const actor of [cashier, other]) {
+      await user(actor);
+      await expect(
+        value("select remove_service_row($1,'work',$2) v", [jid, wid]),
+      ).rejects.toThrow();
+    }
+    await user(admin);
+    await expect(
+      db.query("delete from job_work_items where id=$1", [wid]),
+    ).rejects.toThrow(/permission/);
+  });
+  it("protects started work, completed work and finalized percentage earnings", async () => {
+    const { jid, wid } = await removalFixture();
+    const uid = await value(
+      "insert into workers(owner_user_id,first_name,last_name,role_id) select auth.uid(),'Removal','Worker',id from worker_roles limit 1 returning id v",
+    );
+    await value("select save_worker_compensation_policy($1,true,60) v", [uid]);
+    await value(
+      "select update_work_assignment($1,$2,'IN_PROGRESS',null,true) v",
+      [wid, uid],
+    );
+    await expect(
+      value("select remove_service_row($1,'work',$2) v", [jid, wid]),
+    ).rejects.toThrow(/icra tarixçəsi/);
+    await value("select update_work_assignment($1,$2,'DONE',null) v", [
+      wid,
+      uid,
+    ]);
+    await expect(
+      value("select remove_service_row($1,'work',$2) v", [jid, wid]),
+    ).rejects.toThrow(/maliyyə əməliyyatı/);
+    expect(
+      Number(
+        await value(
+          "select earning_snapshot v from job_work_items where id=$1",
+          [wid],
+        ),
+      ),
+    ).toBe(60);
+  });
+  it("protects paid work even if payment was voided", async () => {
+    const { jid, wid } = await removalFixture();
+    const uid = await value(
+      "insert into workers(owner_user_id,first_name,last_name,role_id) select auth.uid(),'Paid','Worker',id from worker_roles limit 1 returning id v",
+    );
+    await value("select set_work_costing($1,$2,50) v", [wid, uid]);
+    const payment = await post({
+      allocation_type: "WORKER_WORK_ITEM",
+      service_job_id: jid,
+      target_id: wid,
+      amount: 1,
+    });
+    await expect(
+      value("select remove_service_row($1,'work',$2) v", [jid, wid]),
+    ).rejects.toThrow(/maliyyə əməliyyatı/);
+    await value("select void_cash_payment($1,'QA correction') v", [payment]);
+    await expect(
+      value("select remove_service_row($1,'work',$2) v", [jid, wid]),
+    ).rejects.toThrow(/maliyyə əməliyyatı/);
+  });
+  it("protects purchased parts and closed cards", async () => {
+    const { jid, wid, pid } = await removalFixture();
+    await value("select save_workshop_purchase($1,$2) v", [
+      JSON.stringify({
+        service_job_id: jid,
+        required_part_id: pid,
+        quantity: 1,
+        unit_price: 0,
+        source_type: "CUSTOMER_PROVIDED",
+        purchased_by_admin: true,
+        purchase_date: "2026-09-29",
+      }),
+      randomUUID(),
+    ]);
+    await expect(
+      value("select remove_service_row($1,'part',$2) v", [jid, pid]),
+    ).rejects.toThrow(/alış və ya ödəniş/);
+    await db.exec("reset role");
+    await db.query(
+      "update service_jobs set financially_closed_at=now() where id=$1",
+      [jid],
+    );
+    await user(admin);
+    await expect(
+      value("select remove_service_row($1,'work',$2) v", [jid, wid]),
+    ).rejects.toThrow(/maliyyəsi açıq/);
+  });
+  it("rolls back removal that would make customer receipts exceed the new total", async () => {
+    const { jid, wid } = await removalFixture();
+    await post({
+      allocation_type: "CUSTOMER_VEHICLE",
+      service_job_id: jid,
+      amount: 250,
+    });
+    await expect(
+      value("select remove_service_row($1,'work',$2) v", [jid, wid]),
+    ).rejects.toThrow(/yekun məbləği aşır/);
+    expect(
+      await value("select count(*)::int v from job_work_items where id=$1", [
+        wid,
+      ]),
+    ).toBe(1);
+    expect(
+      await value(
+        "select count(*)::int v from audit_logs where entity_id=$1 and action='SERVICE_WORK_REMOVED'",
+        [wid],
+      ),
+    ).toBe(0);
+  });
 });
 
 describe("0010 traceability and catalog revisions", () => {

@@ -30,6 +30,7 @@ import { statusLabels } from "@/components/app-shell";
 import { workerWorkFinance } from "@/lib/worker-finance";
 import { EmptyState } from "@/components/empty-state";
 import { DecimalInput } from "@/components/decimal-input";
+import { profitReason } from "@/lib/profit-status";
 export function MoneyGrid({
   items,
 }: {
@@ -41,7 +42,11 @@ export function MoneyGrid({
         <div key={label}>
           <dt className="text-[var(--muted)]">{label}</dt>
           <dd className="mt-1 font-semibold">
-            {value == null ? missingValue : formatMoney(value)}
+            {value == null
+              ? label.toLocaleLowerCase("az").includes("mənfəət")
+                ? "Maya və ya sətir qiyməti məlumatı natamamdır"
+                : missingValue
+              : formatMoney(value)}
           </dd>
         </div>
       ))}
@@ -86,9 +91,7 @@ export function FinanceSummary({
         ]}
       />
       {missing ? (
-        <p className="pb-3 text-sm text-[var(--warning)]">
-          Maya daxil edilməyib: {missing}.
-        </p>
+        <p className="pb-3 text-sm text-[var(--warning)]">{profitReason(n)}</p>
       ) : null}
       {!n.detailed ? (
         <p className="pb-3 text-sm text-[var(--warning)]">

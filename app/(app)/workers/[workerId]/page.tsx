@@ -16,6 +16,8 @@ import { workerFinance, workerWorkFinance } from "@/lib/worker-finance";
 import { formatDate } from "@/lib/format";
 import { EmptyState } from "@/components/empty-state";
 import { WorkerManagement } from "@/components/worker-management";
+import { MasterLifecycle } from "@/components/master-lifecycle";
+import { WorkerEditButton } from "@/components/worker-edit-button";
 export default async function WorkerPage({
   params,
   searchParams,
@@ -35,7 +37,23 @@ export default async function WorkerPage({
       <PageHeader
         title={workerDisplayName(worker)}
         eyebrow={worker.worker_roles?.name}
-        actions={<ReportActions report="workers" query={filterQuery(f)} />}
+        actions={
+          <div className="flex flex-wrap items-center gap-3">
+            {!worker.deleted_at && <WorkerEditButton />}
+            {!worker.deleted_at && (
+              <MasterLifecycle
+                id={worker.id}
+                name={workerDisplayName(worker)}
+                kind="worker"
+                active={worker.active}
+              />
+            )}
+            <ReportActions
+              report="workers"
+              query={filterQuery(f, { detail: "worker" })}
+            />
+          </div>
+        }
       />
       <dl className="identity-grid grid gap-4 text-sm sm:grid-cols-3">
         {[

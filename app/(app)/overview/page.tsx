@@ -7,6 +7,7 @@ import { getWorkshop, selectJobs } from "@/lib/supabase/workshop";
 import { jobFinance, sumMoney } from "@/lib/workshop";
 import { formatMoney } from "@/lib/format";
 import { EmptyState } from "@/components/empty-state";
+import { profitReason, profitSummary } from "@/lib/profit-status";
 export const dynamic = "force-dynamic";
 export default async function OverviewPage() {
   await requireAccess(["ADMIN"]);
@@ -15,7 +16,7 @@ export default async function OverviewPage() {
     totals = jobs.map((j) =>
       jobFinance(j, data.work, data.parts, data.purchases, data.cash),
     );
-  const missing = totals.filter((n) => n.grossProfit == null).length;
+  const profit = profitSummary(totals);
   return (
     <>
       <PageHeader
@@ -45,15 +46,12 @@ export default async function OverviewPage() {
           ["Təchizatçı borcu", sumMoney(totals.map((n) => n.supplierPayable))],
           ["Usta borcu", sumMoney(totals.map((n) => n.workerPayable))],
           ["Usta avansı", sumMoney(totals.map((n) => n.workerAdvance))],
-          [
-            "Ümumi brüt mənfəət",
-            missing ? null : sumMoney(totals.map((n) => n.grossProfit)),
-          ],
+          ["Ümumi brüt mənfəət", profit.amount],
         ]}
       />
-      {missing ? (
+      {profit.explanation ? (
         <p className="mb-5 text-sm text-[var(--warning)]">
-          {missing} servis kartında mənfəət tam hesablanmayıb.
+          <strong>{profit.status}</strong> · {profit.explanation}
         </p>
       ) : null}
       <div className="divide-y divide-[var(--border)]">
@@ -86,7 +84,7 @@ export default async function OverviewPage() {
                   [
                     "Brüt mənfəət",
                     n.grossProfit == null
-                      ? "Mənfəət tam hesablanmayıb"
+                      ? `Maya məlumatı natamamdır. ${profitReason(n)}`
                       : formatMoney(n.grossProfit),
                   ],
                 ].map(([k, v]) => (

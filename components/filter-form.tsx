@@ -3,6 +3,18 @@ export function FilterForm({ children }: { children: React.ReactNode }) {
   return (
     <form
       className="filter-grid mb-5 border-y border-[var(--border)] py-4"
+      onClick={(event) => {
+        if (
+          !(event.target instanceof Element) ||
+          !event.target.closest("[data-filter-reset]")
+        )
+          return;
+        for (const element of Array.from(event.currentTarget.elements)) {
+          if (element instanceof HTMLInputElement && element.type !== "hidden")
+            element.value = "";
+          if (element instanceof HTMLSelectElement) element.value = "";
+        }
+      }}
       onChange={(event) => {
         const target = event.target;
         if (

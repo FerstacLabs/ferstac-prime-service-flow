@@ -57,6 +57,8 @@ export const auditActions = [
   "SERVICE_JOB_ARCHIVED",
   "SERVICE_JOB_RESTORED",
   "WORK_QUOTE_ADDED",
+  "SERVICE_WORK_REMOVED",
+  "SERVICE_PART_REMOVED",
   "WORK_QUOTE_UPDATED",
   "PART_QUOTE_ADDED",
   "PART_QUOTE_UPDATED",
@@ -169,6 +171,8 @@ const auditDescriptions: Record<(typeof auditActions)[number], string> = {
   SERVICE_JOB_ARCHIVED: "servis kartını arxivlədi",
   SERVICE_JOB_RESTORED: "servis kartını arxivdən bərpa etdi",
   WORK_QUOTE_ADDED: "iş üzrə qiymət təklifi əlavə etdi",
+  SERVICE_WORK_REMOVED: "iş sətrini servis kartından sildi",
+  SERVICE_PART_REMOVED: "detal sətrini servis kartından sildi",
   WORK_QUOTE_UPDATED: "iş məlumatlarını yenilədi",
   PART_QUOTE_ADDED: "detal üzrə qiymət təklifi əlavə etdi",
   PART_QUOTE_UPDATED: "detal üzrə qiymət təklifini yenilədi",
@@ -204,6 +208,11 @@ const auditDescriptions: Record<(typeof auditActions)[number], string> = {
 };
 
 export function auditDescription(log: AuditLog) {
+  if (["SERVICE_WORK_REMOVED", "SERVICE_PART_REMOVED"].includes(log.action)) {
+    const name =
+      typeof log.metadata.name === "string" ? log.metadata.name : "Sətir";
+    return `${log.actor_username_snapshot} istifadəçisi “${name}” ${log.action === "SERVICE_WORK_REMOVED" ? "işini" : "detalını"} ${log.plate ? `${log.plate} ` : ""}servis kartından sildi.`;
+  }
   const assignment = log.changes.assigned_worker_id as
     | { before?: unknown; after?: unknown }
     | undefined;

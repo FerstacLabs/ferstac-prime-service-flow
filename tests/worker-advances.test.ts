@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { workerCashFixture } from "./fixtures/worker-cash";
 import { parseFilters } from "@/lib/filters";
 import { selectCash } from "@/lib/supabase/workshop";
-import { cashFlow, jobFinance, missingValue } from "@/lib/workshop";
+import { cashFlow, jobFinance } from "@/lib/workshop";
 import {
   workerWorkFinance,
   workerFinance,
@@ -234,17 +234,15 @@ describe("worker advances against agreed cost", () => {
       });
     data.work[0].quoted_price = null;
     const report = buildWorkshopReport("kassa", data, f);
-    expect(report.sections[0].table?.columns.map((c) => c.label)).toContain(
-      "Qalan razılaşdırılmış usta məbləği",
+    expect(report.sections[1].table?.columns.map((c) => c.label)).toContain(
+      "Qazanılmış",
     );
-    expect(report.sections[0].table?.rows[0].cells).toMatchObject({
-      "2": missingValue,
-      "3": "500,00 AZN",
-      "4": "0,00 AZN",
-      "5": "200,00 AZN",
-      "6": "200,00 AZN",
-      "7": "0,00 AZN",
-      "8": "300,00 AZN",
+    expect(report.sections[1].table?.rows[0].cells).toMatchObject({
+      "2": "İş gedir",
+      "3": "Sabit",
+      "4": "0,00",
+      "5": "200,00",
+      "6": "0,00",
     });
     expect(report.summary.find((s) => s.label === "Avans")?.value).toBe(
       "200,00 AZN",
@@ -252,7 +250,8 @@ describe("worker advances against agreed cost", () => {
     expect(report.filters).toContain("Avansı olanlar");
     expect(report.filters).toContain("Emre Altin");
     expect(JSON.stringify(report)).not.toContain("Qanad təmiri");
-    expect(report.sections[1].table?.rows).toHaveLength(1);
+    expect(report.sections[2].table?.rows).toHaveLength(1);
+    expect(JSON.stringify(report)).not.toContain("Müştəri qiyməti");
     const quote = JSON.stringify(
       buildWorkshopReport("quotation", data, parseFilters({ job: "job" })),
     );

@@ -22,6 +22,7 @@ type Props = {
     | "worker-cash";
   jobs?: SelectOption[];
   workers?: SelectOption[];
+  roles?: SelectOption[];
   works?: SelectOption[];
   suppliers?: SelectOption[];
   fixed?: Record<string, string>;
@@ -31,6 +32,7 @@ export function WorkshopFilters({
   scope,
   jobs,
   workers,
+  roles,
   works,
   suppliers,
   fixed = {},
@@ -54,6 +56,21 @@ export function WorkshopFilters({
   );
   return (
     <FilterForm key={filterQuery(f, fixed)}>
+      {scope === "workers" && !fixed.worker ? (
+        <>
+          <label className="text-xs text-[var(--muted)]">
+            Axtarış
+            <input name="q" defaultValue={f.q} className="field mt-1" />
+          </label>
+          {select("status", "Status", { active: "Aktiv", archived: "Arxiv" })}
+          {roles &&
+            select(
+              "role",
+              "İxtisas / rol",
+              Object.fromEntries(roles.map((r) => [r.id, r.name])),
+            )}
+        </>
+      ) : null}
       {Object.entries(fixed).map(([k, v]) => (
         <input key={k} type="hidden" name={k} value={v} />
       ))}

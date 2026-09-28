@@ -53,6 +53,8 @@ export const auditEventLabels: Record<string, string> = {
   SERVICE_JOB_ARCHIVED: "Servis kartı arxivləndi",
   SERVICE_JOB_RESTORED: "Servis kartı bərpa edildi",
   WORK_QUOTE_ADDED: "İş təklifi əlavə edildi",
+  SERVICE_WORK_REMOVED: "İş servis kartından silindi",
+  SERVICE_PART_REMOVED: "Detal servis kartından silindi",
   WORK_QUOTE_UPDATED: "İş məlumatı yeniləndi",
   PART_QUOTE_ADDED: "Detal təklifi əlavə edildi",
   PART_QUOTE_UPDATED: "Detal təklifi yeniləndi",

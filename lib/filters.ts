@@ -1,6 +1,9 @@
 import { normalizeAzPlate } from "@/lib/plate";
 export type SearchParams = Record<string, string | string[] | undefined>;
 export type WorkshopFilters = {
+  q: string;
+  role: string;
+  detail: string;
   plate: string;
   status: string;
   source: string;
@@ -51,6 +54,9 @@ export function parseFilters(params: SearchParams): WorkshopFilters {
     }
   }
   return {
+    q: get("q").trim(),
+    role: get("role"),
+    detail: get("detail") === "worker" ? "worker" : "",
     plate: normalizeAzPlate(get("plate")),
     status: get("status"),
     source: get("source"),
