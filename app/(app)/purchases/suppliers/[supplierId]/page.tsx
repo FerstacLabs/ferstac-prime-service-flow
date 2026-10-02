@@ -15,10 +15,12 @@ import { parseFilters, filterQuery, type SearchParams } from "@/lib/filters";
 import { getWorkshop } from "@/lib/supabase/workshop";
 import { supplierFinance } from "@/lib/supplier-finance";
 import { supplierDisplayName } from "@/lib/supabase/queries";
-import { subtractMoney } from "@/lib/workshop";
 import { formatMoney, formatDate } from "@/lib/format";
 import { SupplierForm } from "@/components/supplier-form";
 import { DeleteSupplierDialog } from "@/components/finance-forms";
+import { getFinance } from "@/lib/supabase/finance";
+import { financeReport } from "@/lib/reports/finance-report";
+import { journalFilters } from "@/lib/finance";
 export default async function SupplierPage({
   params,
   searchParams,
@@ -32,7 +34,18 @@ export default async function SupplierPage({
     data = await getWorkshop(),
     supplier = data.suppliers.find((s) => s.id === supplierId);
   if (!supplier) notFound();
-  const { items, cost, paid } = supplierFinance(data, f);
+  const { items, cost, paid, remaining } = supplierFinance(data, f);
+  const reconciliationQuery = new URLSearchParams({
+    reportType: "supplier",
+    supplier: supplierId,
+    job: f.job,
+    from: f.from,
+    to: f.to,
+  });
+  const reconciliation = financeReport(
+    await getFinance(),
+    journalFilters(Object.fromEntries(reconciliationQuery)),
+  )!;
   return (
     <>
       <PageHeader
@@ -60,7 +73,10 @@ export default async function SupplierPage({
         <SupplierForm supplier={supplier} />
       </details>
       <div className="mb-4">
-        <ReportActions report="finance" query={`supplier=${supplier.id}`} />
+        <ReportActions
+          report="finance"
+          query={reconciliationQuery.toString()}
+        />
       </div>
       <dl className="identity-grid grid gap-4 border-b border-[var(--border)] pb-5 text-sm sm:grid-cols-3">
         {[
@@ -102,7 +118,7 @@ export default async function SupplierPage({
           ["Alış sayı", String(items.length)],
           ["Maya", formatMoney(cost)],
           ["Ödənilib", formatMoney(paid)],
-          ["Qalıq", formatMoney(subtractMoney(cost, paid))],
+          ["Qalıq", formatMoney(remaining)],
           [
             "Avtomobil",
             String(new Set(items.map((p) => p.service_job_id)).size),
@@ -115,6 +131,17 @@ export default async function SupplierPage({
           </div>
         ))}
       </dl>
+      <section className="my-5">
+        <h2 className="mb-3 font-semibold">Dövr üzrə hesablaşma</h2>
+        <dl className="metric-grid grid grid-cols-2 gap-4 text-sm xl:grid-cols-4">
+          {reconciliation.summary.map((s) => (
+            <div key={s.label}>
+              <dt className="text-[var(--muted)]">{s.label}</dt>
+              <dd className="mt-1 font-semibold">{s.value}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
       <PurchaseList data={data} items={pageRows(items, f)} />
       <Pagination filters={f} total={items.length} />
     </>

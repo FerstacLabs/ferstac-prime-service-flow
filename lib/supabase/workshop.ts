@@ -8,9 +8,11 @@ import {
 } from "@/lib/supabase/queries";
 import type { CashTransaction, RequiredPart } from "@/lib/workshop";
 import { inPeriod, parseFilters, type WorkshopFilters } from "@/lib/filters";
-import { jobFinance } from "@/lib/workshop";
+import { jobFinance, purchaseDue } from "@/lib/workshop";
 import { masterDirectory } from "@/lib/supabase/master-directory";
 import { workerAdvanceTotals } from "@/lib/supabase/worker-advance-totals";
+import { purchaseLifecycleData } from "@/lib/supabase/purchase-lifecycle";
+import type { FinanceData } from "@/lib/finance";
 
 // Range through PostgREST's response cap on the server; reports never truncate at 1,000 rows.
 async function rows<T>(table: string, select: string, jobId?: string) {
@@ -34,7 +36,7 @@ async function rows<T>(table: string, select: string, jobId?: string) {
   }
   return result;
 }
-export async function getWorkshop(jobId?: string) {
+export async function getWorkshop(jobId?: string): Promise<WorkshopData> {
   const { supabase, profile } = await getAuthedSupabase();
   if (profile.role === "CASHIER")
     throw new Error(
@@ -91,6 +93,10 @@ export async function getWorkshop(jobId?: string) {
       rows<DbSupplier>("suppliers", "*"),
     ]);
   const applied = await workerAdvanceTotals();
+  const lifecycle = await purchaseLifecycleData(jobId);
+  const accounts =
+    await masterDirectory<FinanceData["accounts"][number]>("account");
+  const positions = new Map(lifecycle.purchases.map((p) => [p.id, p]));
   return {
     jobs,
     work: work.map((w) => ({
@@ -103,15 +109,34 @@ export async function getWorkshop(jobId?: string) {
       .filter((p) => !p.voided_at)
       .map((p) => ({
         ...p,
+        returned: positions.get(p.id)?.returned,
+        returned_quantity: positions.get(p.id)?.returned_quantity,
+        credit_created: positions.get(p.id)?.credit_created,
+        credit_applied: positions.get(p.id)?.credit_applied,
+        settled: positions.get(p.id)?.settled,
+        remaining: positions.get(p.id)?.remaining,
+        exchanged: positions.get(p.id)?.exchanged,
         suppliers: p.suppliers ?? p.supplier_snapshot ?? null,
         workers: workers.find((w) => w.id === p.purchased_by_worker_id) || null,
       })),
     cash,
     workers,
     suppliers,
+    purchaseReturns: lifecycle.purchaseReturns,
+    supplierCredits: lifecycle.supplierCredits,
+    accounts,
   };
 }
-export type WorkshopData = Awaited<ReturnType<typeof getWorkshop>>;
+export type WorkshopData = {
+  jobs: DbServiceJob[];
+  work: DbWorkItem[];
+  parts: RequiredPart[];
+  purchases: DbPurchase[];
+  cash: CashTransaction[];
+  workers: DbWorker[];
+  suppliers: DbSupplier[];
+  accounts?: FinanceData["accounts"];
+} & Pick<FinanceData, "purchaseReturns" | "supplierCredits">;
 export function selectJobs(
   data: WorkshopData,
   f = parseFilters({}),
@@ -181,7 +206,14 @@ export function selectPurchases(data: WorkshopData, f: WorkshopFilters) {
         (!f.supplier ||
           p.supplier_id === f.supplier ||
           p.historical_supplier_id === f.supplier) &&
-        (!f.payment || p.payment_status === f.payment) &&
+        (!f.payment ||
+          (p.remaining === undefined
+            ? p.payment_status
+            : purchaseDue(p, data.cash) <= 0
+              ? "PAID"
+              : Number(p.settled ?? p.paid_amount) > 0
+                ? "PARTIAL"
+                : "UNPAID") === f.payment) &&
         inPeriod(p.purchase_date, f),
     )
     .sort((a, b) => b.purchase_date.localeCompare(a.purchase_date));

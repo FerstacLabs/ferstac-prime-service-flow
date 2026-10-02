@@ -90,6 +90,17 @@ export type DbWorkItem = QuoteMeasure & {
 };
 
 export type DbPurchase = {
+  lifecycle_closed?: boolean;
+  unit_name?: string | null;
+  returned?: number;
+  returned_quantity?: number;
+  credit_created?: number;
+  credit_applied?: number;
+  settled?: number;
+  remaining?: number;
+  replacement_of?: string | null;
+  replacement_required_part_id?: string | null;
+  exchanged?: boolean;
   supplier_snapshot?: DbSupplier | null;
   historical_supplier_id?: string | null;
   required_part_id?: string | null;

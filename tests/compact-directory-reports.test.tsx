@@ -43,6 +43,35 @@ function fixture() {
   return d;
 }
 describe("compact directory reports and profit status", () => {
+  it("keeps replacement quantities and units independent of the original requirement", () => {
+    const d = fixture();
+    const original = d.purchases[0];
+    original.quantity = 4;
+    original.unit_name = "Ədəd";
+    d.purchases.push({
+      ...original,
+      id: "replacement-quantity",
+      replacement_of: original.id,
+      quantity: 2.5,
+      unit_name: "Litr",
+      custom_item_name: "Əvəz maye",
+    });
+    const report = buildWorkshopReport(
+      "purchases",
+      d,
+      parseFilters({ visibility: "all" }),
+    );
+    const table = report.sections.find(
+      (s) => s.title === "Alış tarixçəsi",
+    )!.table!;
+    expect(table.rows.find((r) => r.id === original.id)?.cells).toMatchObject({
+      quantity: "4",
+      unit: "Ədəd",
+    });
+    expect(
+      table.rows.find((r) => r.id === "replacement-quantity")?.cells,
+    ).toMatchObject({ quantity: "2,5", unit: "Litr" });
+  });
   it("shows only completed-cost profit as partial and gives specific missing-cost reasons", () => {
     const d = fixture();
     d.work[0].labor_cost_known = false;
@@ -253,7 +282,7 @@ describe("compact directory reports and profit status", () => {
         expect(r.sections[2].table?.rows).toHaveLength(1);
         expect(JSON.stringify(r)).not.toContain("Müştəri qiyməti");
         expect(
-          r.sections[2].table?.rows[0].cells["5"].replaceAll("\n", ""),
+          r.sections[2].table?.rows[0].cells["6"].replaceAll("\n", ""),
         ).toContain(d.cash[2].reference_number);
       }
       if (process.env.PRIME_REPORT_QA_DIR) {

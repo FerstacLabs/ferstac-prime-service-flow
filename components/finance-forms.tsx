@@ -244,6 +244,8 @@ export function NewMovement({
   const [worker, setWorker] = useState("");
   const [target, setTarget] = useState("");
   const purposeName = data.categories.find((c) => c.id === category)?.name;
+  const bonus =
+    !opening && !job && direction === "OUT" && purposeName === "İşçi bonusu";
   const workerMovement =
     !opening &&
     !job &&
@@ -271,17 +273,19 @@ export function NewMovement({
           type="hidden"
           name="allocation_type"
           value={
-            workerMovement
-              ? purposeName === "Usta avansı"
-                ? "WORKER_ADVANCE"
-                : "WORKER_PAYMENT"
-              : opening
-                ? "OPENING_" + direction
-                : job
-                  ? "CUSTOMER_VEHICLE"
-                  : direction === "OUT" && selected
-                    ? "VEHICLE_EXPENSE"
-                    : "GENERAL_" + direction
+            bonus
+              ? "GENERAL_OUT"
+              : workerMovement
+                ? purposeName === "Usta avansı"
+                  ? "WORKER_ADVANCE"
+                  : "WORKER_PAYMENT"
+                : opening
+                  ? "OPENING_" + direction
+                  : job
+                    ? "CUSTOMER_VEHICLE"
+                    : direction === "OUT" && selected
+                      ? "VEHICLE_EXPENSE"
+                      : "GENERAL_" + direction
           }
         />
         {job ? (
@@ -336,7 +340,7 @@ export function NewMovement({
               .map((c) => ({ id: c.id, name: c.name }))}
           />
         ) : null}
-        {workerMovement && (
+        {(workerMovement || bonus) && (
           <>
             <label className="text-sm">
               Tərəf tipi
@@ -359,35 +363,37 @@ export function NewMovement({
                 setTarget("");
               }}
             />
-            <SearchSelect
-              label="İş"
-              name="target_id"
-              value={target}
-              onChange={setTarget}
-              options={data.work
-                .filter(
-                  (w) =>
-                    w.worker_id === worker &&
-                    (!selected || w.service_job_id === selected) &&
-                    w.status !== "CANCELLED" &&
-                    (purposeName === "Usta avansı" || w.status === "DONE") &&
-                    data.jobs.some(
-                      (j) =>
-                        j.id === w.service_job_id &&
-                        !j.closed_at &&
-                        !j.inactive,
-                    ),
-                )
-                .map((w) => ({
-                  id: w.id,
-                  name: `${data.jobs.find((j) => j.id === w.service_job_id)?.plate} · ${w.title}`,
-                }))}
-            />
-            {!target && <p className="text-sm">Ümumi avans</p>}
+            {!bonus && (
+              <SearchSelect
+                label="İş"
+                name="target_id"
+                value={target}
+                onChange={setTarget}
+                options={data.work
+                  .filter(
+                    (w) =>
+                      w.worker_id === worker &&
+                      (!selected || w.service_job_id === selected) &&
+                      w.status !== "CANCELLED" &&
+                      (purposeName === "Usta avansı" || w.status === "DONE") &&
+                      data.jobs.some(
+                        (j) =>
+                          j.id === w.service_job_id &&
+                          !j.closed_at &&
+                          !j.inactive,
+                      ),
+                  )
+                  .map((w) => ({
+                    id: w.id,
+                    name: `${data.jobs.find((j) => j.id === w.service_job_id)?.plate} · ${w.title}`,
+                  }))}
+              />
+            )}
+            {!bonus && !target && <p className="text-sm">Ümumi avans</p>}
           </>
         )}
         <MovementDetails
-          hideParty={workerMovement}
+          hideParty={workerMovement || bonus}
           direction={direction}
           key={selected}
           purpose={
@@ -506,10 +512,7 @@ export function SettlementDialog({
         {n.obligations.some((o) => o.remaining > 0) ? (
           <>
             <PaymentSource accounts={data.accounts} />
-            <MovementDetails
-              direction="OUT"
-              purpose=""
-            />
+            <MovementDetails direction="OUT" purpose="" />
           </>
         ) : null}
         <label className="col-span-full flex items-center gap-2 text-sm">

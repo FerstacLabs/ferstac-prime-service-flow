@@ -89,6 +89,12 @@ beforeAll(async () => {
       "utf8",
     ),
   );
+  await db.exec(
+    readFileSync(
+      "supabase/migrations/0012_accounting_reconciliation.sql",
+      "utf8",
+    ),
+  );
   await user(admin);
   const wc = (
     await value<{ id: string }>(
@@ -199,6 +205,387 @@ async function removalFixture() {
   );
   return { jid, wid, pid, wc, pc };
 }
+describe("0012 additional worker compensation", () => {
+  async function buy(paid = 0) {
+    const f = await removalFixture();
+    const id = await value("select save_workshop_purchase($1,$2) v", [
+      JSON.stringify({
+        service_job_id: f.jid,
+        required_part_id: f.pid,
+        quantity: 1,
+        unit_price: 500,
+        source_type: "SUPPLIER",
+        supplier_id: supplier,
+        purchased_by_admin: true,
+        payment_status: "UNPAID",
+        purchase_date: "2026-09-01",
+      }),
+      randomUUID(),
+    ]);
+    if (paid)
+      await post({
+        allocation_type: "SUPPLIER_PURCHASE",
+        service_job_id: f.jid,
+        target_id: id,
+        amount: paid,
+        occurred_at: "2026-09-27T10:00:00Z",
+      });
+    return { ...f, id };
+  }
+  const position = (id: string) =>
+    value<{
+      remaining: number;
+      cost: number;
+      paid: number;
+      credit_created: number;
+    }>("select r v from finance_data('purchases') r where r->>'id'=$1", [id]);
+  it("applies credit explicitly once, without money movement or over-application", async () => {
+    const source = await buy(500),
+      target = await buy();
+    const ret = await value("select return_purchase($1,$2,$3) v", [
+      source.id,
+      JSON.stringify({ quantity: 1, reason: "Kredit" }),
+      randomUUID(),
+    ]);
+    const before = await value<number>(
+      "select count(*)::int v from finance_data('ledger')",
+    );
+    const key = randomUUID();
+    expect(
+      await value("select apply_supplier_credit($1,$2,300,$3) v", [
+        ret,
+        target.id,
+        key,
+      ]),
+    ).toBe(key);
+    expect(
+      await value("select apply_supplier_credit($1,$2,300,$3) v", [
+        ret,
+        target.id,
+        key,
+      ]),
+    ).toBe(key);
+    expect(Number((await position(target.id)).remaining)).toBe(200);
+    expect(
+      Number(
+        await value(
+          "select r->>'available' v from finance_data('purchase_returns') r where r->>'id'=$1",
+          [ret],
+        ),
+      ),
+    ).toBe(200);
+    await expect(
+      value("select apply_supplier_credit($1,$2,201,$3) v", [
+        ret,
+        target.id,
+        randomUUID(),
+      ]),
+    ).rejects.toThrow();
+    await user(cashier);
+    await expect(
+      value("select apply_supplier_credit($1,$2,1,$3) v", [
+        ret,
+        target.id,
+        randomUUID(),
+      ]),
+    ).rejects.toThrow();
+    await user(other);
+    await expect(
+      value("select apply_supplier_credit($1,$2,1,$3) v", [
+        ret,
+        target.id,
+        randomUUID(),
+      ]),
+    ).rejects.toThrow();
+    await user(admin);
+    expect(
+      await value<number>("select count(*)::int v from finance_data('ledger')"),
+    ).toBe(before);
+  });
+  it("atomically posts a real bank refund and restores available credit on reversal", async () => {
+    const f = await buy(500),
+      key = randomUUID();
+    const result = await value("select return_purchase($1,$2,$3) v", [
+      f.id,
+      JSON.stringify({
+        quantity: 1,
+        reason: "Bank geri qaytarma",
+        handling: "REFUND",
+        channel: "BANK",
+        financial_account_id: account,
+        payment_method: "TRANSFER",
+        occurred_at: "2026-09-29T10:00:00Z",
+      }),
+      key,
+    ]);
+    expect(result).toBe(key);
+    const t = await value<{
+      id: string;
+      channel: string;
+      amount: number;
+      direction: string;
+      financial_account_id: string;
+    }>(
+      "select r v from finance_data('ledger') r where r->'counterparty_details'->>'return_id'=$1",
+      [key],
+    );
+    expect(t.channel).toBe("BANK");
+    expect(t.direction).toBe("IN");
+    expect(t.financial_account_id).toBe(account);
+    expect(Number(t.amount)).toBe(500);
+    await value("select void_cash_payment($1,'Səhv bank qeydi') v", [t.id]);
+    expect(
+      Number(
+        await value(
+          "select r->>'available' v from finance_data('purchase_returns') r where r->>'id'=$1",
+          [key],
+        ),
+      ),
+    ).toBe(500);
+  });
+  it("rolls back return when bank settlement is invalid", async () => {
+    const f = await buy(500);
+    const key = randomUUID();
+    await expect(
+      value("select return_purchase($1,$2,$3) v", [
+        f.id,
+        JSON.stringify({
+          quantity: 1,
+          reason: "Bank",
+          handling: "REFUND",
+          channel: "BANK",
+          financial_account_id: randomUUID(),
+        }),
+        key,
+      ]),
+    ).rejects.toThrow();
+    expect(Number((await position(f.id)).cost)).toBe(500);
+    expect(
+      await value<number>(
+        "select count(*)::int v from purchase_returns where id=$1",
+        [key],
+      ),
+    ).toBe(0);
+  });
+  it.each([0, 300, 500])(
+    "returns a 500 purchase paid %s without inventing cash",
+    async (paid) => {
+      const f = await buy(paid);
+      const before = await value<number>(
+        "select count(*)::int v from finance_data('ledger')",
+      );
+      const key = randomUUID();
+      const args = [
+        f.id,
+        JSON.stringify({
+          quantity: 1,
+          reason: "Uyğun deyil",
+          occurred_at: "2026-09-28T10:00:00Z",
+        }),
+        key,
+      ];
+      expect(await value("select return_purchase($1,$2,$3) v", args)).toBe(key);
+      expect(await value("select return_purchase($1,$2,$3) v", args)).toBe(key);
+      const p = await position(f.id);
+      expect(Number(p.remaining)).toBe(0);
+      expect(Number(p.cost)).toBe(0);
+      expect(Number(p.paid)).toBe(paid);
+      expect(Number(p.credit_created)).toBe(paid);
+      expect(
+        await value<number>(
+          "select count(*)::int v from finance_data('ledger')",
+        ),
+      ).toBe(before);
+      await expect(
+        post({
+          allocation_type: "SUPPLIER_PURCHASE",
+          service_job_id: f.jid,
+          target_id: f.id,
+          amount: 1,
+        }),
+      ).rejects.toThrow();
+      if (paid) {
+        await user(cashier);
+        const refund = await value(
+          "select refund_supplier_credit($1,$2,$3) v",
+          [
+            key,
+            JSON.stringify({
+              amount: paid,
+              channel: "CASH",
+              occurred_at: "2026-09-29T10:00:00Z",
+            }),
+            randomUUID(),
+          ],
+        );
+        const t = await value<{
+          direction: string;
+          amount: number;
+          supplier_identity_id: string;
+        }>("select r v from finance_data('ledger') r where r->>'id'=$1", [
+          refund,
+        ]);
+        expect(t.direction).toBe("IN");
+        expect(Number(t.amount)).toBe(paid);
+        expect(t.supplier_identity_id).toBe(supplier);
+        await expect(
+          value("select refund_supplier_credit($1,$2,$3) v", [
+            key,
+            JSON.stringify({ amount: 1, channel: "CASH" }),
+            randomUUID(),
+          ]),
+        ).rejects.toThrow();
+      }
+      await user(admin);
+      expect(
+        Number(
+          await value("select total_price v from purchases where id=$1", [
+            f.id,
+          ]),
+        ),
+      ).toBe(500);
+    },
+  );
+  it.each([
+    [500, 650, 150, 0],
+    [500, 400, 0, 100],
+    [0, 650, 650, 0],
+  ])(
+    "exchanges paid %s for %s with no cash duplication",
+    async (paid, newPrice, due, credit) => {
+      const f = await buy(paid);
+      const key = randomUUID();
+      const before = await value<number>(
+        "select count(*)::int v from finance_data('ledger')",
+      );
+      const args = [
+        f.id,
+        JSON.stringify({
+          new_name: "Əvəz detal",
+          new_quantity: 1,
+          new_unit_price: newPrice,
+          reason: "Dəyişdirildi",
+          occurred_at: "2026-09-28T10:00:00Z",
+        }),
+        key,
+      ];
+      const replacement = await value(
+        "select exchange_purchase($1,$2,$3) v",
+        args,
+      );
+      expect(await value("select exchange_purchase($1,$2,$3) v", args)).toBe(
+        replacement,
+      );
+      expect(Number((await position(f.id)).remaining)).toBe(0);
+      expect(Number((await position(replacement)).remaining)).toBe(due);
+      expect(
+        Number(
+          await value(
+            "select r->>'available' v from finance_data('purchase_returns') r where r->>'id'=$1",
+            [key],
+          ),
+        ),
+      ).toBe(credit);
+      expect(
+        await value<number>(
+          "select count(*)::int v from finance_data('ledger')",
+        ),
+      ).toBe(before);
+      expect(
+        await value("select replacement_of v from purchases where id=$1", [
+          replacement,
+        ]),
+      ).toBe(f.id);
+      expect(
+        Number(
+          await value(
+            "select quoted_price v from job_required_parts where id=$1",
+            [f.pid],
+          ),
+        ),
+      ).toBe(200);
+    },
+  );
+  it("supports decimal partial returns and rejects cashier return edits", async () => {
+    const f = await buy(300);
+    await user(cashier);
+    await expect(
+      value("select return_purchase($1,$2,$3) v", [
+        f.id,
+        JSON.stringify({ quantity: 0.25, reason: "Qismən" }),
+        randomUUID(),
+      ]),
+    ).rejects.toThrow();
+    await user(admin);
+    await value("select return_purchase($1,$2,$3) v", [
+      f.id,
+      JSON.stringify({ quantity: 0.25, reason: "Qismən" }),
+      randomUUID(),
+    ]);
+    expect(Number((await position(f.id)).remaining)).toBe(75);
+    expect(Number((await position(f.id)).credit_created)).toBe(0);
+    await expect(
+      value("select return_purchase($1,$2,$3) v", [
+        f.id,
+        JSON.stringify({ quantity: 1, reason: "Artıq" }),
+        randomUUID(),
+      ]),
+    ).rejects.toThrow();
+  });
+  it("records a standalone bonus without creating an advance or reducing work debt", async () => {
+    await user(cashier);
+    const bonusCategory = await value(
+      "select id v from transaction_categories where name='İşçi bonusu' and organization_id=$1",
+      [org],
+    );
+    const before = await value<number>(
+      "select count(*)::int v from finance_data('advances')",
+    );
+    const id = await post({
+      allocation_type: "GENERAL_OUT",
+      category_id: bonusCategory,
+      amount: 100,
+      counterparty_details: { worker_id: worker },
+      purpose: "Sentyabr ayı üzrə yüksək nəticəyə görə",
+    });
+    const row = await value<{
+      amount: number;
+      worker_identity_id: string;
+      counterparty_details: { payment_kind: string };
+    }>("select r v from finance_data('ledger') r where r->>'id'=$1", [id]);
+    expect(Number(row.amount)).toBe(100);
+    expect(row.worker_identity_id).toBe(worker);
+    expect(row.counterparty_details.payment_kind).toBe("WORKER_BONUS");
+    expect(
+      await value<number>(
+        "select count(*)::int v from finance_data('advances')",
+      ),
+    ).toBe(before);
+    await expect(
+      post({
+        allocation_type: "GENERAL_OUT",
+        category_id: bonusCategory,
+        amount: 100,
+      }),
+    ).rejects.toThrow();
+    await user(intake);
+    await expect(
+      post({
+        allocation_type: "GENERAL_OUT",
+        category_id: bonusCategory,
+        amount: 100,
+        counterparty_details: { worker_id: worker },
+      }),
+    ).rejects.toThrow();
+    await user(admin);
+    expect(
+      await value<number>(
+        "select count(*)::int v from audit_logs where action='WORKER_BONUS_CREATED' and entity_id=$1",
+        [id],
+      ),
+    ).toBe(1);
+  });
+});
 describe("0011 safe service row removal", () => {
   it.each(["ADMIN", "INTAKE"])(
     "allows %s safe work/part removal with catalog retention, totals and audit",
@@ -2108,7 +2495,7 @@ describe.sequential("unified cash and bank ledger", () => {
       "WORKER_WORK_ITEM",
     ]) {
       const original = await value<Record<string, unknown>>(
-        "select to_jsonb(t) v from cash_transactions t where allocation_type=$1 and voided_at is null limit 1",
+        "select to_jsonb(t) v from cash_transactions t where allocation_type=$1 and voided_at is null and not exists(select 1 from purchase_returns r where r.purchase_id=t.purchase_id) limit 1",
         [kind],
       );
       await value(

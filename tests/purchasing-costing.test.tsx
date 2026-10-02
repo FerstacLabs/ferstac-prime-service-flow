@@ -48,7 +48,8 @@ function fixture() {
     id: `buy${i}`,
     required_part_id: `p${i}`,
     custom_item_name: data.parts[i].part_catalog!.name,
-    unit_price: cost,
+    quantity: data.parts[i].quantity!,
+    unit_price: cost / data.parts[i].quantity!,
     total_price: cost,
     supplier_id: supplier.id,
     suppliers: supplier,
@@ -175,7 +176,8 @@ describe("purchasing workflow and compact reports", () => {
         label: "Qalıq borc",
         value: "820,00 AZN",
       });
-      expect(table.rows[2].cells.quantity).toBe("2,5 Litr");
+      expect(table.rows[2].cells.quantity).toBe("2,5");
+      expect(table.rows[2].cells.unit).toBe("Litr");
       expect(table.rows.every((r) => (r.details?.length ?? 0) <= 1)).toBe(true);
       if (scope === "supplier")
         expect(table.columns.some((c) => c.key === "supplier")).toBe(false);
@@ -184,7 +186,8 @@ describe("purchasing workflow and compact reports", () => {
       const html = renderToStaticMarkup(<PrintReport report={report} />);
       expect(html).toContain("print-purchases");
       expect(html).toContain(reportBrand.company.replace("&", "&amp;"));
-      expect(html).toContain("2,5 Litr");
+      expect(html).toContain("2,5");
+      expect(html).toContain("Litr");
       if (scope === "supplier")
         expect(html.match(/Sınaq Təchizat MMC/g)).toHaveLength(1);
       if (scope === "vehicle") expect(html.match(/77-ZZ-777/g)).toHaveLength(1);

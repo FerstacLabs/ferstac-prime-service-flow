@@ -30,6 +30,7 @@ export function workerFinance(
   const generalAdvances = data.cash.filter(
     (t) =>
       t.allocation_type === "GENERAL_OUT" &&
+      t.counterparty_details?.payment_kind !== "WORKER_BONUS" &&
       t.worker_identity_id === workerId &&
       !t.voided_at,
   );

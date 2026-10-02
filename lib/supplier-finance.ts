@@ -1,6 +1,6 @@
 import { selectPurchases, type WorkshopData } from "@/lib/supabase/workshop";
 import { supplierDisplayName } from "@/lib/supabase/queries";
-import { paidFor, purchaseCost, subtractMoney, sumMoney } from "@/lib/workshop";
+import { paidFor, purchaseCost, purchaseDue, sumMoney } from "@/lib/workshop";
 import type { WorkshopFilters } from "@/lib/filters";
 
 export function supplierFinance(data: WorkshopData, f: WorkshopFilters) {
@@ -10,7 +10,12 @@ export function supplierFinance(data: WorkshopData, f: WorkshopFilters) {
   const paid = sumMoney(
     items.map((p) => paidFor(data.cash, "SUPPLIER_PURCHASE", p.id)),
   );
-  return { items, cost, paid, remaining: subtractMoney(cost, paid) };
+  return {
+    items,
+    cost,
+    paid,
+    remaining: sumMoney(items.map((p) => purchaseDue(p, data.cash))),
+  };
 }
 export function selectSupplierFinances(data: WorkshopData, f: WorkshopFilters) {
   return data.suppliers

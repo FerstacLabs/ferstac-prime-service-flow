@@ -114,6 +114,7 @@ export async function loadWorkshopReport(
     return null;
   if (scope === "vehicle") {
     const finance = await loadFinanceReport({
+      reportType: "vehicle",
       from: f.from,
       to: f.to,
       job: f.job,
@@ -289,6 +290,7 @@ export function buildWorkshopReport(
       money(sumMoney(totals.map((n) => n.quotedTotal))),
     ],
     ["Məlum maya", money(sumMoney(totals.map((n) => n.totalCost)))],
+    ["Müştəridən alınıb", money(sumMoney(totals.map((n) => n.customerPaid)))],
     ["Müştəri borcu", money(sumMoney(totals.map((n) => n.customerReceivable)))],
     ["Təchizatçı borcu", money(sumMoney(totals.map((n) => n.supplierPayable)))],
     ["Usta borcu", money(sumMoney(totals.map((n) => n.workerPayable)))],
@@ -301,33 +303,40 @@ export function buildWorkshopReport(
     ],
   ]);
   report.subtitle = profitSummary(totals).explanation || undefined;
+  report.orientation = "landscape";
   report.sections = [
     {
       title: "Servis kartları",
       table: table(
         [
-          "Avtomobil / status",
-          "Təklif / maya",
-          "Müştəri: alınıb / borc",
-          "Təchizatçı / usta borcu",
+          "Avtomobil",
+          "Status",
+          "Təklif (AZN)",
+          "Məlum maya (AZN)",
+          "Müştəridən alınıb",
+          "Müştəri qalıq borcu",
+          "Təchizatçı qalıq borcu",
+          "Usta qalıq borcu",
+          "Usta avansı",
           "Brüt mənfəət",
+          "Mənfəət statusu",
         ],
         jobs.map((j, i) => {
           const n = totals[i];
           return {
             id: j.id,
             values: [
-              `${j.vehicles?.plate} · ${j.vehicles?.make} ${j.vehicles?.model} · ${reportJobStatusLabels[j.status]}`,
-              `${money(n.quotedTotal)} / ${money(n.totalCost)}`,
-              `${money(n.customerPaid)} / ${money(n.customerReceivable)}`,
-              `${money(n.supplierPayable)} / ${money(n.workerPayable)}`,
-              n.grossProfit == null
-                ? `Maya məlumatı natamamdır. ${profitReason(n)}`
-                : money(n.grossProfit),
-            ],
-            details: [
-              ...missingCostFields(n),
-              ["Usta avansı", money(n.workerAdvance)],
+              `${j.vehicles?.plate} · ${j.vehicles?.make} ${j.vehicles?.model}`,
+              reportJobStatusLabels[j.status],
+              money(n.quotedTotal),
+              money(n.totalCost),
+              money(n.customerPaid),
+              money(n.customerReceivable),
+              money(n.supplierPayable),
+              money(n.workerPayable),
+              money(n.workerAdvance),
+              n.grossProfit == null ? "-" : money(n.grossProfit),
+              n.grossProfit == null ? profitReason(n) : "Tam hesablanıb",
             ],
           };
         }),

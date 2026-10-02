@@ -150,6 +150,9 @@ function Section({ section }: { section: ReportSection }) {
                 <>
                   <p>Ad/Soyad: ____________________</p>
                   <p>İmza: ____________________</p>
+                  {section.signatureDates ? (
+                    <p>Tarix: ____________________</p>
+                  ) : null}
                 </>
               )}
             </div>

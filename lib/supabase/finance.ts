@@ -74,6 +74,8 @@ export async function getFinance(): Promise<FinanceData> {
     workers,
     advances,
     advanceAllocations,
+    purchaseReturns,
+    supplierCredits,
   ] = await Promise.all([
     read<FinanceData["jobs"][number]>("jobs"),
     read<FinanceData["work"][number]>("work"),
@@ -86,6 +88,12 @@ export async function getFinance(): Promise<FinanceData> {
     read<NonNullable<FinanceData["advanceAllocations"]>[number]>(
       "advance_allocations",
     ),
+    read<NonNullable<FinanceData["purchaseReturns"]>[number]>(
+      "purchase_returns",
+    ),
+    read<NonNullable<FinanceData["supplierCredits"]>[number]>(
+      "supplier_credit_allocations",
+    ),
   ]);
   return {
     jobs,
@@ -97,5 +105,7 @@ export async function getFinance(): Promise<FinanceData> {
     workers,
     advances,
     advanceAllocations,
+    purchaseReturns,
+    supplierCredits,
   };
 }

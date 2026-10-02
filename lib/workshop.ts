@@ -38,6 +38,7 @@ export type AllocationType =
   | "SUPPLIER_PURCHASE"
   | "WORKER_WORK_ITEM";
 export type CashTransaction = {
+  occurred_at?: string;
   worker_identity_id?: string | null;
   reference_number?: string | null;
   purpose?: string;
@@ -106,7 +107,30 @@ export const costKnown = (work: DbWorkItem) =>
 export const purchaseCost = (p: DbPurchase) =>
   p.source_type === "CUSTOMER_PROVIDED"
     ? 0
-    : cents(p.total_price ?? multiplyMoney(p.quantity, p.unit_price)) / 100;
+    : subtractMoney(
+        cents(p.total_price ?? multiplyMoney(p.quantity, p.unit_price)) / 100,
+        p.returned ?? 0,
+      );
+export const purchaseDue = (p: DbPurchase, cash: CashTransaction[]) =>
+  p.source_type !== "SUPPLIER"
+    ? 0
+    : (p.remaining ??
+      subtractMoney(purchaseCost(p), paidFor(cash, "SUPPLIER_PURCHASE", p.id)));
+export const purchaseLifecycleLabel = (
+  p: Pick<
+    DbPurchase,
+    "exchanged" | "replacement_of" | "returned_quantity" | "quantity"
+  >,
+) =>
+  p.exchanged
+    ? "Dəyişdirilib"
+    : Number(p.returned_quantity ?? 0) >= Number(p.quantity)
+      ? "Qaytarılıb"
+      : Number(p.returned_quantity ?? 0) > 0
+        ? "Qismən qaytarılıb"
+        : p.replacement_of
+          ? "Dəyişdirmə nəticəsində alınıb"
+          : "Alınıb";
 export function paidFor(
   cash: CashTransaction[],
   type: AllocationType,
@@ -181,7 +205,12 @@ export function jobFinance(
   const partsCost = sumMoney(purchases.map(purchaseCost));
   const missingWork = activeWork.filter((w) => !costKnown(w)).length;
   const missingParts = required.filter(
-    (r) => !purchases.some((p) => p.required_part_id === r.id),
+    (r) =>
+      !purchases.some(
+        (p) =>
+          (p.required_part_id || p.replacement_required_part_id) === r.id &&
+          Number(p.quantity) > Number(p.returned_quantity ?? 0),
+      ),
   ).length;
   const customerPaid = sumMoney(
     cash
@@ -207,9 +236,6 @@ export function jobFinance(
       .filter((w) => w.status !== "DONE" && costKnown(w))
       .map((w) => w.labor_cost),
   );
-  const supplierCost = sumMoney(
-    purchases.filter((p) => p.source_type === "SUPPLIER").map(purchaseCost),
-  );
   const otherCost = sumMoney(
     cash
       .filter((t) => t.allocation_type === "VEHICLE_EXPENSE")
@@ -232,7 +258,7 @@ export function jobFinance(
     workerPaid,
     workerEarned,
     workerExpected,
-    supplierPayable: subtractMoney(supplierCost, supplierPaid),
+    supplierPayable: sumMoney(purchases.map((p) => purchaseDue(p, cash))),
     workerPayable: sumMoney(workerLines.map((n) => n.outstanding)),
     workerAdvance: sumMoney(workerLines.map((n) => n.advance)),
     workerRemaining: sumMoney(

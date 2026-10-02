@@ -306,6 +306,7 @@ export function ReportDocument({ report }: { report: PrimeReport }) {
               "overview",
               "workers",
               "suppliers",
+              "purchases",
               "finance",
               "work",
               "audit",
@@ -543,6 +544,11 @@ function ReportSectionView({
                   <Text style={{ marginTop: compact ? 3 : 5, fontSize: 8 }}>
                     İmza: ____________________
                   </Text>
+                  {section.signatureDates ? (
+                    <Text style={{ marginTop: 3, fontSize: 8 }}>
+                      Tarix: ____________________
+                    </Text>
+                  ) : null}
                 </>
               ) : null}
             </View>
@@ -693,7 +699,9 @@ function tableChunks(
   const width = landscape ? 785 : 539;
   const maxHeight = denseLedger
     ? landscape
-      ? 350
+      ? table.columns.length >= 10
+        ? 320
+        : 460
       : 550
     : landscape
       ? 320
@@ -740,7 +748,12 @@ function tableChunks(
       (denseLedger
         ? Math.max(19, lineCount * 9.6 + 6)
         : Math.max(24, lineCount * 12 + 10)) + detailHeight;
-    if (rows.length && height + rowHeight > maxHeight) {
+    // Leave room for the report header and reconciliation totals on the first page.
+    const chunkHeight =
+      denseLedger && landscape && chunks.length === 0
+        ? Math.min(maxHeight, table.columns.length >= 10 ? 200 : 280)
+        : maxHeight;
+    if (rows.length && height + rowHeight > chunkHeight) {
       chunks.push(rows);
       rows = [];
       height = 35;

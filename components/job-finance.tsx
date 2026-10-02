@@ -15,6 +15,7 @@ import {
   jobFinance,
   paidFor,
   purchaseCost,
+  purchaseDue,
   costKnown,
   sumMoney,
   subtractMoney,
@@ -319,8 +320,7 @@ function PurchaseBalance({
   editable: boolean;
 }) {
   const paid = paidFor(data.cash, "SUPPLIER_PURCHASE", p.id),
-    remaining =
-      p.source_type === "SUPPLIER" ? subtractMoney(purchaseCost(p), paid) : 0;
+    remaining = purchaseDue(p, data.cash);
   return (
     <div className="mt-3">
       <p className="text-sm text-[var(--muted)]">

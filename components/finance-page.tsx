@@ -29,6 +29,8 @@ import {
 } from "@/app/actions/ledger";
 import { voidPaymentAction } from "@/app/actions/finance";
 import { ReportActions } from "@/components/report-actions";
+import { SupplierCreditActions } from "@/components/purchase-lifecycle-forms";
+import { financeReport } from "@/lib/reports/finance-report";
 import {
   WorkerAdvanceButton,
   AdvanceAllocationButton,
@@ -52,15 +54,35 @@ export function FinancePage({
         : "operations";
   const settlementJob =
     typeof params.settlementJob === "string" ? params.settlementJob : "";
-  const listView = ["operations", "reports", "workers"].includes(view);
+  const reconciliation =
+    view === "workers" && (f.reportType === "supplier" ? f.supplier : f.worker)
+      ? financeReport(
+          data,
+          journalFilters({
+            reportType: f.reportType === "supplier" ? "supplier" : "worker",
+            supplier: f.reportType === "supplier" ? f.supplier : "",
+            worker: f.reportType === "supplier" ? "" : f.worker,
+            job: f.job,
+            from: f.from,
+            to: f.to,
+          }),
+        )
+      : null;
+  const listView = ["operations", "reports"].includes(view);
   const resetQuery = new URLSearchParams({
     view,
     ...(settlementJob ? { settlementJob } : {}),
   }).toString();
   const rows = filterLedger(data, f),
-    cash = movementTotals(rows.filter((t) => t.channel === "CASH")),
-    bank = movementTotals(rows.filter((t) => t.channel === "BANK")),
-    total = movementTotals(rows),
+    cash = movementTotals(
+      rows.filter((t) => t.channel === "CASH"),
+      view !== "reports",
+    ),
+    bank = movementTotals(
+      rows.filter((t) => t.channel === "BANK"),
+      view !== "reports",
+    ),
+    total = movementTotals(rows, view !== "reports"),
     selected =
       view === "settlement"
         ? data.jobs.find((j) => j.id === settlementJob)
@@ -91,10 +113,16 @@ export function FinancePage({
       {label}
       <select
         name={name}
-        defaultValue={f[name as keyof typeof f]}
+        defaultValue={
+          name === "reportType" && view === "workers"
+            ? f.reportType || "worker"
+            : f[name as keyof typeof f]
+        }
         className="field mt-1"
       >
-        <option value="">Hamısı</option>
+        {name !== "reportType" || view !== "workers" ? (
+          <option value="">Hamısı</option>
+        ) : null}
         {options.map((o) => (
           <option key={o.id} value={o.id}>
             {o.name}
@@ -121,7 +149,7 @@ export function FinancePage({
         {[
           ["operations", "Əməliyyatlar"],
           ["settlement", "Avtomobil hesablaşması"],
-          ["workers", "İşçilərlə hesablaşma"],
+          ["workers", "Hesablaşma"],
           ...(admin
             ? [
                 ["accounts", "Bank hesabları"],
@@ -190,6 +218,12 @@ export function FinancePage({
             className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
           >
             <input type="hidden" name="view" value={view} />
+            {view === "reports"
+              ? select("reportType", "Hesabat növü", [
+                  { id: "ledger", name: "Mədaxil / Məxaric jurnalı" },
+                  { id: "opening", name: "Başlanğıc qalıqlar" },
+                ])
+              : null}
             {settlementJob ? (
               <input type="hidden" name="settlementJob" value={settlementJob} />
             ) : null}
@@ -246,12 +280,12 @@ export function FinancePage({
               "İşçi",
               Array.from(
                 new Map(
-                  data.work
-                    .filter((w) => w.worker_id)
-                    .map((w) => [
-                      w.worker_id!,
-                      { id: w.worker_id!, name: w.worker },
-                    ]),
+                  (
+                    data.workers ??
+                    data.work
+                      .filter((w) => w.worker_id)
+                      .map((w) => ({ id: w.worker_id!, name: w.worker }))
+                  ).map((w) => [w.id, { id: w.id, name: w.name }]),
                 ).values(),
               ),
             )}
@@ -297,7 +331,16 @@ export function FinancePage({
           />
         </>
       ) : null}
-      {view === "reports" ? (
+      {view === "reports" &&
+      (f.account || f.channel === "CASH") &&
+      !f.worker &&
+      !f.supplier &&
+      !f.job &&
+      !f.category &&
+      !f.direction &&
+      !f.party &&
+      !f.actor &&
+      f.reportType !== "opening" ? (
         <section className="my-6">
           <h2 className="text-lg font-semibold">
             {start === end
@@ -487,107 +530,239 @@ export function FinancePage({
       ) : null}
       {view === "workers" ? (
         <section className="my-6">
-          <h2 className="mb-3 text-lg font-semibold">İşçilərlə hesablaşma</h2>
-          <div className="mb-4">
-            <WorkerAdvanceButton data={data} />
-          </div>
-          <h3 className="mb-2 font-semibold">Ümumi avanslar</h3>
-          <div className="mb-6 divide-y divide-[var(--border)]">
-            {(data.advances ?? [])
-              .filter(
-                (a) => !a.voided_at && (!f.worker || a.worker_id === f.worker),
-              )
-              .map((a) => (
-                <div
-                  key={a.id}
-                  className="flex flex-wrap items-center justify-between gap-3 py-3"
-                >
-                  <div>
-                    <p>{a.worker}</p>
-                    <p className="text-sm text-[var(--muted)]">
-                      Verilib: {formatMoney(a.amount)} · Ümumi avans qalığı:{" "}
-                      {formatMoney(a.remaining)}
-                    </p>
-                  </div>
-                  {a.remaining > 0 && (
-                    <AdvanceAllocationButton data={data} advance={a} />
-                  )}
-                </div>
-              ))}
-          </div>
-          <div className="table-scroll">
-            <table className="data-table w-full min-w-[850px] text-sm">
-              <thead>
-                <tr>
-                  {[
-                    "Usta / iş",
-                    "Maya",
-                    "Qazanılmış",
-                    "Ödənilib",
-                    "İşə bağlı avans",
-                    "Qazanılmış qalıq",
-                    "Qalan maya",
-                  ].map((h) => (
-                    <th key={h}>{h}</th>
+          <h2 className="mb-3 text-lg font-semibold">Hesablaşma</h2>
+          <form className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <input type="hidden" name="view" value="workers" />
+            {select("reportType", "Hesablaşma növü", [
+              { id: "worker", name: "İşçi / Usta" },
+              { id: "supplier", name: "Təchizatçı" },
+            ])}
+            {select("worker", "İşçi", data.workers ?? [])}
+            {select(
+              "supplier",
+              "Təchizatçı",
+              Array.from(
+                new Map(
+                  data.purchases
+                    .filter((p) => p.supplier_id)
+                    .map((p) => [
+                      p.supplier_id!,
+                      { id: p.supplier_id!, name: p.supplier },
+                    ]),
+                ).values(),
+              ),
+            )}
+            {select(
+              "job",
+              "Avtomobil",
+              data.jobs.map((j) => ({ id: j.id, name: j.plate })),
+            )}
+            {[
+              ["from", "Başlanğıc tarix"],
+              ["to", "Son tarix"],
+            ].map(([name, label]) => (
+              <label key={name} className="text-sm">
+                {label}
+                <input
+                  className="field mt-1"
+                  type="date"
+                  name={name}
+                  defaultValue={f[name as "from" | "to"]}
+                />
+              </label>
+            ))}
+            <div className="flex items-end gap-2">
+              <button className="btn btn-primary">Tətbiq et</button>
+              <Link className="btn btn-secondary" href="/kassa?view=workers">
+                Sıfırla
+              </Link>
+            </div>
+          </form>
+          {f.reportType === "supplier" ? (
+            f.supplier ? (
+              <div className="mb-5">
+                <ReportActions
+                  report="finance"
+                  query={new URLSearchParams({
+                    reportType: "supplier",
+                    supplier: f.supplier,
+                    job: f.job,
+                    from: f.from,
+                    to: f.to,
+                  }).toString()}
+                />
+              </div>
+            ) : null
+          ) : f.worker ? (
+            <div className="mb-5">
+              <ReportActions
+                report="finance"
+                query={new URLSearchParams({
+                  reportType: "worker",
+                  worker: f.worker,
+                  job: f.job,
+                  from: f.from,
+                  to: f.to,
+                }).toString()}
+              />
+            </div>
+          ) : null}
+          {f.reportType === "supplier" ? (
+            <div className="divide-y divide-[var(--border)]">
+              {reconciliation ? (
+                <dl className="metric-grid my-5 grid grid-cols-2 gap-4 text-sm xl:grid-cols-4">
+                  {reconciliation.summary.map((s) => (
+                    <div key={s.label}>
+                      <dt className="text-[var(--muted)]">{s.label}</dt>
+                      <dd className="mt-1 font-semibold">{s.value}</dd>
+                    </div>
                   ))}
-                </tr>
-              </thead>
-              <tbody>
-                {data.work
+                </dl>
+              ) : null}
+              {(data.purchaseReturns ?? [])
+                .filter(
+                  (r) =>
+                    (!f.supplier || r.supplier_id === f.supplier) &&
+                    (!f.job || r.service_job_id === f.job) &&
+                    Number(r.available) > 0,
+                )
+                .map((r) => (
+                  <div key={r.id} className="py-4">
+                    <p className="mb-3">
+                      {
+                        data.purchases.find((p) => p.id === r.purchase_id)
+                          ?.supplier
+                      }{" "}
+                      ·{" "}
+                      {
+                        data.purchases.find((p) => p.id === r.purchase_id)
+                          ?.title
+                      }{" "}
+                      · Kredit: {formatMoney(r.available)}
+                    </p>
+                    <SupplierCreditActions
+                      data={data}
+                      credit={r}
+                      admin={admin}
+                    />
+                  </div>
+                ))}
+            </div>
+          ) : (
+            <>
+              <div className="mb-4">
+                <WorkerAdvanceButton data={data} />
+              </div>
+              {reconciliation ? (
+                <dl className="metric-grid my-5 grid grid-cols-2 gap-4 text-sm xl:grid-cols-4">
+                  {reconciliation.summary.map((s) => (
+                    <div key={s.label}>
+                      <dt className="text-[var(--muted)]">{s.label}</dt>
+                      <dd className="mt-1 font-semibold">{s.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              ) : null}
+              <h3 className="mb-2 font-semibold">Ümumi avanslar</h3>
+              <div className="mb-6 divide-y divide-[var(--border)]">
+                {(data.advances ?? [])
                   .filter(
-                    (w) =>
-                      (!f.worker || w.worker_id === f.worker) &&
-                      (!f.job || w.service_job_id === f.job),
+                    (a) =>
+                      !a.voided_at && (!f.worker || a.worker_id === f.worker),
                   )
-                  .map((w) => {
-                    const paid = moneySum([
-                        w.applied_advance ?? 0,
-                        ...data.ledger
-                          .filter(
-                            (t) =>
-                              t.work_item_id === w.id &&
-                              t.allocation_type === "WORKER_WORK_ITEM" &&
-                              !t.voided_at,
-                          )
-                          .map((t) => t.amount),
-                      ]),
-                      earned =
-                        w.status === "DONE" && w.labor_cost_known
-                          ? Number(w.labor_cost)
-                          : 0;
-                    return (
-                      <tr key={w.id}>
-                        <td>
-                          <Link
-                            href={`/kassa?view=settlement&settlementJob=${w.service_job_id}`}
-                            className="text-[var(--accent)]"
-                          >
-                            {w.worker} · {w.title}
-                            {w.compensation_mode === "PERCENTAGE"
-                              ? " · Faizli"
-                              : ""}
-                          </Link>
-                        </td>
-                        <td>
-                          {w.labor_cost_known
-                            ? formatMoney(w.labor_cost)
-                            : "Maya dəyəri daxil edilməyib"}
-                        </td>
-                        {[
-                          earned,
-                          paid,
-                          Math.max(moneyDiff(paid, earned), 0),
-                          Math.max(moneyDiff(earned, paid), 0),
-                          moneyDiff(Number(w.labor_cost), paid),
-                        ].map((n, i) => (
-                          <td key={i}>{formatMoney(n)}</td>
-                        ))}
-                      </tr>
-                    );
-                  })}
-              </tbody>
-            </table>
-          </div>
+                  .map((a) => (
+                    <div
+                      key={a.id}
+                      className="flex flex-wrap items-center justify-between gap-3 py-3"
+                    >
+                      <div>
+                        <p>{a.worker}</p>
+                        <p className="text-sm text-[var(--muted)]">
+                          Verilib: {formatMoney(a.amount)} · Ümumi avans qalığı:{" "}
+                          {formatMoney(a.remaining)}
+                        </p>
+                      </div>
+                      {a.remaining > 0 && (
+                        <AdvanceAllocationButton data={data} advance={a} />
+                      )}
+                    </div>
+                  ))}
+              </div>
+              <div className="table-scroll">
+                <table className="data-table w-full min-w-[850px] text-sm">
+                  <thead>
+                    <tr>
+                      {[
+                        "Usta / iş",
+                        "Maya",
+                        "Qazanılmış",
+                        "Ödənilib",
+                        "İşə bağlı avans",
+                        "Qazanılmış qalıq",
+                        "Qalan maya",
+                      ].map((h) => (
+                        <th key={h}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.work
+                      .filter(
+                        (w) =>
+                          (!f.worker || w.worker_id === f.worker) &&
+                          (!f.job || w.service_job_id === f.job),
+                      )
+                      .map((w) => {
+                        const paid = moneySum([
+                            w.applied_advance ?? 0,
+                            ...data.ledger
+                              .filter(
+                                (t) =>
+                                  t.work_item_id === w.id &&
+                                  t.allocation_type === "WORKER_WORK_ITEM" &&
+                                  !t.voided_at,
+                              )
+                              .map((t) => t.amount),
+                          ]),
+                          earned =
+                            w.status === "DONE" && w.labor_cost_known
+                              ? Number(w.labor_cost)
+                              : 0;
+                        return (
+                          <tr key={w.id}>
+                            <td>
+                              <Link
+                                href={`/kassa?view=settlement&settlementJob=${w.service_job_id}`}
+                                className="text-[var(--accent)]"
+                              >
+                                {w.worker} · {w.title}
+                                {w.compensation_mode === "PERCENTAGE"
+                                  ? " · Faizli"
+                                  : ""}
+                              </Link>
+                            </td>
+                            <td>
+                              {w.labor_cost_known
+                                ? formatMoney(w.labor_cost)
+                                : "Maya dəyəri daxil edilməyib"}
+                            </td>
+                            {[
+                              earned,
+                              paid,
+                              Math.max(moneyDiff(paid, earned), 0),
+                              Math.max(moneyDiff(earned, paid), 0),
+                              moneyDiff(Number(w.labor_cost), paid),
+                            ].map((n, i) => (
+                              <td key={i}>{formatMoney(n)}</td>
+                            ))}
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
         </section>
       ) : null}
       {listView ? (

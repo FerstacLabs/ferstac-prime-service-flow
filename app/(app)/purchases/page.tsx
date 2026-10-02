@@ -6,7 +6,7 @@ import { ReportActions } from "@/components/report-actions";
 import { PurchaseEntry } from "@/components/purchase-entry";
 import { PurchaseList } from "@/components/purchase-list";
 import { WorkerCostForm, AdditionalWorkForm } from "@/components/work-costing";
-import { paidFor, purchaseCost } from "@/lib/workshop";
+import { paidFor, purchaseCost, purchaseLifecycleLabel } from "@/lib/workshop";
 import { formatQuantity } from "@/lib/decimal";
 import { formatMoney } from "@/lib/format";
 import {
@@ -18,6 +18,7 @@ import { parseFilters, filterQuery, type SearchParams } from "@/lib/filters";
 import { getWorkshop, selectPurchases } from "@/lib/supabase/workshop";
 import {
   supplierDisplayName,
+  partTitle,
   workerDisplayName,
   getMasterData,
 } from "@/lib/supabase/queries";
@@ -164,7 +165,7 @@ export default async function PurchasesPage({
           <>
             {requirements.map((part) => {
               const purchase = data.purchases.find(
-                (p) => p.required_part_id === part.id,
+                (p) => p.required_part_id === part.id && !p.lifecycle_closed,
               );
               return (
                 <div
@@ -172,14 +173,16 @@ export default async function PurchasesPage({
                   className="border-t border-[var(--border)] py-4"
                 >
                   <h3 className="mb-3 font-semibold">
-                    {part.part_catalog?.name}
+                    {purchase?.replacement_of
+                      ? partTitle(purchase)
+                      : part.part_catalog?.name}
                   </h3>
                   {purchase ? (
                     <div>
                       <p className="text-sm text-[var(--success)]">
                         {purchase.source_type === "CUSTOMER_PROVIDED"
                           ? "Müştəri təqdim edib"
-                          : "Alınıb"}
+                          : purchaseLifecycleLabel(purchase)}
                       </p>
                       <p className="mt-1 text-sm text-[var(--muted)]">
                         {formatQuantity(part.quantity ?? 1)}{" "}

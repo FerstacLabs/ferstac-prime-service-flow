@@ -16,6 +16,12 @@ import { resolveAuditContext } from "@/lib/supabase/audit-context";
 
 export const auditActions = [
   "WORKER_ADVANCE_CREATED",
+  "WORKER_BONUS_CREATED",
+  "PURCHASE_RETURNED",
+  "PURCHASE_EXCHANGED",
+  "SUPPLIER_REFUND_CREATED",
+  "SUPPLIER_CREDIT_CREATED",
+  "SUPPLIER_CREDIT_APPLIED",
   "WORKER_ADVANCE_ALLOCATED",
   "WORKER_COMPENSATION_POLICY_UPDATED",
   "WORK_COMPENSATION_UPDATED",
@@ -129,6 +135,12 @@ export type AuditLog = {
 };
 const auditDescriptions: Record<(typeof auditActions)[number], string> = {
   WORKER_ADVANCE_CREATED: "ustaya avans verdi",
+  WORKER_BONUS_CREATED: "işçiyə bonus verdi",
+  PURCHASE_RETURNED: "detalı təchizatçıya qaytardı",
+  PURCHASE_EXCHANGED: "detalı dəyişdirdi",
+  SUPPLIER_REFUND_CREATED: "təchizatçıdan vəsait geri aldı",
+  SUPPLIER_CREDIT_CREATED: "təchizatçı krediti yaratdı",
+  SUPPLIER_CREDIT_APPLIED: "təchizatçı kreditini alışa tətbiq etdi",
   WORKER_ADVANCE_ALLOCATED: "ümumi avansı usta borcuna tətbiq etdi",
   WORKER_COMPENSATION_POLICY_UPDATED: "ustanın faiz qaydasını yenilədi",
   WORK_COMPENSATION_UPDATED: "işin usta hesablamasını yenilədi",
@@ -214,11 +226,9 @@ export function auditDescription(log: AuditLog) {
     return `${log.actor_username_snapshot} istifadəçisi “${name}” ${log.action === "SERVICE_WORK_REMOVED" ? "işini" : "detalını"} ${log.plate ? `${log.plate} ` : ""}servis kartından sildi.`;
   }
   const assignment = log.changes.assigned_worker_id as
-    | { before?: unknown; after?: unknown }
-    | undefined;
+    { before?: unknown; after?: unknown } | undefined;
   const status = log.changes.status as
-    | { before?: unknown; after?: unknown }
-    | undefined;
+    { before?: unknown; after?: unknown } | undefined;
   if (
     log.action === "WORKER_ASSIGNED" &&
     assignment?.before == null &&

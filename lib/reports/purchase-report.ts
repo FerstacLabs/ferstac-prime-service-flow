@@ -1,13 +1,9 @@
 import type { WorkshopData } from "@/lib/supabase/workshop";
 import { supplierFinance } from "@/lib/supplier-finance";
-import {
-  partTitle,
-  supplierDisplayName,
-  workerDisplayName,
-} from "@/lib/supabase/queries";
+import { partTitle, supplierDisplayName } from "@/lib/supabase/queries";
 import type { WorkshopFilters } from "@/lib/filters";
 import { formatQuantity } from "@/lib/decimal";
-import { paidFor, purchaseCost, sumMoney, subtractMoney } from "@/lib/workshop";
+import { paidFor, purchaseDue, purchaseLifecycleLabel } from "@/lib/workshop";
 import {
   formatReportMoney,
   formatReportDate,
@@ -45,17 +41,20 @@ export function purchaseReport(
   ];
   const money = (n: number) => formatReportMoney(n).replace(/ AZN$/, "");
   const columns: ReportTableColumn[] = [
-    { key: "date", label: "Tarix", width: 8 },
-    ...(!job ? [{ key: "vehicle", label: "Avtomobil", width: 10 }] : []),
+    { key: "date", label: "Tarix", width: 10 },
+    ...(!job ? [{ key: "vehicle", label: "Avtomobil", width: 12 }] : []),
     { key: "part", label: "Detal", width: 17 },
-    { key: "quantity", label: "Miqdar / vahid", width: 8 },
+    { key: "quantity", label: "Miqdar", width: 6 },
+    { key: "unit", label: "Vahid", width: 6 },
     ...(!supplier ? [{ key: "supplier", label: "Təchizatçı", width: 11 }] : []),
-    { key: "buyer", label: "Alıcı", width: 11 },
+    { key: "status", label: "Alış statusu", width: 12 },
+    { key: "reference", label: "Sənəd", width: 12 },
     ...[
-      ["quote", "Müştəri qiyməti"],
-      ["cost", "Maya"],
-      ["margin", "Marja"],
+      ["cost", "İlkin alış"],
       ["paid", "Ödənilib"],
+      ["returned", "Qaytarılıb"],
+      ["credit", "Yaranmış kredit"],
+      ["applied", "Kredit tətbiqi"],
       ["due", "Qalıq"],
     ].map(([key, label]) => ({
       key,
@@ -78,20 +77,7 @@ export function purchaseReport(
     },
     {
       label: "Qalıq borc",
-      value: formatReportMoney(
-        f.supplier
-          ? remaining
-          : sumMoney(
-              items
-                .filter((p) => p.source_type === "SUPPLIER")
-                .map((p) =>
-                  subtractMoney(
-                    purchaseCost(p),
-                    paidFor(data.cash, "SUPPLIER_PURCHASE", p.id),
-                  ),
-                ),
-            ),
-      ),
+      value: formatReportMoney(remaining),
     },
   ];
   report.sections = [];
@@ -124,14 +110,12 @@ export function purchaseReport(
       rows: items.map((p) => {
         const part = data.parts.find((r) => r.id === p.required_part_id),
           j = data.jobs.find((j) => j.id === p.service_job_id),
-          cost = purchaseCost(p),
           paid = paidFor(data.cash, "SUPPLIER_PURCHASE", p.id);
         const metadata =
           supplier || job
             ? [
-                ["Qaimə", p.document_no],
                 ["OEM", p.part_code_oem],
-                ["Qeyd", p.notes],
+                ["Qeyd", p.replacement_of ? null : p.notes],
               ]
                 .filter(([, v]) => v)
                 .map(([label, v]) => `${label}: ${v}`)
@@ -145,21 +129,23 @@ export function purchaseReport(
             part:
               partTitle(p) +
               (part?.is_additional || !p.required_part_id ? " (əlavə)" : ""),
-            quantity: `${formatQuantity(part?.quantity ?? p.quantity)} ${part?.unit_catalog?.name ?? "Ədəd"}`,
+            quantity: formatQuantity(p.quantity),
+            unit: p.unit_name ?? part?.unit_catalog?.name ?? "Ədəd",
             supplier:
               p.source_type === "SUPPLIER"
                 ? supplierDisplayName(p.suppliers)
                 : reportPurchaseSourceLabels[p.source_type],
-            buyer: p.purchased_by_admin
-              ? "Administrator"
-              : workerDisplayName(p.workers),
-            quote: part ? money(part.quoted_price) : "-",
-            cost: money(cost),
-            margin: part ? money(subtractMoney(part.quoted_price, cost)) : "-",
-            paid: money(paid),
-            due: money(
-              p.source_type === "SUPPLIER" ? subtractMoney(cost, paid) : 0,
+            status: purchaseLifecycleLabel(p),
+            reference: (p.document_no || "-").replace(
+              /([^\s]{10})(?=\S)/g,
+              "$1\n",
             ),
+            cost: money(Number(p.total_price)),
+            returned: money(Number(p.returned ?? 0)),
+            credit: money(Number(p.credit_created ?? 0)),
+            applied: money(Number(p.credit_applied ?? 0)),
+            paid: money(paid),
+            due: money(purchaseDue(p, data.cash)),
           },
           ...(metadata
             ? { details: [{ label: "Əlavə", value: metadata }] }
@@ -168,5 +154,86 @@ export function purchaseReport(
       }),
     },
   });
+  const selected = new Set(items.map((p) => p.id));
+  const events = [
+    ...(data.purchaseReturns ?? [])
+      .filter((r) => selected.has(r.purchase_id))
+      .map((r) => ({
+        id: r.id,
+        date: r.occurred_at,
+        type: r.replacement_purchase_id ? "Dəyişdirmə" : "Qaytarma",
+        item: partTitle(data.purchases.find((p) => p.id === r.purchase_id)),
+        amount: r.amount,
+        quantity: formatQuantity(r.quantity),
+        reference: [r.reason, r.reference_number].filter(Boolean).join(" · "),
+      })),
+    ...(data.supplierCredits ?? [])
+      .filter(
+        (a) =>
+          selected.has(a.purchase_id) ||
+          (data.purchaseReturns ?? []).some(
+            (r) => r.id === a.return_id && selected.has(r.purchase_id),
+          ),
+      )
+      .map((a) => ({
+        id: a.id,
+        date: a.created_at,
+        type: "Kredit tətbiqi (pul deyil)",
+        item: partTitle(data.purchases.find((p) => p.id === a.purchase_id)),
+        amount: a.amount,
+        quantity: "-",
+        reference: "",
+      })),
+    ...data.cash
+      .filter(
+        (t) =>
+          t.counterparty_details?.payment_kind === "SUPPLIER_REFUND" &&
+          (data.purchaseReturns ?? []).some(
+            (r) =>
+              r.id === t.counterparty_details?.return_id &&
+              selected.has(r.purchase_id),
+          ),
+      )
+      .map((t) => ({
+        id: t.id,
+        date: t.occurred_at || t.transaction_date,
+        type: t.voided_at
+          ? "Geri ödəniş ləğv edilib"
+          : "Təchizatçıdan geri ödəniş",
+        item: partTitle(
+          data.purchases.find(
+            (p) => p.id === t.counterparty_details?.purchase_id,
+          ),
+        ),
+        amount: t.amount,
+        quantity: "-",
+        reference: t.reference_number || "",
+      })),
+  ].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+  if (events.length)
+    report.sections.push({
+      title: "Qaytarma / dəyişdirmə tarixçəsi",
+      table: {
+        columns: [
+          { key: "date", label: "Tarix", width: 12 },
+          { key: "type", label: "Əməliyyat", width: 23 },
+          { key: "item", label: "Detal", width: 18 },
+          { key: "quantity", label: "Miqdar", width: 5 },
+          { key: "amount", label: "Məbləğ (AZN)", width: 12, align: "right" },
+          { key: "reference", label: "Səbəb / sənəd", width: 30 },
+        ],
+        rows: events.map((e) => ({
+          id: e.id,
+          cells: {
+            date: formatReportDate(e.date),
+            type: e.type,
+            item: e.item,
+            quantity: e.quantity,
+            amount: money(e.amount),
+            reference: e.reference.replace(/([^\s]{20})(?=\S)/g, "$1\n"),
+          },
+        })),
+      },
+    });
   return report;
 }

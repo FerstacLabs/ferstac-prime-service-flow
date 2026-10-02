@@ -8,6 +8,7 @@ import {
   ledgerBalance,
   vehicleSettlement,
   moneySum,
+  accountRunningBalances,
   type FinanceData,
   type JournalFilters,
 } from "@/lib/finance";
@@ -18,6 +19,8 @@ import {
 import { requireAccess } from "@/lib/supabase/auth";
 import { getFinance } from "@/lib/supabase/finance";
 import type { SearchParams } from "@/lib/filters";
+import { workerReconciliation } from "@/lib/reports/worker-reconciliation";
+import { supplierReconciliation } from "@/lib/reports/supplier-reconciliation";
 export async function loadFinanceReport(params: SearchParams) {
   await requireAccess(["ADMIN", "CASHIER"]);
   return financeReport(await getFinance(), journalFilters(params));
@@ -26,6 +29,20 @@ export function financeReport(
   data: FinanceData,
   f: JournalFilters,
 ): PrimeReport | null {
+  if (f.reportType === "worker" && !f.worker) return null;
+  if (f.reportType === "supplier" && !f.supplier) return null;
+  if (
+    ["worker", "supplier"].includes(f.reportType) &&
+    (f.channel ||
+      f.account ||
+      f.category ||
+      f.direction ||
+      f.party ||
+      f.actor ||
+      f.transaction ||
+      (f.reportType === "worker" ? f.supplier : f.worker))
+  )
+    return null;
   const rows = filterLedger(data, f),
     fields = (items: Array<[string, string | null | undefined]>) =>
       items
@@ -52,15 +69,18 @@ export function financeReport(
       f.to,
     ],
     scope: "finance",
-    title: "Mədaxil / Məxaric hesabatı",
+    title:
+      f.reportType === "opening"
+        ? "Başlanğıc qalıqlar"
+        : "Mədaxil / Məxaric hesabatı",
     generatedAt: formatReportDateTime(),
     orientation: "landscape",
     summary: [],
     sections: [],
     filters: [
-      f.from || "Başlanğıcdan",
-      f.to || "Bu günədək",
-      f.channel ? channelName(f.channel) : "Bütün kanallar",
+      f.from ? `Başlanğıc: ${f.from}` : "",
+      f.to ? `Son: ${f.to}` : "",
+      f.channel ? channelName(f.channel) : "",
       data.accounts.find((a) => a.id === f.account)?.name,
       data.categories.find((c) => c.id === f.category)?.name,
       f.direction ? (f.direction === "IN" ? "Mədaxil" : "Məxaric") : "",
@@ -69,7 +89,10 @@ export function financeReport(
       f.supplier
         ? data.purchases.find((p) => p.supplier_id === f.supplier)?.supplier
         : "",
-      f.worker ? data.work.find((w) => w.worker_id === f.worker)?.worker : "",
+      f.worker
+        ? data.workers?.find((w) => w.id === f.worker)?.name ||
+          data.work.find((w) => w.worker_id === f.worker)?.worker
+        : "",
       f.actor
         ? data.ledger.find((t) => t.owner_user_id === f.actor)?.created_by_name
         : "",
@@ -143,6 +166,7 @@ export function financeReport(
           ["Tərəfin bankı", t.counterparty_details.bank],
           ["Şəxsiyyət sənədi", t.counterparty_details.identity],
           ["Sənəd / qəbz №", t.reference_number],
+          ["İlkin alış sənədi", t.counterparty_details.original_reference],
           ["Bank reference", t.bank_reference],
           ["Ödəniş tapşırığı №", t.payment_order_number],
           [
@@ -176,9 +200,15 @@ export function financeReport(
       report.sections.splice(1, 0, advanceAllocationSection(data, allocations));
     return report;
   }
-  const cash = movementTotals(rows.filter((t) => t.channel === "CASH")),
-    bank = movementTotals(rows.filter((t) => t.channel === "BANK")),
-    all = movementTotals(rows);
+  const cash = movementTotals(
+      rows.filter((t) => t.channel === "CASH"),
+      false,
+    ),
+    bank = movementTotals(
+      rows.filter((t) => t.channel === "BANK"),
+      false,
+    ),
+    all = movementTotals(rows, false);
   report.summary = [
     ["Nağd mədaxil", cash.income],
     ["Nağd məxaric", cash.expense],
@@ -191,7 +221,17 @@ export function financeReport(
     label: String(label),
     value: money(Number(value)),
   }));
-  if (f.channel || f.account) {
+  if (
+    (f.account || f.channel === "CASH") &&
+    !f.worker &&
+    !f.supplier &&
+    !f.job &&
+    !f.category &&
+    !f.direction &&
+    !f.party &&
+    !f.actor &&
+    f.reportType !== "opening"
+  ) {
     const relevant = data.ledger.filter(
         (t) =>
           (!f.channel || t.channel === f.channel) &&
@@ -219,7 +259,7 @@ export function financeReport(
       })),
     });
   }
-  if (f.job) {
+  if (f.job && f.reportType === "vehicle") {
     const n = vehicleSettlement(data, f.job);
     if (n.job)
       report.sections.push({
@@ -288,7 +328,7 @@ export function financeReport(
         },
       });
   }
-  if (f.worker || f.supplier) {
+  if (f.reportType === "vehicle" && (f.worker || f.supplier)) {
     const obligations = data.jobs
       .flatMap((j) => vehicleSettlement(data, j.id).obligations)
       .filter((o) =>
@@ -317,27 +357,57 @@ export function financeReport(
       })),
     });
   }
-  const columns = [
-    ["date", "Tarix", 9],
-    ["channel", "Kanal / hesab", 10],
-    ["direction", "İstiqamət", 8],
-    ["category", "Təyinat", 10],
-    ["party", "Tərəf", 12],
-    ["vehicle", "Avtomobil", 8],
-    ["purpose", "Əlavə izah", 15],
-    ["reference", "Reference", 10],
-    ["in", "Mədaxil", 9],
-    ["out", "Məxaric", 9],
-  ] as const;
+  const columns: ReadonlyArray<readonly [string, string, number]> =
+    f.reportType === "opening"
+      ? [
+          ["date", "Tarix / vaxt", 12],
+          ["channel", "Kanal / hesab", 14],
+          ["party", "Mənbə / kimdən", 14],
+          ["reference", "Reference", 13],
+          ["notes", "Qeyd", 18],
+          ["in", "Mədaxil", 10],
+          ["out", "Məxaric", 10],
+        ]
+      : ([
+          ["date", "Tarix", 9],
+          ["channel", "Kanal / hesab", 10],
+          ["direction", "İstiqamət", 8],
+          ["category", "Təyinat", 10],
+          ["party", "Tərəf", 12],
+          ["vehicle", "Avtomobil", 8],
+          ["purpose", "Əlavə izah", 15],
+          ["reference", "Reference", 10],
+          ["in", "Mədaxil", 9],
+          ["out", "Məxaric", 9],
+        ] as const);
+  const balances = accountRunningBalances(data, f);
   const section: ReportSection = {
     title: "Əməliyyatlar",
     table: {
-      columns: columns.map(([key, label, width]) => ({
-        key,
-        label,
-        width,
-        align: key === "in" || key === "out" ? "right" : "left",
-      })),
+      columns: [
+        ...columns.map(([key, label, width]) => ({
+          key,
+          label,
+          width,
+          align:
+            key === "in" || key === "out"
+              ? ("right" as const)
+              : ("left" as const),
+        })),
+        ...(f.reportType === "opening"
+          ? [{ key: "actor", label: "Daxil edən", width: 12 }]
+          : []),
+        ...(balances.size
+          ? [
+              {
+                key: "balance",
+                label: "Hesab qalığı",
+                width: 10,
+                align: "right" as const,
+              },
+            ]
+          : []),
+      ],
       rows: rows.map((t) => ({
         id: t.id,
         cells: {
@@ -357,15 +427,31 @@ export function financeReport(
           vehicle:
             data.jobs.find((j) => j.id === t.service_job_id)?.plate || "-",
           purpose: t.purpose || t.notes || "-",
-          reference: t.bank_reference || t.reference_number || "-",
+          reference: (t.bank_reference || t.reference_number || "-").replace(
+            /([^\s]{16})(?=\S)/g,
+            "$1\n",
+          ),
           in: t.direction === "IN" ? money(t.amount) : "-",
           out: t.direction === "OUT" ? money(t.amount) : "-",
+          actor: t.created_by_name || "-",
+          notes: t.notes || t.purpose || "-",
+          balance: balances.has(t.id) ? money(balances.get(t.id)!) : "-",
         },
       })),
     },
   };
+  if (section.table) {
+    const totalWidth = section.table.columns.reduce(
+      (sum, column) => sum + (column.width ?? 1),
+      0,
+    );
+    section.table.columns = section.table.columns.map((column) => ({
+      ...column,
+      width: ((column.width ?? 1) * 100) / totalWidth,
+    }));
+  }
   report.sections.push(section);
-  if (f.worker || f.job) {
+  if (f.reportType === "vehicle" && (f.worker || f.job)) {
     const allocations = (data.advanceAllocations ?? []).filter(
       (a) =>
         (!f.worker || a.worker_id === f.worker) &&
@@ -374,7 +460,11 @@ export function financeReport(
     if (allocations.length)
       report.sections.push(advanceAllocationSection(data, allocations));
   }
-  return report;
+  return f.reportType === "worker"
+    ? workerReconciliation(data, f, report)
+    : f.reportType === "supplier"
+      ? supplierReconciliation(data, f, report)
+      : report;
 }
 
 function advanceAllocationSection(

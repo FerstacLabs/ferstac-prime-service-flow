@@ -78,6 +78,7 @@ export type FinanceJob = {
   inactive?: boolean;
 };
 export type FinanceWork = {
+  completed_at?: string | null;
   applied_advance?: number;
   compensation_mode?: "FIXED" | "PERCENTAGE";
   id: string;
@@ -91,6 +92,19 @@ export type FinanceWork = {
   is_additional: boolean;
 };
 export type FinancePurchase = {
+  original_cost?: number;
+  returned?: number;
+  returned_quantity?: number;
+  credit_created?: number;
+  credit_applied?: number;
+  settled?: number;
+  paid?: number;
+  remaining?: number;
+  purchase_date?: string;
+  quantity?: number;
+  replacement_of?: string | null;
+  replacement_required_part_id?: string | null;
+  exchanged?: boolean;
   id: string;
   service_job_id: string;
   title: string;
@@ -131,6 +145,33 @@ export type LedgerEntry = {
   created_by_name: string | null;
 };
 export type FinanceData = {
+  purchaseReturns?: Array<{
+    id: string;
+    purchase_id: string;
+    service_job_id: string;
+    supplier_id: string;
+    quantity: number;
+    amount: number;
+    credit_amount: number;
+    paid_snapshot: number;
+    reason: string;
+    occurred_at: string;
+    created_at: string;
+    created_by: string;
+    reference_number: string | null;
+    replacement_purchase_id: string | null;
+    available: number;
+  }>;
+  supplierCredits?: Array<{
+    id: string;
+    return_id: string;
+    purchase_id: string;
+    service_job_id: string;
+    supplier_id: string;
+    amount: number;
+    created_at: string;
+    created_by: string;
+  }>;
   workers?: Array<{ id: string; name: string; active: boolean }>;
   advances?: Array<{
     id: string;
@@ -183,6 +224,7 @@ export function movementTotals(rows: LedgerEntry[], business = true) {
   return { income, expense, net: moneyDiff(income, expense) };
 }
 export type JournalFilters = {
+  reportType: string;
   from: string;
   to: string;
   channel: string;
@@ -213,6 +255,7 @@ export function journalFilters(
       "party",
       "actor",
       "transaction",
+      "reportType",
     ].map((k) => [k, typeof params[k] === "string" ? params[k] : ""]),
   ) as JournalFilters;
 }
@@ -220,6 +263,8 @@ export function filterLedger(data: FinanceData, f: JournalFilters) {
   return data.ledger
     .filter(
       (t) =>
+        (f.reportType !== "opening" ||
+          t.allocation_type.startsWith("OPENING_")) &&
         (!f.from || t.transaction_date >= f.from) &&
         (!f.to || t.transaction_date <= f.to) &&
         (!f.channel || t.channel === f.channel) &&
@@ -240,6 +285,29 @@ export function filterLedger(data: FinanceData, f: JournalFilters) {
       (a, b) =>
         b.occurred_at.localeCompare(a.occurred_at) || a.id.localeCompare(b.id),
     );
+}
+// Account balances use the entire account history, never just matching business rows.
+export function accountRunningBalances(data: FinanceData, f: JournalFilters) {
+  const balances = new Map<string, number>();
+  if (!f.account && f.channel !== "CASH") return balances;
+  const rows = data.ledger
+    .filter((t) =>
+      f.account ? t.financial_account_id === f.account : t.channel === "CASH",
+    )
+    .sort(
+      (a, b) =>
+        a.occurred_at.localeCompare(b.occurred_at) || a.id.localeCompare(b.id),
+    );
+  let balance = 0;
+  for (const row of rows) {
+    if (!row.voided_at)
+      balance = moneySum([
+        balance,
+        row.direction === "IN" ? row.amount : -Number(row.amount),
+      ]);
+    balances.set(row.id, balance);
+  }
+  return balances;
 }
 export function vehicleSettlement(data: FinanceData, jobId: string) {
   const job = data.jobs.find((j) => j.id === jobId),
@@ -269,7 +337,7 @@ export function vehicleSettlement(data: FinanceData, jobId: string) {
         party: p.supplier,
         title: p.title,
         cost: Number(p.cost),
-        paid: paid("SUPPLIER_PURCHASE", p.id),
+        paid: p.settled ?? paid("SUPPLIER_PURCHASE", p.id),
         known: true,
       })),
     ...work.map((w) => ({

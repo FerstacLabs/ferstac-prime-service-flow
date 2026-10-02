@@ -7,6 +7,7 @@ import { ReportDocument } from "@/lib/report-pdf";
 import { PrintReport } from "@/components/reports/print-report";
 import {
   filterLedger,
+  accountRunningBalances,
   journalFilters,
   ledgerBalance,
   movementTotals,
@@ -158,6 +159,221 @@ function fixture(): FinanceData {
   };
 }
 describe("finance reconciliation and reports", () => {
+  it("reconciles supplier exchange credit with the current payable projection", () => {
+    const d = fixture();
+    d.work = [];
+    d.purchases = [
+      {
+        ...d.purchases[0],
+        original_cost: 500,
+        cost: 0,
+        paid: 500,
+        settled: 0,
+        remaining: 0,
+        purchase_date: "2026-09-01",
+        returned: 500,
+        credit_created: 500,
+      },
+      {
+        ...d.purchases[0],
+        id: "replacement",
+        title: "Əvəz qanad",
+        original_cost: 650,
+        cost: 650,
+        settled: 500,
+        remaining: 150,
+        credit_applied: 500,
+        replacement_of: "purchase",
+        purchase_date: "2026-09-25",
+      },
+    ];
+    d.ledger = [
+      entry("supplier", {
+        allocation_type: "SUPPLIER_PURCHASE",
+        direction: "OUT",
+        purchase_id: "purchase",
+        service_job_id: "job",
+        supplier_identity_id: "supplier",
+        amount: 500,
+        transaction_date: "2026-09-10",
+        occurred_at: "2026-09-10T10:00:00Z",
+      }),
+    ];
+    d.purchaseReturns = [
+      {
+        id: "return",
+        purchase_id: "purchase",
+        service_job_id: "job",
+        supplier_id: "supplier",
+        quantity: 1,
+        amount: 500,
+        credit_amount: 500,
+        paid_snapshot: 500,
+        reason: "Dəyişmə",
+        occurred_at: "2026-09-25T10:00:00Z",
+        created_at: "2026-09-25T10:00:00Z",
+        created_by: "admin",
+        reference_number: "QA",
+        replacement_purchase_id: "replacement",
+        available: 0,
+      },
+    ];
+    d.supplierCredits = [
+      {
+        id: "credit",
+        return_id: "return",
+        purchase_id: "replacement",
+        service_job_id: "job",
+        supplier_id: "supplier",
+        amount: 500,
+        created_at: "2026-09-25T10:00:00Z",
+        created_by: "admin",
+      },
+    ];
+    const report = financeReport(
+      d,
+      journalFilters({
+        reportType: "supplier",
+        supplier: "supplier",
+        from: "2026-09-20",
+        to: "2026-09-30",
+      }),
+    )!;
+    expect(
+      report.summary.find((s) => s.label === "Son qalıq borc")?.value,
+    ).toContain("150,00");
+    expect(vehicleSettlement(d, "job").remaining).toBe(150);
+    expect(report.sections[0].table?.rows).toHaveLength(4);
+    expect(report.sections.at(-1)?.signatureDates).toBe(true);
+    expect(report.sections.at(-1)?.signatures).toHaveLength(2);
+    expect(
+      financeReport(
+        d,
+        journalFilters({
+          reportType: "supplier",
+          supplier: "supplier",
+          worker: "unrelated",
+        }),
+      ),
+    ).toBeNull();
+    d.purchases[1].service_job_id = "other-job";
+    d.supplierCredits[0].service_job_id = "other-job";
+    const sourceReport = financeReport(
+      d,
+      journalFilters({
+        reportType: "supplier",
+        supplier: "supplier",
+        job: "job",
+      }),
+    )!;
+    expect(
+      sourceReport.sections[0].table?.rows.some(
+        (r) => r.cells.kind === "Kredit başqa avtomobilə tətbiq edilib",
+      ),
+    ).toBe(true);
+    expect(
+      sourceReport.summary.find((s) => s.label === "Son qalıq borc")?.value,
+    ).toBe("0,00 AZN");
+  });
+  it("never injects unrelated full-history obligations into a filtered journal", () => {
+    const d = fixture();
+    d.advanceAllocations = [
+      {
+        id: "outside",
+        advance_id: "x",
+        work_item_id: "work",
+        service_job_id: "job",
+        worker_id: "worker",
+        amount: 800,
+        created_at: "2025-01-01",
+      },
+    ];
+    const report = financeReport(
+      d,
+      journalFilters({
+        worker: "worker",
+        job: "job",
+        from: "2026-09-25",
+        to: "2026-09-25",
+      }),
+    )!;
+    expect(report.sections.map((s) => s.title)).toEqual(["Əməliyyatlar"]);
+    expect(report.sections[0].table?.rows).toHaveLength(1);
+    expect(JSON.stringify(report)).not.toContain("Müştəri qalıq borcu");
+  });
+  it("shows opening events with their actor and only single-account running balances", () => {
+    const d = fixture();
+    d.ledger.push(
+      entry("opening", {
+        allocation_type: "OPENING_IN",
+        amount: 100,
+        transaction_date: "2026-09-01",
+        occurred_at: "2026-09-01T10:00:00Z",
+      }),
+    );
+    const report = financeReport(
+      d,
+      journalFilters({ reportType: "opening", channel: "CASH" }),
+    )!;
+    expect(report.title).toBe("Başlanğıc qalıqlar");
+    expect(report.sections[0].table?.rows.map((r) => r.id)).toEqual([
+      "opening",
+    ]);
+    expect(report.sections[0].table?.rows[0].cells.actor).toBe("Kassir");
+    expect(
+      report.summary.find((s) => s.label === "Ümumi mədaxil")?.value,
+    ).toContain("100,00");
+    expect(accountRunningBalances(d, journalFilters({})).size).toBe(0);
+    expect(
+      accountRunningBalances(d, journalFilters({ channel: "BANK" })).size,
+    ).toBe(0);
+    expect(
+      accountRunningBalances(
+        d,
+        journalFilters({ channel: "CASH", worker: "worker" }),
+      ).get("opening"),
+    ).toBe(100);
+  });
+  it("uses completion dates for worker reconciliation and keeps bonus outside debt", () => {
+    const d = fixture();
+    d.work[0].status = "DONE";
+    d.work[0].completed_at = "2026-09-25T10:00:00Z";
+    d.ledger.push(
+      entry("bonus", {
+        allocation_type: "GENERAL_OUT",
+        amount: 100,
+        direction: "OUT",
+        worker_identity_id: "worker",
+        counterparty_details: { payment_kind: "WORKER_BONUS" },
+      }),
+    );
+    const report = financeReport(
+      d,
+      journalFilters({
+        reportType: "worker",
+        worker: "worker",
+        from: "2026-09-01",
+        to: "2026-09-30",
+      }),
+    )!;
+    expect(
+      report.summary.find((s) => s.label === "Əlavə ödəniş / bonus")?.value,
+    ).toContain("100,00");
+    expect(
+      report.summary.find((s) => s.label === "Dövrün sonunda qalıq borc")
+        ?.value,
+    ).toContain("300,00");
+    expect(report.sections.at(-1)?.signatures).toHaveLength(2);
+    const prior = financeReport(
+      d,
+      journalFilters({
+        reportType: "worker",
+        worker: "worker",
+        to: "2026-09-24",
+      }),
+    )!;
+    expect(prior.sections[0].table?.rows).toHaveLength(0);
+  });
   it("applies a general advance to debt without duplicating reported cash outflow", () => {
     const d = fixture();
     const before = movementTotals(d.ledger).expense;

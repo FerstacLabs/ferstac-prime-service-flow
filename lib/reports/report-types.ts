@@ -45,6 +45,7 @@ export type ReportSection = {
   paragraphs?: string[];
   bullets?: string[];
   signatures?: string[];
+  signatureDates?: boolean;
   title: string;
   summary?: ReportSummaryItem[];
   fields?: ReportField[];

@@ -189,6 +189,7 @@ export function workerReport(
         t.counterparty_details?.payment_kind === "WORKER_ADVANCE"
           ? money(t.amount)
           : "-",
+        "-",
         [wrapReference(t.reference_number), t.notes, t.void_reason]
           .filter(Boolean)
           .join(" · ") || "-",
@@ -204,10 +205,21 @@ export function workerReport(
       id: t.id,
       values: [
         date(t.transaction_date),
-        "Ümumi avans",
-        t.voided_at ? "Ləğv edilib" : "Usta avansı",
+        t.counterparty_details?.payment_kind === "WORKER_BONUS"
+          ? "Əlavə ödəniş"
+          : "Ümumi avans",
+        t.voided_at
+          ? "Ləğv edilib"
+          : t.counterparty_details?.payment_kind === "WORKER_BONUS"
+            ? "İşçi bonusu"
+            : "Usta avansı",
         "-",
-        money(t.amount),
+        t.counterparty_details?.payment_kind === "WORKER_BONUS"
+          ? "-"
+          : money(t.amount),
+        t.counterparty_details?.payment_kind === "WORKER_BONUS"
+          ? money(t.amount)
+          : "-",
         [wrapReference(t.reference_number), t.notes, t.void_reason]
           .filter(Boolean)
           .join(" · ") || "-",
@@ -222,11 +234,12 @@ export function workerReport(
         "Təyinat",
         "Ödəniş",
         "Avans",
+        "Bonus",
         "Qeyd / Reference",
       ],
-      [12, 26, 15, 11, 11, 25],
+      [10, 20, 15, 10, 10, 10, 25],
       history,
-      [3, 4],
+      [3, 4, 5],
     ),
   });
   return report;

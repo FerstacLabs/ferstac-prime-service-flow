@@ -54,6 +54,12 @@ export async function recordLedgerAction(f: FormData) {
         p_key: uuidValue(f, "idempotency_key"),
         p_data: {
           ...details(f),
+          counterparty_details: {
+            ...details(f).counterparty_details,
+            ...(text(f, "worker_id")
+              ? { worker_id: uuidValue(f, "worker_id") }
+              : {}),
+          },
           amount: moneySchema.parse(f.get("amount")),
           allocation_type: text(f, "allocation_type"),
           service_job_id: optionalId(f, "service_job_id"),
