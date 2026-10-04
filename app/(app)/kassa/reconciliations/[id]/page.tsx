@@ -2,7 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { FileDown, Printer, FileCheck, GitBranch } from "lucide-react";
 import { getReconciliation } from "@/lib/supabase/reconciliation";
-import { reconciliationStatus } from "@/lib/reconciliation";
+import {
+  reconciliationStatus,
+  savedReconciliationReport,
+} from "@/lib/reconciliation";
 import { PageHeader } from "@/components/app-shell";
 import { ActionForm } from "@/components/action-form";
 import { SubmitButton } from "@/components/submit-button";
@@ -21,6 +24,7 @@ export default async function ReconciliationPage({
 }) {
   const d = await getReconciliation((await params).id, true);
   if (!d) notFound();
+  const report = savedReconciliationReport(d);
   return (
     <>
       <PageHeader
@@ -80,7 +84,7 @@ export default async function ReconciliationPage({
         </p>
       ) : null}
       <dl className="my-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {d.report_snapshot?.summary.map((s) => (
+        {report?.summary.map((s) => (
           <div key={s.label}>
             <dt className="text-sm text-[var(--muted)]">{s.label}</dt>
             <dd className="mt-1 font-semibold tabular-nums">{s.value}</dd>
@@ -109,9 +113,7 @@ export default async function ReconciliationPage({
           Təsdiqlənib: {d.confirmed_at ? formatDate(d.confirmed_at) : "-"}
         </p>
       ) : null}
-      {d.report_snapshot ? (
-        <ReconciliationTables report={d.report_snapshot} />
-      ) : null}
+      {report ? <ReconciliationTables report={report} /> : null}
     </>
   );
 }

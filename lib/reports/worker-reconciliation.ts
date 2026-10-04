@@ -2,7 +2,6 @@ import { bakuDate } from "@/lib/filters";
 import {
   moneySum,
   moneyDiff,
-  accountRunningBalances,
   type FinanceData,
   type JournalFilters,
   type LedgerEntry,
@@ -72,11 +71,6 @@ export function workerReconciliation(
       ),
     ),
   );
-  const balances = accountRunningBalances(data, {
-    ...f,
-    account: "",
-    channel: "",
-  });
   const generalAdvance = moneySum(
     (data.advances ?? [])
       .filter(
@@ -179,12 +173,6 @@ export function workerReconciliation(
           { key: "channel", label: "Kanal / hesab", width: 10 },
           { key: "in", label: "Mədaxil", width: 8, align: "right" },
           { key: "out", label: "Məxaric", width: 8, align: "right" },
-          {
-            key: "balance",
-            label: "Hesab üzrə qalıq",
-            width: 10,
-            align: "right",
-          },
           { key: "reference", label: "Reference", width: 11 },
           { key: "notes", label: "Əlavə izah", width: 12 },
         ],
@@ -207,7 +195,6 @@ export function workerReconciliation(
                 .join(" · ") || "-",
             in: t.direction === "IN" ? money(t.amount) : "-",
             out: t.direction === "OUT" ? money(t.amount) : "-",
-            balance: balances.has(t.id) ? money(balances.get(t.id)!) : "-",
             notes: t.notes || "-",
             channel:
               t.channel === "CASH"

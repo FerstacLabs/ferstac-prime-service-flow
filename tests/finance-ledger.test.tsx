@@ -6,6 +6,11 @@ import { financeReport } from "@/lib/reports/finance-report";
 import { ReportDocument } from "@/lib/report-pdf";
 import { PrintReport } from "@/components/reports/print-report";
 import {
+  savedReconciliationReport,
+  type ReconciliationDocument,
+} from "@/lib/reconciliation";
+import { cloneElement } from "react";
+import {
   filterLedger,
   accountRunningBalances,
   journalFilters,
@@ -632,6 +637,84 @@ describe("finance reconciliation and reports", () => {
       const pdf = await renderToBuffer(<ReportDocument report={report} />);
       expect(pdf.toString("latin1").match(/\/Type \/Page\b/g)).toHaveLength(1);
     },
+  );
+  it.each(["worker", "supplier"] as const)(
+    "keeps internal balances out of fresh and legacy %s PDF/Print",
+    async (kind) => {
+      const data = fixture();
+      data.ledger = data.ledger.map((row) => ({
+        ...row,
+        account_balance: 9876543.21,
+      }));
+      const report = financeReport(
+        data,
+        journalFilters({ reportType: kind, [kind]: kind }),
+      )!;
+      const secret = "9 876 543,21 AZN";
+      expect(JSON.stringify(report)).not.toContain("Hesab üzrə qalıq");
+      expect(JSON.stringify(report)).not.toContain(secret);
+      const legacy = structuredClone(report);
+      legacy.sections.push({
+        title: "Köhnə ödəniş tarixçəsi",
+        table: {
+          columns: [
+            { key: "out", label: "Məxaric" },
+            { key: "balance", label: "Hesab üzrə qalıq" },
+          ],
+          rows: [
+            {
+              id: "legacy",
+              cells: {
+                out: "25,00 AZN",
+                balance: secret,
+                account_balance: secret,
+              },
+            },
+          ],
+        },
+      });
+      const original = JSON.stringify(legacy);
+      for (const status of ["DRAFT", "CONFIRMED"] as const) {
+        const saved = savedReconciliationReport({
+          report_snapshot: legacy,
+          created_at: "2026-10-04T08:00:00Z",
+          status,
+          confirmed_at: null,
+          outdated: false,
+          superseded_by: null,
+        } as ReconciliationDocument)!;
+        expect(saved.summary).toEqual(report.summary);
+        if (kind === "supplier")
+          expect(
+            saved.sections[0].table?.columns.some(
+              (c) => c.label === "Qalıq borc",
+            ),
+          ).toBe(true);
+        for (const output of [report, saved]) {
+          const html = renderToStaticMarkup(<PrintReport report={output} />);
+          expect(html).not.toContain("Hesab üzrə qalıq");
+          expect(html).not.toContain(secret);
+          expect(JSON.stringify(output)).not.toContain(secret);
+          let layout = "";
+          await renderToBuffer(
+            cloneElement(<ReportDocument report={output} />, {
+              onRender: (result: { _INTERNAL__LAYOUT__DATA_: unknown }) => {
+                layout = JSON.stringify(result._INTERNAL__LAYOUT__DATA_);
+              },
+            }),
+          );
+          expect(layout).not.toContain("Hesab üzrə qalıq");
+          expect(layout).not.toContain(secret);
+        }
+      }
+      expect(JSON.stringify(legacy)).toBe(original);
+      const internal = financeReport(data, journalFilters({}))!;
+      expect(JSON.stringify(internal)).toContain("Hesab üzrə qalıq");
+      expect(renderToStaticMarkup(<PrintReport report={internal} />)).toContain(
+        secret,
+      );
+    },
+    20000,
   );
   it("renders a paginated dense Unicode ledger and filtered print", async () => {
     const d = fixture();

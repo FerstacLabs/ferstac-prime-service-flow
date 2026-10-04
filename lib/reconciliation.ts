@@ -98,6 +98,43 @@ export function savedReconciliationReport(
 ): PrimeReport | null {
   if (!d.report_snapshot) return null;
   const report = structuredClone(d.report_snapshot);
+  // Redact legacy internal account balances only at presentation time, never rewrite signed snapshots.
+  const internalBalance = (label: string) =>
+    /hesab üzrə qalıq|account[_ ]?balance|cash balance|bank balance/i.test(
+      label,
+    );
+  report.summary = report.summary.filter(
+    (item) => !internalBalance(item.label),
+  );
+  for (const section of report.sections) {
+    section.summary = section.summary?.filter(
+      (item) => !internalBalance(item.label),
+    );
+    section.fields = section.fields?.filter(
+      (item) => !internalBalance(item.label),
+    );
+    if (!section.table) continue;
+    const table = section.table;
+    const paymentTable = table.columns.some(
+      (c) => c.key === "in" || c.key === "out",
+    );
+    const privateKey = (key: string) =>
+      internalBalance(key) || (paymentTable && key === "balance");
+    const removed = new Set(
+      table.columns
+        .filter((c) => internalBalance(c.label) || privateKey(c.key))
+        .map((c) => c.key),
+    );
+    table.columns = table.columns.filter((c) => !removed.has(c.key));
+    for (const row of table.rows) {
+      row.cells = Object.fromEntries(
+        Object.entries(row.cells).filter(
+          ([key]) => !removed.has(key) && !privateKey(key),
+        ),
+      );
+      row.details = row.details?.filter((item) => !internalBalance(item.label));
+    }
+  }
   report.generatedAt = formatReportDateTime(d.created_at);
   // Lifecycle metadata may evolve; all financial values and rows remain the stored snapshot.
   const metadata = report.sections.find((s) => s.title === "Sənəd məlumatları");
