@@ -15,6 +15,11 @@ import {
 import { resolveAuditContext } from "@/lib/supabase/audit-context";
 
 export const auditActions = [
+  "RECONCILIATION_CREATED",
+  "RECONCILIATION_SIGNED_FILE_UPLOADED",
+  "RECONCILIATION_CONFIRMED",
+  "RECONCILIATION_SUPERSEDED",
+  "RECONCILIATION_PERIOD_CHANGED_AFTER_CONFIRMATION",
   "WORKER_ADVANCE_CREATED",
   "WORKER_BONUS_CREATED",
   "PURCHASE_RETURNED",
@@ -134,6 +139,12 @@ export type AuditLog = {
   created_at: string;
 };
 const auditDescriptions: Record<(typeof auditActions)[number], string> = {
+  RECONCILIATION_CREATED: "hesablaşma sənədi yaratdı",
+  RECONCILIATION_SIGNED_FILE_UPLOADED: "imzalı hesablaşma sənədini yüklədi",
+  RECONCILIATION_CONFIRMED: "hesablaşmanı təsdiqlədi",
+  RECONCILIATION_SUPERSEDED: "hesablaşmanı yeni versiya ilə əvəz etdi",
+  RECONCILIATION_PERIOD_CHANGED_AFTER_CONFIRMATION:
+    "təsdiqlənmiş dövrün məlumatlarını dəyişdi",
   WORKER_ADVANCE_CREATED: "ustaya avans verdi",
   WORKER_BONUS_CREATED: "işçiyə bonus verdi",
   PURCHASE_RETURNED: "detalı təchizatçıya qaytardı",

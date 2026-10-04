@@ -158,6 +158,141 @@ function fixture(): FinanceData {
     ],
   };
 }
+
+describe("account-partitioned journal balances", () => {
+  it("keeps 1300 on an expense-only filtered row after opening 1000 and income 500", () => {
+    const d = fixture();
+    d.ledger = [
+      entry("opening", {
+        allocation_type: "OPENING_IN",
+        amount: 1000,
+        occurred_at: "2026-09-01T00:00:00Z",
+      }),
+      entry("income", { amount: 500, occurred_at: "2026-09-02T00:00:00Z" }),
+      entry("expense", {
+        amount: 200,
+        direction: "OUT",
+        occurred_at: "2026-09-03T00:00:00Z",
+      }),
+    ];
+    const f = journalFilters({ direction: "OUT" });
+    expect(filterLedger(d, f).map((t) => t.id)).toEqual(["expense"]);
+    expect([...accountRunningBalances(d, f).values()]).toEqual([
+      1000, 1500, 1300,
+    ]);
+    const report = financeReport(d, f)!;
+    expect(report.sections[0].table?.rows[0].cells.balance).toBe(
+      "1 300,00 AZN",
+    );
+  });
+  it("partitions bank accounts, cash, transfers and reversals without a global balance", () => {
+    const d = fixture();
+    d.ledger = [
+      entry("cash", { amount: 1000, occurred_at: "2026-09-01T00:00:00Z" }),
+      entry("bank1", {
+        channel: "BANK",
+        financial_account_id: "b1",
+        amount: 500,
+        occurred_at: "2026-09-01T01:00:00Z",
+      }),
+      entry("bank2", {
+        channel: "BANK",
+        financial_account_id: "b2",
+        amount: 700,
+        occurred_at: "2026-09-01T02:00:00Z",
+      }),
+      entry("transfer-out", {
+        allocation_type: "TRANSFER_OUT",
+        direction: "OUT",
+        amount: 100,
+        occurred_at: "2026-09-01T03:00:00Z",
+      }),
+      entry("transfer-in", {
+        allocation_type: "TRANSFER_IN",
+        channel: "BANK",
+        financial_account_id: "b2",
+        amount: 100,
+        occurred_at: "2026-09-01T03:00:00Z",
+      }),
+      entry("void", {
+        direction: "OUT",
+        amount: 100,
+        voided_at: "2026-09-02",
+        occurred_at: "2026-09-01T04:00:00Z",
+      }),
+    ];
+    const b = accountRunningBalances(d, journalFilters({}));
+    expect(b.get("cash")).toBe(1000);
+    expect(b.get("bank1")).toBe(500);
+    expect(b.get("bank2")).toBe(700);
+    expect(b.get("transfer-out")).toBe(900);
+    expect(b.get("transfer-in")).toBe(800);
+    expect(b.get("void")).toBe(900);
+    expect(
+      accountRunningBalances(d, journalFilters({ worker: "hidden" })),
+    ).toEqual(b);
+  });
+  it("uses frozen full-account balances when rendering a party-only archive", () => {
+    const d = fixture();
+    d.ledger = [
+      entry("party", { direction: "OUT", amount: 200, account_balance: 1300 }),
+    ];
+    expect(accountRunningBalances(d, journalFilters({})).get("party")).toBe(
+      1300,
+    );
+  });
+  it("calculates general advances at period end rather than using today's remaining value", () => {
+    const d = fixture();
+    d.advances = [
+      {
+        id: "advance",
+        worker_id: "worker",
+        worker: "Rauf",
+        amount: 300,
+        remaining: 0,
+        occurred_at: "2026-09-02",
+        voided_at: null,
+        channel: "CASH",
+        reference_number: null,
+      },
+    ];
+    d.advanceAllocations = [
+      {
+        id: "applied",
+        advance_id: "advance",
+        worker_id: "worker",
+        work_item_id: "work",
+        service_job_id: "job",
+        amount: 100,
+        created_at: "2026-09-05",
+      },
+      {
+        id: "future",
+        advance_id: "advance",
+        worker_id: "worker",
+        work_item_id: "work",
+        service_job_id: "job",
+        amount: 200,
+        created_at: "2026-10-05",
+      },
+    ];
+    const report = financeReport(
+      d,
+      journalFilters({
+        reportType: "worker",
+        worker: "worker",
+        from: "2026-09-01",
+        to: "2026-09-30",
+      }),
+    )!;
+    expect(
+      report.summary.find(
+        (s) => s.label === "Dövrün sonunda ümumi avans qalığı",
+      )?.value,
+    ).toContain("200,00");
+    expect(report.sections.at(-1)?.signaturePositions).toBe(true);
+  });
+});
 describe("finance reconciliation and reports", () => {
   it("reconciles supplier exchange credit with the current payable projection", () => {
     const d = fixture();
@@ -301,7 +436,7 @@ describe("finance reconciliation and reports", () => {
     expect(report.sections[0].table?.rows).toHaveLength(1);
     expect(JSON.stringify(report)).not.toContain("Müştəri qalıq borcu");
   });
-  it("shows opening events with their actor and only single-account running balances", () => {
+  it("shows opening events with their actor and account-specific running balances", () => {
     const d = fixture();
     d.ledger.push(
       entry("opening", {
@@ -323,10 +458,14 @@ describe("finance reconciliation and reports", () => {
     expect(
       report.summary.find((s) => s.label === "Ümumi mədaxil")?.value,
     ).toContain("100,00");
-    expect(accountRunningBalances(d, journalFilters({})).size).toBe(0);
+    expect(accountRunningBalances(d, journalFilters({})).get("opening")).toBe(
+      100,
+    );
     expect(
-      accountRunningBalances(d, journalFilters({ channel: "BANK" })).size,
-    ).toBe(0);
+      accountRunningBalances(d, journalFilters({ channel: "BANK" })).get(
+        "bank-in",
+      ),
+    ).toBe(1000.25);
     expect(
       accountRunningBalances(
         d,

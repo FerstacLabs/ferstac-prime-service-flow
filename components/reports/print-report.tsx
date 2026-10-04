@@ -138,7 +138,7 @@ function Section({ section }: { section: ReportSection }) {
       ) : null}
       {section.signatures ? (
         <div className="print-signatures">
-          {section.signatures.map((label) => (
+          {section.signatures.map((label, index) => (
             <div
               key={label}
               className={`print-signature ${label === "Tarix" ? "print-signature-date" : ""}`}
@@ -149,6 +149,9 @@ function Section({ section }: { section: ReportSection }) {
               ) : (
                 <>
                   <p>Ad/Soyad: ____________________</p>
+                  {section.signaturePositions && index === 0 ? (
+                    <p>Vəzifə: ____________________</p>
+                  ) : null}
                   <p>İmza: ____________________</p>
                   {section.signatureDates ? (
                     <p>Tarix: ____________________</p>

@@ -184,7 +184,20 @@ export function supplierReconciliation(
         ]),
       ),
   );
-  report.title = "Təchizatçı Hesablaşma";
+  const outstanding = new Map<string, number>();
+  const rowBalances = new Map<string, number>();
+  for (const event of events) {
+    if (event.purchase)
+      outstanding.set(
+        event.purchase,
+        moneySum([outstanding.get(event.purchase) ?? 0, event.debt]),
+      );
+    rowBalances.set(
+      event.id,
+      moneySum([...outstanding.values()].map((n) => Math.max(0, n))),
+    );
+  }
+  report.title = "TƏCHİZATÇI İLƏ HESABLAŞMA AKTI";
   report.documentContext = [
     name,
     f.from,
@@ -234,6 +247,14 @@ export function supplierReconciliation(
           .map((a) => a.amount),
       ),
     ],
+    [
+      "Yaranmış kredit",
+      moneySum(
+        returns
+          .filter((r) => within(bakuDate(r.occurred_at)))
+          .map((r) => r.credit_amount),
+      ),
+    ],
     ["Son qalıq borc", balance(false)],
     ["İstifadə edilməmiş kredit", available],
   ].map(([label, n]) => ({ label: String(label), value: money(Number(n)) }));
@@ -243,11 +264,16 @@ export function supplierReconciliation(
       table: {
         columns: [
           { key: "date", label: "Tarix", width: 10 },
-          { key: "vehicle", label: "Avtomobil", width: 12 },
-          { key: "kind", label: "Əməliyyat", width: 20 },
-          { key: "item", label: "Detal", width: 20 },
-          { key: "amount", label: "Məbləğ (AZN)", width: 13, align: "right" },
-          { key: "reference", label: "Reference / səbəb", width: 25 },
+          { key: "vehicle", label: "Avtomobil", width: 9 },
+          { key: "kind", label: "Əməliyyat", width: 14 },
+          { key: "item", label: "Detal", width: 14 },
+          { key: "reference", label: "Reference / səbəb", width: 14 },
+          { key: "increase", label: "Borc artımı", width: 8, align: "right" },
+          { key: "decrease", label: "Borc azalması", width: 8, align: "right" },
+          { key: "paid", label: "Ödəniş", width: 8, align: "right" },
+          { key: "refund", label: "Geri ödəniş", width: 8, align: "right" },
+          { key: "credit", label: "Kredit", width: 8, align: "right" },
+          { key: "balance", label: "Qalıq borc", width: 9, align: "right" },
         ],
         rows: selected.map((e) => ({
           id: e.id,
@@ -256,7 +282,17 @@ export function supplierReconciliation(
             vehicle: data.jobs.find((j) => j.id === e.job)?.plate || "-",
             kind: e.kind,
             item: data.purchases.find((p) => p.id === e.purchase)?.title || "-",
-            amount: money(e.amount),
+            increase: e.debt > 0 ? money(e.debt) : "-",
+            decrease: e.debt < 0 ? money(-e.debt) : "-",
+            paid: e.kind === "Ödəniş" ? money(e.amount) : "-",
+            refund: e.kind === "Geri ödəniş" ? money(e.amount) : "-",
+            credit:
+              e.kind === "Təchizatçı krediti"
+                ? money(e.amount)
+                : e.kind.startsWith("Kredit")
+                  ? money(-e.amount)
+                  : "-",
+            balance: money(rowBalances.get(e.id) ?? 0),
             reference: e.reference.replace(/([^\s]{20})(?=\S)/g, "$1\n"),
           },
         })),
@@ -266,7 +302,10 @@ export function supplierReconciliation(
       title: "Təsdiq",
       keepTogether: true,
       signatureDates: true,
-      paragraphs: ["Daxili hesablaşma sənədi. Rəsmi normativ forma deyil."],
+      signaturePositions: true,
+      paragraphs: [
+        "Tərəflər yuxarıda göstərilən dövr üzrə əməliyyatları, ödənişləri və yekun hesablaşma qalığını daxili hesablaşma məqsədi ilə təsdiq edir.",
+      ],
       signatures: ["PRIME / məsul şəxs", `${name} / nümayəndə`],
     },
   ];

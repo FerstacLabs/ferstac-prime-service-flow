@@ -114,6 +114,7 @@ export type FinancePurchase = {
   supplier: string;
 };
 export type LedgerEntry = {
+  account_balance?: number;
   id: string;
   owner_user_id: string;
   service_job_id: string | null;
@@ -289,22 +290,28 @@ export function filterLedger(data: FinanceData, f: JournalFilters) {
 // Account balances use the entire account history, never just matching business rows.
 export function accountRunningBalances(data: FinanceData, f: JournalFilters) {
   const balances = new Map<string, number>();
-  if (!f.account && f.channel !== "CASH") return balances;
+  const accounts = new Map<string, number>();
   const rows = data.ledger
     .filter((t) =>
-      f.account ? t.financial_account_id === f.account : t.channel === "CASH",
+      f.account
+        ? t.financial_account_id === f.account
+        : !f.channel || t.channel === f.channel,
     )
     .sort(
       (a, b) =>
         a.occurred_at.localeCompare(b.occurred_at) || a.id.localeCompare(b.id),
     );
-  let balance = 0;
   for (const row of rows) {
-    if (!row.voided_at)
+    // A bank entry without an account cannot have a meaningful balance.
+    if (row.channel === "BANK" && !row.financial_account_id) continue;
+    const key = `${row.channel}:${row.financial_account_id ?? "cash"}:${row.currency}`;
+    let balance = row.account_balance ?? accounts.get(key) ?? 0;
+    if (row.account_balance === undefined && !row.voided_at)
       balance = moneySum([
         balance,
         row.direction === "IN" ? row.amount : -Number(row.amount),
       ]);
+    accounts.set(key, balance);
     balances.set(row.id, balance);
   }
   return balances;

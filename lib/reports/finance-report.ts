@@ -401,7 +401,7 @@ export function financeReport(
           ? [
               {
                 key: "balance",
-                label: "Hesab qalığı",
+                label: "Hesab üzrə qalıq",
                 width: 10,
                 align: "right" as const,
               },

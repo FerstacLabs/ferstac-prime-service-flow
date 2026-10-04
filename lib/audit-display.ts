@@ -11,6 +11,11 @@ import {
 } from "@/lib/reports/report-format";
 
 export const auditEventLabels: Record<string, string> = {
+  RECONCILIATION_CREATED: "Hesablaşma sənədi yaradıldı",
+  RECONCILIATION_SIGNED_FILE_UPLOADED: "İmzalı hesablaşma sənədi yükləndi",
+  RECONCILIATION_CONFIRMED: "Hesablaşma təsdiqləndi",
+  RECONCILIATION_SUPERSEDED: "Hesablaşma yeni versiya ilə əvəz edildi",
+  RECONCILIATION_PERIOD_CHANGED_AFTER_CONFIRMATION: "Təsdiqlənmiş dövr dəyişib",
   WORKER_ADVANCE_CREATED: "Ustaya avans verildi",
   WORKER_BONUS_CREATED: "İşçiyə bonus verildi",
   PURCHASE_RETURNED: "Detal qaytarıldı",
@@ -112,6 +117,7 @@ export const auditEntityLabels: Record<string, string> = {
   work_catalog: "İş kataloqu",
   part_catalog: "Detal kataloqu",
   cash_transactions: "Maliyyə əməliyyatı",
+  reconciliation_documents: "Hesablaşma sənədi",
   cash_reversals: "Əks əməliyyat",
   user_profiles: "İstifadəçi hesabı",
 };
@@ -130,6 +136,11 @@ export const auditRoleLabel = (code: string) =>
 
 // Explicit allowlist: credentials, tokens and unknown metadata never reach display.
 const fields: Record<string, string> = {
+  document_number: "Sənəd №",
+  period_from: "Dövrün başlanğıcı",
+  period_to: "Dövrün sonu",
+  version: "Versiya",
+  totals: "Hesablaşma yekunları",
   applied_advance: "Tətbiq edilmiş ümumi avans",
   eligible: "Faizlə işləyə bilər",
   worker_percentage: "Usta payı (%)",
@@ -305,6 +316,18 @@ export function auditValue(
       ? "Nağd kassa"
       : references[`${field}:${value}`] || "Bank hesabı (adı saxlanmayıb)";
   if (value === null || value === undefined || value === "") return "Yoxdur";
+  if (field === "totals" && Array.isArray(value))
+    return value
+      .filter(
+        (item) =>
+          item &&
+          typeof item.label === "string" &&
+          typeof item.value === "string",
+      )
+      .map((item) => `${item.label}: ${item.value}`)
+      .join("; ");
+  if (["period_from", "period_to"].includes(field))
+    return formatReportDate(String(value));
   if (field.endsWith("_id"))
     return typeof value === "string"
       ? references[`${field}:${value}`] || "Əlaqəli qeyd (adı saxlanmayıb)"

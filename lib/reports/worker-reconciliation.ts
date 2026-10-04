@@ -2,6 +2,7 @@ import { bakuDate } from "@/lib/filters";
 import {
   moneySum,
   moneyDiff,
+  accountRunningBalances,
   type FinanceData,
   type JournalFilters,
   type LedgerEntry,
@@ -46,17 +47,59 @@ export function workerReconciliation(
   const direct = payments.filter(
     (t) => t.allocation_type === "WORKER_WORK_ITEM",
   );
-  const opening = moneySum([
-    ...earnings
-      .filter((w) => before(bakuDate(w.completed_at!)))
-      .map((w) => w.labor_cost),
-    ...direct
-      .filter((t) => before(t.transaction_date))
-      .map((t) => -Number(t.amount)),
-    ...allocations
-      .filter((a) => before(bakuDate(a.created_at)))
-      .map((a) => -Number(a.amount)),
-  ]);
+  const opening = moneySum(
+    work.map((w) =>
+      Math.max(
+        0,
+        moneySum([
+          ...earnings
+            .filter(
+              (item) =>
+                item.id === w.id && before(bakuDate(item.completed_at!)),
+            )
+            .map((w) => w.labor_cost),
+          ...direct
+            .filter(
+              (t) => t.work_item_id === w.id && before(t.transaction_date),
+            )
+            .map((t) => -Number(t.amount)),
+          ...allocations
+            .filter(
+              (a) => a.work_item_id === w.id && before(bakuDate(a.created_at)),
+            )
+            .map((a) => -Number(a.amount)),
+        ]),
+      ),
+    ),
+  );
+  const balances = accountRunningBalances(data, {
+    ...f,
+    account: "",
+    channel: "",
+  });
+  const generalAdvance = moneySum(
+    (data.advances ?? [])
+      .filter(
+        (a) =>
+          a.worker_id === f.worker &&
+          !a.voided_at &&
+          (!f.to || bakuDate(a.occurred_at) <= f.to),
+      )
+      .map((a) =>
+        moneyDiff(
+          Number(a.amount),
+          moneySum(
+            (data.advanceAllocations ?? [])
+              .filter(
+                (item) =>
+                  item.advance_id === a.id &&
+                  (!f.to || bakuDate(item.created_at) <= f.to),
+              )
+              .map((item) => item.amount),
+          ),
+        ),
+      ),
+  );
   const periodWorks = earnings.filter((w) => within(bakuDate(w.completed_at!)));
   const periodPayments = payments.filter((t) => within(t.transaction_date));
   const periodAllocations = allocations.filter((a) =>
@@ -90,7 +133,7 @@ export function workerReconciliation(
         .map((a) => -Number(a.amount)),
     ]),
   );
-  report.title = "İşçi Hesablaşma";
+  report.title = "İŞÇİ İLƏ HESABLAŞMA AKTI";
   report.documentContext = [
     name,
     f.from,
@@ -120,6 +163,7 @@ export function workerReconciliation(
       "İşə bağlı artıq ödəniş",
       moneySum(endingByWork.map((n) => Math.max(-n, 0))),
     ],
+    ["Dövrün sonunda ümumi avans qalığı", generalAdvance],
   ].map(([label, amount]) => ({
     label: String(label),
     value: money(Number(amount)),
@@ -130,11 +174,19 @@ export function workerReconciliation(
       table: {
         columns: [
           { key: "date", label: "Tarix", width: 11 },
-          { key: "purpose", label: "Təyinat", width: 20 },
-          { key: "work", label: "Avtomobil / İş", width: 24 },
-          { key: "amount", label: "Məbləğ (AZN)", width: 12, align: "right" },
-          { key: "channel", label: "Kanal / hesab", width: 13 },
-          { key: "reference", label: "Reference", width: 20 },
+          { key: "purpose", label: "Təyinat", width: 13 },
+          { key: "work", label: "Avtomobil / İş", width: 17 },
+          { key: "channel", label: "Kanal / hesab", width: 10 },
+          { key: "in", label: "Mədaxil", width: 8, align: "right" },
+          { key: "out", label: "Məxaric", width: 8, align: "right" },
+          {
+            key: "balance",
+            label: "Hesab üzrə qalıq",
+            width: 10,
+            align: "right",
+          },
+          { key: "reference", label: "Reference", width: 11 },
+          { key: "notes", label: "Əlavə izah", width: 12 },
         ],
         rows: periodPayments.map((t) => ({
           id: t.id,
@@ -153,7 +205,10 @@ export function workerReconciliation(
               ]
                 .filter(Boolean)
                 .join(" · ") || "-",
-            amount: money(t.amount),
+            in: t.direction === "IN" ? money(t.amount) : "-",
+            out: t.direction === "OUT" ? money(t.amount) : "-",
+            balance: balances.has(t.id) ? money(balances.get(t.id)!) : "-",
+            notes: t.notes || "-",
             channel:
               t.channel === "CASH"
                 ? "Nağd"
@@ -251,8 +306,9 @@ export function workerReconciliation(
     title: "Təsdiq",
     keepTogether: true,
     signatureDates: true,
+    signaturePositions: true,
     paragraphs: [
-      "Tərəflər dövr üzrə iş və ödəniş məlumatlarını daxili hesablaşma məqsədilə təsdiq edir. Rəsmi normativ forma deyil.",
+      "Tərəflər yuxarıda göstərilən dövr üzrə əməliyyatları, ödənişləri və yekun hesablaşma qalığını daxili hesablaşma məqsədi ilə təsdiq edir.",
     ],
     signatures: ["PRIME / məsul şəxs", name],
   });

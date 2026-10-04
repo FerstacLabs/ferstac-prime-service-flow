@@ -23,6 +23,11 @@ export function canAccessPath(role: AppRole, path: string) {
   if (path === "/change-password") return true;
   const report = /^\/(?:api\/)?reports\/([^/]+)\//.exec(path);
   if (report) return canReport(role, report[1]);
+  if (
+    /^\/(?:api\/)?reconciliations(?:\/|$)/.test(path) ||
+    path.startsWith("/kassa/reconciliations/")
+  )
+    return role === "ADMIN" || role === "CASHIER";
   if (role === "ADMIN") return true;
   const home = roleHome(role);
   return (

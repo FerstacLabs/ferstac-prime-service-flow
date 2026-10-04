@@ -36,6 +36,36 @@ export async function resolveAuditContext(
     ...log,
     metadata: { ...log.metadata },
   }));
+  const reconciliationIds = [
+    ...new Set(
+      logs
+        .filter(
+          (log) =>
+            log.entity_type === "reconciliation_documents" &&
+            uuid(log.entity_id),
+        )
+        .map((log) => log.entity_id),
+    ),
+  ];
+  if (reconciliationIds.length) {
+    const { data, error } = await supabase
+      .from("reconciliation_documents")
+      .select("id,totals_snapshot")
+      .eq("organization_id", org)
+      .in("id", reconciliationIds);
+    if (error) throw error;
+    const totals = new Map(
+      (data ?? []).map((document) => [document.id, document.totals_snapshot]),
+    );
+    for (const log of enriched) {
+      if (
+        log.entity_type === "reconciliation_documents" &&
+        !log.metadata.totals &&
+        totals.get(log.entity_id)
+      )
+        log.metadata.totals = totals.get(log.entity_id);
+    }
+  }
   const transactionIds = [
     ...new Set(
       logs
@@ -154,8 +184,7 @@ export async function resolveAuditContext(
       if (error) throw error;
       for (const row of (data || []) as unknown as Row[]) {
         const catalog = (row.work_catalog || row.part_catalog) as
-          | Row
-          | undefined;
+          Row | undefined;
         const label = name({ ...row, name: catalog?.name || row.name });
         for (const field of group.fields) refs[`${field}:${row.id}`] = label;
       }

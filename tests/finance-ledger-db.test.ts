@@ -159,6 +159,22 @@ beforeAll(async () => {
     "select id v from transaction_categories where name='Bank komissiyası' and organization_id=$1",
     [org],
   );
+  await db.exec(`reset role;
+    create schema storage;
+    create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
+    alter table storage.buckets enable row level security;
+    create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text);
+    alter table storage.objects enable row level security;
+    grant usage on schema storage to authenticated,service_role;
+    grant select on storage.objects to authenticated;
+    grant all on storage.objects to service_role;
+  `);
+  await db.exec(
+    readFileSync(
+      "supabase/migrations/0013_reconciliation_documents.sql",
+      "utf8",
+    ),
+  );
 }, 60000);
 afterAll(async () => {
   await db?.close();
@@ -2634,5 +2650,283 @@ describe.sequential("unified cash and bank ledger", () => {
         [intake, extra],
       ),
     ).toBeGreaterThan(0);
+  });
+});
+
+describe("0013 signed reconciliation archive", () => {
+  it("creates supplier documents from durable identities after safe master deletion", async () => {
+    await user(admin);
+    const id = randomUUID();
+    await value(
+      "select create_reconciliation($1,'supplier',$2,'2026-09-01','2026-12-31') v",
+      [id, supplier],
+    );
+    expect(
+      await value(
+        "select entity_id v from reconciliation_documents where id=$1",
+        [id],
+      ),
+    ).toBe(supplier);
+    expect(
+      await value(
+        "select jsonb_array_length(source_snapshot->'purchases') v from reconciliation_documents where id=$1",
+        [id],
+      ),
+    ).toBeGreaterThan(0);
+    expect(
+      await value(
+        "select count(*)::int v from reconciliation_sources where document_id=$1 and purchase_id is not null",
+        [id],
+      ),
+    ).toBeGreaterThan(0);
+  });
+  let doc: string, entity: string, frozen: unknown, signedPath: string;
+  const create = (id: string = randomUUID(), previous: string | null = null) =>
+    value(
+      "select create_reconciliation($1,'worker',$2,'2026-09-01','2026-09-30',null,null,$3) v",
+      [id, entity, previous],
+    );
+  it("captures canonical source records in a draft and rejects untrusted sealing", async () => {
+    await user(admin);
+    entity = await value(
+      "insert into workers(owner_user_id,first_name,last_name,role_id) select auth.uid(),'Archive','Worker',id from worker_roles limit 1 returning id v",
+    );
+    await value("select record_worker_advance($1,$2,$3) v", [
+      entity,
+      JSON.stringify({
+        channel: "CASH",
+        amount: 100,
+        occurred_at: "2026-09-15T10:00:00Z",
+        purpose: "Archive advance",
+      }),
+      randomUUID(),
+    ]);
+    doc = await create();
+    expect(
+      await value("select status v from reconciliation_documents where id=$1", [
+        doc,
+      ]),
+    ).toBe("DRAFT");
+    expect(
+      await value(
+        "select count(*)::int v from reconciliation_sources where document_id=$1",
+        [doc],
+      ),
+    ).toBeGreaterThan(0);
+    expect(await create(doc)).toBe(doc);
+    await expect(create()).rejects.toThrow(/versiya/);
+    await expect(
+      value("select seal_reconciliation($1,$2,'{}') v", [doc, org]),
+    ).rejects.toThrow();
+    await expect(
+      value("select confirm_reconciliation($1) v", [doc]),
+    ).rejects.toThrow(/imzalı/);
+    frozen = await value(
+      "select source_snapshot v from reconciliation_documents where id=$1",
+      [doc],
+    );
+  });
+  it("seals once, uploads privately and confirms explicitly", async () => {
+    await db.exec("reset role;set role service_role");
+    await value("select seal_reconciliation($1,$2,$3) v", [
+      doc,
+      org,
+      JSON.stringify({
+        summary: [
+          { label: "Dövrün sonunda ümumi avans qalığı", value: "100,00 AZN" },
+        ],
+        sections: [],
+      }),
+    ]);
+    signedPath = `${org}/reconciliations/${doc}/${randomUUID()}.pdf`;
+    await db.query(
+      "insert into storage.objects(bucket_id,name) values('prime-reconciliations',$1)",
+      [signedPath],
+    );
+    await value("select attach_reconciliation_file($1,$2,$3,$4,$5,100) v", [
+      doc,
+      org,
+      admin,
+      signedPath,
+      "a".repeat(64),
+    ]);
+    await user(cashier);
+    expect(
+      await value("select status v from reconciliation_documents where id=$1", [
+        doc,
+      ]),
+    ).toBe("DRAFT");
+    expect(
+      await value("select count(*)::int v from storage.objects where name=$1", [
+        signedPath,
+      ]),
+    ).toBe(1);
+    await value("select confirm_reconciliation($1) v", [doc]);
+    expect(
+      await value("select status v from reconciliation_documents where id=$1", [
+        doc,
+      ]),
+    ).toBe("CONFIRMED");
+    expect(
+      await value(
+        "select confirmed_by v from reconciliation_documents where id=$1",
+        [doc],
+      ),
+    ).toBe(cashier);
+  });
+  it("denies intake, cross-organization reads, uploads and confirmations", async () => {
+    await db.exec(
+      "reset role;create policy unrelated_wide_read on storage.objects for select to authenticated using(true)",
+    );
+    for (const actor of [intake, other]) {
+      await user(actor);
+      expect(
+        await value(
+          "select count(*)::int v from reconciliation_documents where id=$1",
+          [doc],
+        ),
+      ).toBe(0);
+      expect(
+        await value(
+          "select count(*)::int v from storage.objects where name=$1",
+          [signedPath],
+        ),
+      ).toBe(0);
+      await expect(
+        value("select confirm_reconciliation($1) v", [doc]),
+      ).rejects.toThrow();
+      await expect(create()).rejects.toThrow();
+      await expect(
+        db.query(
+          "insert into storage.objects(bucket_id,name) values('prime-reconciliations',$1)",
+          [signedPath],
+        ),
+      ).rejects.toThrow();
+    }
+    await db.exec(
+      "reset role;drop policy unrelated_wide_read on storage.objects",
+    );
+  });
+  it("blocks financial edits, hard deletion and confirmed file replacement", async () => {
+    await user(admin);
+    await expect(
+      db.query(
+        "update reconciliation_documents set period_to='2026-10-01' where id=$1",
+        [doc],
+      ),
+    ).rejects.toThrow();
+    await expect(
+      db.query("delete from reconciliation_documents where id=$1", [doc]),
+    ).rejects.toThrow();
+    await expect(
+      db.query("delete from reconciliation_sources where document_id=$1", [
+        doc,
+      ]),
+    ).rejects.toThrow();
+    await db.exec("reset role");
+    await expect(
+      db.query(
+        "update reconciliation_documents set source_snapshot='{}' where id=$1",
+        [doc],
+      ),
+    ).rejects.toThrow(/dəyişdirilə/);
+    await db.exec("set role service_role");
+    await expect(
+      value("select attach_reconciliation_file($1,$2,$3,$4,$5,100) v", [
+        doc,
+        org,
+        admin,
+        signedPath,
+        "b".repeat(64),
+      ]),
+    ).rejects.toThrow(/versiya/);
+  });
+  it("flags backdated activity without rewriting the agreed snapshot", async () => {
+    await user(admin);
+    await value("select record_worker_advance($1,$2,$3) v", [
+      entity,
+      JSON.stringify({
+        channel: "CASH",
+        amount: 25,
+        occurred_at: "2026-09-20T10:00:00Z",
+        purpose: "Backdated archive advance",
+      }),
+      randomUUID(),
+    ]);
+    expect(
+      await value(
+        "select outdated v from reconciliation_documents where id=$1",
+        [doc],
+      ),
+    ).toBe(true);
+    expect(
+      await value(
+        "select source_snapshot v from reconciliation_documents where id=$1",
+        [doc],
+      ),
+    ).toEqual(frozen);
+    expect(
+      await value(
+        "select count(*)::int v from audit_logs where entity_id=$1 and action='RECONCILIATION_PERIOD_CHANGED_AFTER_CONFIRMATION'",
+        [doc],
+      ),
+    ).toBe(1);
+  });
+  it("retains the signed original when a revision is created and confirmed", async () => {
+    await user(admin);
+    const revision = await create(randomUUID(), doc);
+    expect(
+      await value(
+        "select version v from reconciliation_documents where id=$1",
+        [revision],
+      ),
+    ).toBe(2);
+    expect(
+      await value(
+        "select superseded_by v from reconciliation_documents where id=$1",
+        [doc],
+      ),
+    ).toBeNull();
+    await db.exec("reset role;set role service_role");
+    await value("select seal_reconciliation($1,$2,$3) v", [
+      revision,
+      org,
+      JSON.stringify({
+        summary: [{ label: "Advance", value: "125" }],
+        sections: [],
+      }),
+    ]);
+    const path = `${org}/reconciliations/${revision}/${randomUUID()}.pdf`;
+    await db.query(
+      "insert into storage.objects(bucket_id,name) values('prime-reconciliations',$1)",
+      [path],
+    );
+    await value("select attach_reconciliation_file($1,$2,$3,$4,$5,100) v", [
+      revision,
+      org,
+      admin,
+      path,
+      "c".repeat(64),
+    ]);
+    await user(admin);
+    await value("select confirm_reconciliation($1) v", [revision]);
+    expect(
+      await value(
+        "select superseded_by v from reconciliation_documents where id=$1",
+        [doc],
+      ),
+    ).toBe(revision);
+    expect(
+      await value(
+        "select signed_file_path v from reconciliation_documents where id=$1",
+        [doc],
+      ),
+    ).toBe(signedPath);
+    expect(
+      await value(
+        "select count(*)::int v from reconciliation_documents where entity_id=$1 and period_from='2026-09-01' and period_to='2026-09-30'",
+        [entity],
+      ),
+    ).toBe(2);
   });
 });

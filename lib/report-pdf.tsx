@@ -524,7 +524,7 @@ function ReportSectionView({
             marginTop: compact ? 3 : 6,
           }}
         >
-          {section.signatures.map((label) => (
+          {section.signatures.map((label, index) => (
             <View
               key={label}
               style={{
@@ -541,6 +541,11 @@ function ReportSectionView({
                   <Text style={{ marginTop: compact ? 3 : 5, fontSize: 8 }}>
                     Ad/Soyad: ____________________
                   </Text>
+                  {section.signaturePositions && index === 0 ? (
+                    <Text style={{ marginTop: 3, fontSize: 8 }}>
+                      Vəzifə: ____________________
+                    </Text>
+                  ) : null}
                   <Text style={{ marginTop: compact ? 3 : 5, fontSize: 8 }}>
                     İmza: ____________________
                   </Text>
@@ -697,10 +702,15 @@ function tableChunks(
 ) {
   const chunks: ReportTable["rows"][] = [];
   const width = landscape ? 785 : 539;
+  const supplierChronology =
+    table.columns.some((c) => c.key === "decrease") &&
+    table.columns.some((c) => c.key === "credit");
   const maxHeight = denseLedger
     ? landscape
       ? table.columns.length >= 10
-        ? 320
+        ? supplierChronology
+          ? 450
+          : 320
         : 460
       : 550
     : landscape
