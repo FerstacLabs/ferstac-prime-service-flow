@@ -175,6 +175,9 @@ beforeAll(async () => {
       "utf8",
     ),
   );
+  await db.exec(
+    readFileSync("supabase/migrations/0014_vat_accounting.sql", "utf8"),
+  );
 }, 60000);
 afterAll(async () => {
   await db?.close();

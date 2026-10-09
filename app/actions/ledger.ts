@@ -6,9 +6,42 @@ import { getAuthedSupabase } from "@/lib/supabase/queries";
 import { moneySchema, uuidValue } from "@/lib/workshop-validation";
 import { z } from "zod";
 import { serverMutation } from "@/lib/server-mutation";
+import { parseIntakeDate } from "@/lib/intake-date";
 const text = (f: FormData, k: string) => String(f.get(k) || "").trim();
 const optionalId = (f: FormData, k: string) =>
   text(f, k) ? uuidValue(f, k) : null;
+export async function recordVatAdjustmentAction(f: FormData) {
+  return serverMutation(async () => {
+    const { supabase } = await getAuthedSupabase("ADMIN");
+    const kind = z
+      .enum(["OPENING", "FUNDING", "BUDGET_PAYMENT", "REVERSAL"])
+      .parse(f.get("kind"));
+    const time = z
+      .string()
+      .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+      .parse(f.get("time"));
+    const { error } = await supabase.rpc("record_vat_adjustment", {
+      p_key: uuidValue(f, "idempotency_key"),
+      p_data: {
+        kind,
+        amount: moneySchema.parse(f.get("amount")),
+        occurred_at: new Date(
+          `${parseIntakeDate(f.get("date"))}T${time}:00+04:00`,
+        ).toISOString(),
+        reference_number: z
+          .string()
+          .trim()
+          .min(1)
+          .max(200)
+          .parse(f.get("reference_number")),
+        note: z.string().trim().min(1).max(500).parse(f.get("note")),
+        reversal_of: kind === "REVERSAL" ? uuidValue(f, "reversal_of") : null,
+      },
+    });
+    if (error) return { error: databaseActionError(error) };
+    revalidatePath("/", "layout");
+  });
+}
 function details(f: FormData) {
   const channel = z.enum(["CASH", "BANK"]).parse(f.get("channel"));
   return {

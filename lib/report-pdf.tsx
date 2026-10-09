@@ -465,7 +465,7 @@ function ReportSectionView({
 }) {
   return (
     <View
-      style={[styles.section, compact ? { marginTop: 5, flexShrink: 0 } : {}]}
+      style={[styles.section, compact ? { marginTop: 5 } : {}]}
       wrap={!section.keepTogether}
     >
       <View

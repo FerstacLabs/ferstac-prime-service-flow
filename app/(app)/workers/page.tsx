@@ -1,3 +1,4 @@
+import { IntakeDateInput } from "@/components/intake-date-input";
 import { requireAccess } from "@/lib/supabase/auth";
 import Link from "next/link";
 import { saveWorkerAction } from "@/app/actions/workers";
@@ -66,7 +67,7 @@ export default async function WorkersPage({
           />
           <label className="text-xs text-[var(--muted)]">
             İşə başlama tarixi
-            <input name="hire_date" type="date" className="field mt-1" />
+            <IntakeDateInput name="hire_date" className="field mt-1" />
           </label>
           <label className="text-xs text-[var(--muted)]">
             Status

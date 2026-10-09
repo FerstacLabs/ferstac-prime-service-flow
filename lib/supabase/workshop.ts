@@ -13,6 +13,7 @@ import { masterDirectory } from "@/lib/supabase/master-directory";
 import { workerAdvanceTotals } from "@/lib/supabase/worker-advance-totals";
 import { purchaseLifecycleData } from "@/lib/supabase/purchase-lifecycle";
 import type { FinanceData } from "@/lib/finance";
+import type { VatLedgerEntry } from "@/lib/vat-ledger";
 
 // Range through PostgREST's response cap on the server; reports never truncate at 1,000 rows.
 async function rows<T>(table: string, select: string, jobId?: string) {
@@ -70,7 +71,7 @@ export async function getWorkshop(jobId?: string): Promise<WorkshopData> {
       suppliers: [] as DbSupplier[],
     };
   }
-  const [jobs, work, parts, purchases, cash, workers, suppliers] =
+  const [jobs, work, parts, purchases, cash, workers, suppliers, vatLedger] =
     await Promise.all([
       rows<DbServiceJob>("service_jobs", "*,vehicles(*)", jobId),
       rows<DbWorkItem>(
@@ -91,6 +92,7 @@ export async function getWorkshop(jobId?: string): Promise<WorkshopData> {
       rows<CashTransaction>("cash_transactions", "*", jobId),
       masterDirectory<DbWorker>("worker"),
       rows<DbSupplier>("suppliers", "*"),
+      rows<VatLedgerEntry>("vat_ledger", "*"),
     ]);
   const applied = await workerAdvanceTotals();
   const lifecycle = await purchaseLifecycleData(jobId);
@@ -110,6 +112,9 @@ export async function getWorkshop(jobId?: string): Promise<WorkshopData> {
       .map((p) => ({
         ...p,
         returned: positions.get(p.id)?.returned,
+        returned_net: positions.get(p.id)?.returned_net,
+        remaining_net: positions.get(p.id)?.remaining_net,
+        remaining_vat: positions.get(p.id)?.remaining_vat,
         returned_quantity: positions.get(p.id)?.returned_quantity,
         credit_created: positions.get(p.id)?.credit_created,
         credit_applied: positions.get(p.id)?.credit_applied,
@@ -125,6 +130,7 @@ export async function getWorkshop(jobId?: string): Promise<WorkshopData> {
     purchaseReturns: lifecycle.purchaseReturns,
     supplierCredits: lifecycle.supplierCredits,
     accounts,
+    vatLedger,
   };
 }
 export type WorkshopData = {
@@ -136,7 +142,7 @@ export type WorkshopData = {
   workers: DbWorker[];
   suppliers: DbSupplier[];
   accounts?: FinanceData["accounts"];
-} & Pick<FinanceData, "purchaseReturns" | "supplierCredits">;
+} & Pick<FinanceData, "purchaseReturns" | "supplierCredits" | "vatLedger">;
 export function selectJobs(
   data: WorkshopData,
   f = parseFilters({}),

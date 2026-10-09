@@ -1,6 +1,7 @@
 import { decimalMinor, multiplyMoney } from "@/lib/decimal";
 import type { Purchase, WorkItem } from "@/lib/types";
 import { sumMoney, subtractMoney } from "@/lib/workshop";
+import type { VatLedgerEntry } from "@/lib/vat-ledger";
 export type FinancialSummary = {
   partsCost: number;
   laborCost: number;
@@ -67,6 +68,10 @@ export type FinanceCategory = {
   active: boolean;
 };
 export type FinanceJob = {
+  vat_enabled?: boolean;
+  net_quotation?: number;
+  vat_quotation?: number;
+  gross_quotation?: number;
   id: string;
   job_no: string;
   plate: string;
@@ -92,6 +97,14 @@ export type FinanceWork = {
   is_additional: boolean;
 };
 export type FinancePurchase = {
+  vat_enabled?: boolean;
+  net_amount?: number;
+  vat_amount?: number;
+  gross_amount?: number;
+  returned_net?: number;
+  remaining_net?: number;
+  remaining_vat?: number;
+  paid_vat?: number;
   original_cost?: number;
   returned?: number;
   returned_quantity?: number;
@@ -114,6 +127,8 @@ export type FinancePurchase = {
   supplier: string;
 };
 export type LedgerEntry = {
+  net_amount?: number;
+  vat_amount?: number;
   account_balance?: number;
   id: string;
   owner_user_id: string;
@@ -146,7 +161,11 @@ export type LedgerEntry = {
   created_by_name: string | null;
 };
 export type FinanceData = {
+  vatLedger?: VatLedgerEntry[];
   purchaseReturns?: Array<{
+    net_amount?: number;
+    vat_amount?: number;
+    credit_vat_amount?: number;
     id: string;
     purchase_id: string;
     service_job_id: string;
@@ -164,6 +183,8 @@ export type FinanceData = {
     available: number;
   }>;
   supplierCredits?: Array<{
+    net_amount?: number;
+    vat_amount?: number;
     id: string;
     return_id: string;
     purchase_id: string;
@@ -208,23 +229,31 @@ export const moneyDiff = (a: number, b: number) =>
 export const isBusiness = (t: LedgerEntry) =>
   !t.allocation_type.startsWith("TRANSFER_") &&
   !t.allocation_type.startsWith("OPENING_");
+export const operatingAmount = (row: {
+  amount: number;
+  net_amount?: number;
+  vat_amount?: number;
+}) => row.net_amount ?? moneyDiff(row.amount, row.vat_amount ?? 0);
 export const ledgerBalance = (rows: LedgerEntry[]) =>
   moneySum(
     rows
       .filter((t) => !t.voided_at)
-      .map((t) => (t.direction === "IN" ? t.amount : -Number(t.amount))),
+      .map((t) =>
+        t.direction === "IN" ? operatingAmount(t) : -operatingAmount(t),
+      ),
   );
 export function movementTotals(rows: LedgerEntry[], business = true) {
   const live = rows.filter((t) => !t.voided_at && (!business || isBusiness(t)));
   const income = moneySum(
-      live.filter((t) => t.direction === "IN").map((t) => t.amount),
+      live.filter((t) => t.direction === "IN").map(operatingAmount),
     ),
     expense = moneySum(
-      live.filter((t) => t.direction === "OUT").map((t) => t.amount),
+      live.filter((t) => t.direction === "OUT").map(operatingAmount),
     );
   return { income, expense, net: moneyDiff(income, expense) };
 }
 export type JournalFilters = {
+  vatKind?: string;
   reportType: string;
   from: string;
   to: string;
@@ -244,6 +273,7 @@ export function journalFilters(
 ): JournalFilters {
   return Object.fromEntries(
     [
+      "vatKind",
       "from",
       "to",
       "channel",
@@ -309,7 +339,7 @@ export function accountRunningBalances(data: FinanceData, f: JournalFilters) {
     if (row.account_balance === undefined && !row.voided_at)
       balance = moneySum([
         balance,
-        row.direction === "IN" ? row.amount : -Number(row.amount),
+        row.direction === "IN" ? operatingAmount(row) : -operatingAmount(row),
       ]);
     accounts.set(key, balance);
     balances.set(row.id, balance);
@@ -343,7 +373,13 @@ export function vehicleSettlement(data: FinanceData, jobId: string) {
         type: "SUPPLIER_PURCHASE",
         party: p.supplier,
         title: p.title,
-        cost: Number(p.cost),
+        cost:
+          p.remaining !== undefined
+            ? moneySum([
+                p.remaining,
+                p.settled ?? paid("SUPPLIER_PURCHASE", p.id),
+              ])
+            : Number(p.cost),
         paid: p.settled ?? paid("SUPPLIER_PURCHASE", p.id),
         known: true,
       })),
@@ -381,7 +417,7 @@ export function vehicleSettlement(data: FinanceData, jobId: string) {
                   "VEHICLE_EXPENSE",
                 ].includes(t.allocation_type)),
         )
-        .map((t) => t.amount),
+        .map(operatingAmount),
     );
   return {
     job,

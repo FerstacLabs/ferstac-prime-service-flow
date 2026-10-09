@@ -100,7 +100,7 @@ export function savedReconciliationReport(
   const report = structuredClone(d.report_snapshot);
   // Redact legacy internal account balances only at presentation time, never rewrite signed snapshots.
   const internalBalance = (label: string) =>
-    /hesab üzrə qalıq|account[_ ]?balance|cash balance|bank balance/i.test(
+    /hesab üzrə qalıq|account[_ ]?balance|cash balance|bank balance|ƏDV depozit.*qal|vat[_ ]?(deposit[_ ]?)?balance/i.test(
       label,
     );
   report.summary = report.summary.filter(

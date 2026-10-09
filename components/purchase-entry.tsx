@@ -1,4 +1,5 @@
 "use client";
+import { IntakeDateInput } from "@/components/intake-date-input";
 import { useState } from "react";
 import { savePurchaseAction } from "@/app/actions/purchases";
 import { ActionForm } from "@/components/action-form";
@@ -16,6 +17,8 @@ import {
 } from "@/lib/decimal";
 import { subtractMoney } from "@/lib/workshop";
 import { AdditionalMeasureFields } from "@/components/work-costing";
+import { VatMode } from "@/components/vat-mode";
+import { VatTotals } from "@/components/vat-totals";
 export function PurchaseEntry({
   jobId,
   part,
@@ -38,6 +41,7 @@ export function PurchaseEntry({
     purchase?.purchased_by_admin === false ? "worker" : "admin",
   );
   const [payment, setPayment] = useState("UNPAID");
+  const [vatEnabled, setVatEnabled] = useState(purchase?.vat_enabled ?? false);
   const [cost, setCost] = useState(String(purchase?.unit_price ?? ""));
   let actualTotal: number | null = null;
   try {
@@ -172,7 +176,18 @@ export function PurchaseEntry({
           required
         />
       ) : null}
-      {!purchase && source === "SUPPLIER" ? (
+      {source === "SUPPLIER" && (
+        <VatMode value={vatEnabled} onChange={setVatEnabled} />
+      )}
+      {source === "SUPPLIER" && vatEnabled && (
+        <input type="hidden" name="payment_status" value="UNPAID" />
+      )}
+      {source === "SUPPLIER" && vatEnabled && actualTotal !== null && (
+        <div className="sm:col-span-2 xl:col-span-3">
+          <VatTotals net={actualTotal} enabled />
+        </div>
+      )}
+      {!purchase && source === "SUPPLIER" && !vatEnabled ? (
         <>
           <label className="text-xs text-[var(--muted)]">
             Ödəniş
@@ -203,9 +218,8 @@ export function PurchaseEntry({
       ) : null}
       <label className="text-xs text-[var(--muted)]">
         Alış tarixi
-        <input
+        <IntakeDateInput
           name="purchase_date"
-          type="date"
           required
           defaultValue={purchase?.purchase_date ?? bakuDate()}
           className="field mt-1"

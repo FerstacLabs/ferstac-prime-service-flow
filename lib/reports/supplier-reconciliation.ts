@@ -13,6 +13,7 @@ type Event = {
   purchase: string;
   job: string;
   amount: number;
+  vat: number;
   debt: number;
   reference: string;
 };
@@ -52,8 +53,9 @@ export function supplierReconciliation(
       kind: p.replacement_of ? "Dəyişdirmə nəticəsində alış" : "Alış",
       purchase: p.id,
       job: p.service_job_id,
-      amount: Number(p.original_cost ?? p.cost),
-      debt: Number(p.original_cost ?? p.cost),
+      amount: Number(p.gross_amount ?? p.original_cost ?? p.cost),
+      vat: Number(p.vat_amount ?? 0),
+      debt: Number(p.gross_amount ?? p.original_cost ?? p.cost),
       reference: p.title,
     })),
     ...returns.map((r) => ({
@@ -64,6 +66,7 @@ export function supplierReconciliation(
       purchase: r.purchase_id,
       job: r.service_job_id,
       amount: Number(r.amount),
+      vat: Number(r.vat_amount ?? 0),
       debt: moneySum([-Number(r.amount), r.credit_amount]),
       reference: [r.reference_number, r.reason].filter(Boolean).join(" · "),
     })),
@@ -77,6 +80,7 @@ export function supplierReconciliation(
         purchase: r.purchase_id,
         job: r.service_job_id,
         amount: Number(r.credit_amount),
+        vat: Number(r.credit_vat_amount ?? 0),
         debt: 0,
         reference: r.reference_number || r.reason,
       })),
@@ -88,6 +92,7 @@ export function supplierReconciliation(
       purchase: a.purchase_id,
       job: a.service_job_id,
       amount: Number(a.amount),
+      vat: Number(a.vat_amount ?? 0),
       debt: -Number(a.amount),
       reference:
         data.purchases.find((p) => p.id === a.purchase_id)?.title || "-",
@@ -107,6 +112,7 @@ export function supplierReconciliation(
         purchase: returns.find((r) => r.id === a.return_id)!.purchase_id,
         job: f.job,
         amount: Number(a.amount),
+        vat: Number(a.vat_amount ?? 0),
         debt: 0,
         reference: [
           data.jobs.find((j) => j.id === a.service_job_id)?.plate,
@@ -129,6 +135,7 @@ export function supplierReconciliation(
         purchase: t.purchase_id || t.counterparty_details.purchase_id || "",
         job: t.service_job_id || "",
         amount: Number(t.amount),
+        vat: Number(t.vat_amount ?? 0),
         debt: t.direction === "OUT" ? -Number(t.amount) : 0,
         reference: [t.reference_number, t.purpose].filter(Boolean).join(" · "),
       })),
@@ -198,6 +205,7 @@ export function supplierReconciliation(
     );
   }
   report.title = "TƏCHİZATÇI İLƏ HESABLAŞMA AKTI";
+  report.orientation = "landscape";
   report.documentContext = [
     name,
     f.from,
@@ -309,5 +317,35 @@ export function supplierReconciliation(
       signatures: ["PRIME / məsul şəxs", `${name} / nümayəndə`],
     },
   ];
+  if (selected.some((e) => e.vat > 0))
+    report.sections.splice(1, 0, {
+      title: "Təchizatçı üzrə ƏDV bölgüsü",
+      table: {
+        columns: [
+          { key: "date", label: "Tarix", width: 10 },
+          { key: "kind", label: "Əməliyyat", width: 22 },
+          { key: "item", label: "Avtomobil / detal", width: 27 },
+          { key: "net", label: "ƏDV-siz məbləğ", width: 14, align: "right" },
+          { key: "vat", label: "ƏDV", width: 13, align: "right" },
+          { key: "gross", label: "Yekun məbləğ", width: 14, align: "right" },
+        ],
+        rows: selected.map((e) => ({
+          id: `${e.id}-vat`,
+          cells: {
+            date: date(e.day),
+            kind: e.kind,
+            item: [
+              data.jobs.find((j) => j.id === e.job)?.plate,
+              data.purchases.find((p) => p.id === e.purchase)?.title,
+            ]
+              .filter(Boolean)
+              .join(" · "),
+            net: money(moneySum([e.amount, -e.vat])),
+            vat: money(e.vat),
+            gross: money(e.amount),
+          },
+        })),
+      },
+    });
   return report;
 }

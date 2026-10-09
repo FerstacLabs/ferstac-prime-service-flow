@@ -11,6 +11,14 @@ import {
 } from "@/lib/reports/report-format";
 
 export const auditEventLabels: Record<string, string> = {
+  VAT_MODE_CHANGED: "ƏDV rejimi dəyişdirildi",
+  VAT_OPENING: "ƏDV başlanğıc qalığı",
+  VAT_CUSTOMER_RECEIPT: "Müştəridən ƏDV mədaxili",
+  VAT_SUPPLIER_PAYMENT: "Təchizatçıya ƏDV məxarici",
+  VAT_SUPPLIER_REFUND: "Təchizatçıdan ƏDV qaytarılması",
+  VAT_FUNDING: "ƏDV depoziti artırıldı",
+  VAT_BUDGET_PAYMENT: "ƏDV büdcəyə ödəniş",
+  VAT_REVERSAL: "ƏDV əməliyyatı ləğv edildi",
   RECONCILIATION_CREATED: "Hesablaşma sənədi yaradıldı",
   RECONCILIATION_SIGNED_FILE_UPLOADED: "İmzalı hesablaşma sənədi yükləndi",
   RECONCILIATION_CONFIRMED: "Hesablaşma təsdiqləndi",
@@ -100,6 +108,7 @@ export const auditEventLabels: Record<string, string> = {
   PAYMENT_REVERSED: "Əks ödəniş qeydə alındı",
 };
 export const auditEntityLabels: Record<string, string> = {
+  vat_ledger: "ƏDV depoziti",
   account: "Bank hesabı",
   financial_accounts: "Bank hesabı",
   category: "Maliyyə təyinatı",
@@ -136,6 +145,13 @@ export const auditRoleLabel = (code: string) =>
 
 // Explicit allowlist: credentials, tokens and unknown metadata never reach display.
 const fields: Record<string, string> = {
+  vat_enabled: "ƏDV rejimi",
+  vat_amount: "ƏDV məbləği",
+  net_amount: "ƏDV-siz məbləğ",
+  gross_amount: "Yekun məbləğ",
+  old_gross: "Əvvəlki yekun məbləğ",
+  new_gross: "Yeni yekun məbləğ",
+  reference: "İstinad",
   document_number: "Sənəd №",
   period_from: "Dövrün başlanğıcı",
   period_to: "Dövrün sonu",
@@ -251,6 +267,11 @@ const fields: Record<string, string> = {
   insurance_approved_amount: "Təsdiqlənmiş sığorta məbləği",
 };
 const moneyFields = new Set([
+  "net_amount",
+  "vat_amount",
+  "gross_amount",
+  "old_gross",
+  "new_gross",
   "applied_advance",
   "earning_basis_snapshot",
   "earning_snapshot",
@@ -332,6 +353,7 @@ export function auditValue(
     return typeof value === "string"
       ? references[`${field}:${value}`] || "Əlaqəli qeyd (adı saxlanmayıb)"
       : "Əlaqəli qeyd";
+  if (field === "vat_enabled") return value ? "ƏDV-li" : "ƏDV-siz";
   if (typeof value === "boolean") return value ? "Bəli" : "Xeyr";
   if (typeof value !== "string" && typeof value !== "number")
     return "Dəyişdirilib";

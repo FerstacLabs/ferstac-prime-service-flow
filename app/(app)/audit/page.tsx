@@ -1,3 +1,4 @@
+import { IntakeDateInput } from "@/components/intake-date-input";
 import Link from "next/link";
 import { Filter, ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
 import { PageHeader, StatusBadge } from "@/components/app-shell";
@@ -58,18 +59,16 @@ export default async function AuditPage({
       <FilterForm>
         <label className="text-xs text-[var(--muted)]">
           Başlanğıc
-          <input
+          <IntakeDateInput
             className="field mt-1"
-            type="date"
             name="from"
             defaultValue={f.from}
           />
         </label>
         <label className="text-xs text-[var(--muted)]">
           Son
-          <input
+          <IntakeDateInput
             className="field mt-1"
-            type="date"
             name="to"
             defaultValue={f.to}
           />

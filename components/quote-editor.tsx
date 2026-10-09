@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { SearchSelect, type SelectOption } from "@/components/search-select";
 import { DecimalInput } from "@/components/decimal-input";
+import { VatMode } from "@/components/vat-mode";
+import { VatTotals } from "@/components/vat-totals";
 import {
   decimalMinor,
   formatMoneyAZN,
@@ -255,6 +257,7 @@ export function IntakeQuotes({
 }) {
   const [workTotal, setWorkTotal] = useState("0.00"),
     [partTotal, setPartTotal] = useState("0.00");
+  const [vatEnabled, setVatEnabled] = useState(false);
   return (
     <>
       <QuoteEditor
@@ -269,14 +272,11 @@ export function IntakeQuotes({
         units={units}
         onTotalChange={setPartTotal}
       />
-      <div className="flex flex-wrap justify-between gap-3 border-y border-[var(--border)] py-5 font-semibold">
-        <span>Yekun təklif məbləği</span>
-        <output>
-          {formatMoneyAZN(
-            fromMinor(decimalMinor(workTotal) + decimalMinor(partTotal)),
-          )}
-        </output>
-      </div>
+      <VatMode value={vatEnabled} onChange={setVatEnabled} />
+      <VatTotals
+        net={fromMinor(decimalMinor(workTotal) + decimalMinor(partTotal))}
+        enabled={vatEnabled}
+      />
     </>
   );
 }

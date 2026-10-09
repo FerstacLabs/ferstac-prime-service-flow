@@ -100,6 +100,7 @@ export async function createServiceJobAction(formData: FormData) {
       p_works: works,
       p_parts: parts,
       p_job: {
+        vat_enabled: formData.get("vat_enabled") === "true",
         customer_name: nullable(formData.get("customer_name")),
         customer_phone: nullable(formData.get("customer_phone")),
         funding_source:
@@ -187,6 +188,7 @@ export async function updateVehicleIntakeAction(form: FormData) {
     p_job: uuidValue(form, "service_job_id"),
     p_vehicle: vehicle,
     p_details: {
+      vat_enabled: form.get("vat_enabled") === "true",
       ...readFields(jobIntakeFields),
       insurance_company: nullable(form.get("insurance_company")),
       insurance_claim_no: nullable(form.get("insurance_claim_no")),

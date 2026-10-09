@@ -1,5 +1,5 @@
 export const reportBrand = {
-  company: "Prime Performance Service & Detailing",
+  company: "PRIME TUNING & DETAILING",
   address: "18 Abdulla Mirzəyev küçəsi, Bakı 1001",
   logo: "/brand/prime-logo.png",
 };

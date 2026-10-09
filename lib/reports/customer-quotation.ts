@@ -2,7 +2,8 @@ import type { DbServiceJob, DbWorkItem } from "@/lib/supabase/queries";
 import { workTitle } from "@/lib/supabase/queries";
 import type { RequiredPart } from "@/lib/workshop";
 import { sumMoney, missingValue } from "@/lib/workshop";
-import { formatQuantity } from "@/lib/decimal";
+import { formatMoneyAZN, formatQuantity } from "@/lib/decimal";
+import { vatPricing } from "@/lib/vat";
 import {
   formatReportDate as date,
   formatReportDateTime,
@@ -39,7 +40,17 @@ export function customerQuotation(
     job.has_line_quotes && rows.every((row) => row.quoted_price != null)
       ? money(sumMoney(rows.map((row) => row.quoted_price)))
       : missingValue;
-  const quotationTotal = total([...parts, ...works]);
+  const netQuotationTotal = total([...parts, ...works]);
+  const pricing =
+    netQuotationTotal === missingValue
+      ? null
+      : vatPricing(
+          sumMoney([...parts, ...works].map((row) => row.quoted_price)),
+          job.vat_enabled ?? false,
+        );
+  const quotationTotal = pricing
+    ? formatMoneyAZN(pricing.gross, "AZN")
+    : missingValue;
   // Explicit customer-only projection: never spread source records into a document.
   const lines = (
     rows: (DbWorkItem | RequiredPart)[],
@@ -109,18 +120,21 @@ export function customerQuotation(
             label: "İşçilik cəmi",
             value: total(works),
           },
-          {
-            label: "Yekun məbləğ",
-            value: quotationTotal,
-          },
-          ...(insurance && job.insurance_approved_amount != null
+          ...(job.vat_enabled
             ? [
+                { label: "ƏDV-siz cəm", value: netQuotationTotal },
                 {
-                  label: "Sığorta tərəfindən təsdiqlənmiş",
-                  value: money(job.insurance_approved_amount),
+                  label: "ƏDV (18%)",
+                  value: pricing
+                    ? formatMoneyAZN(pricing.vat, "AZN")
+                    : missingValue,
                 },
               ]
             : []),
+          {
+            label: job.vat_enabled ? "Yekun ƏDV-li məbləğ" : "Yekun məbləğ",
+            value: quotationTotal,
+          },
         ],
         paragraphs: [
           `Zərər dəymiş avtonəqliyyat vasitəsinə baxış keçirdikdən və apardığımız təhlil və hesablamalardan sonra məlum oldu ki, ____________________________ nəticəsində ____________________________ dəymiş zərərin həcmi ${quotationTotal === missingValue ? "__________________ AZN" : quotationTotal} təşkil edir.`,

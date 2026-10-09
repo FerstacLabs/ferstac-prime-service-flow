@@ -1,4 +1,5 @@
 import { normalizeAzPlate } from "@/lib/plate";
+import { parseIntakeDate } from "@/lib/intake-date";
 export type SearchParams = Record<string, string | string[] | undefined>;
 export type WorkshopFilters = {
   q: string;
@@ -36,8 +37,13 @@ export function bakuDate(value: Date | string = new Date()) {
 export function parseFilters(params: SearchParams): WorkshopFilters {
   const get = (key: string) =>
     typeof params[key] === "string" ? (params[key] as string) : "";
-  const date = (key: string) =>
-    /^\d{4}-\d{2}-\d{2}$/.test(get(key)) ? get(key) : "";
+  const date = (key: string) => {
+    try {
+      return parseIntakeDate(get(key));
+    } catch {
+      return "";
+    }
+  };
   let from = date("from"),
     to = date("to");
   const period = get("period"),

@@ -22,6 +22,37 @@ vi.mock("@/app/actions/purchases", () => ({
 }));
 afterEach(cleanup);
 describe("intake notes and date inputs", () => {
+  it("restores supplier VAT mode and submits gross-mode pricing without an inline payment", () => {
+    const purchase = {
+      ...workerCashFixture().purchases[0],
+      quantity: 1,
+      unit_price: 100,
+      vat_enabled: true,
+      vat_amount: 18,
+      gross_amount: 118,
+    };
+    const { container } = render(
+      <PurchaseEntry
+        jobId="job"
+        purchase={purchase}
+        suppliers={[]}
+        workers={[]}
+      />,
+    );
+    expect(
+      (screen.getByLabelText("ƏDV-li (18%)") as HTMLInputElement).checked,
+    ).toBe(true);
+    expect(screen.getByText("118,00 ₼")).toBeTruthy();
+    expect(
+      container.querySelector<HTMLInputElement>('[name="payment_status"]')
+        ?.value,
+    ).toBe("UNPAID");
+    fireEvent.click(screen.getByLabelText("ƏDV-siz"));
+    expect((screen.getByLabelText("ƏDV-siz") as HTMLInputElement).checked).toBe(
+      true,
+    );
+    expect(screen.queryByText("Yekun ƏDV-li məbləğ")).toBeNull();
+  });
   it("routes payments through vehicle settlement without inline cost or payment forms", () => {
     const data = workerCashFixture();
     const { container } = render(
@@ -101,7 +132,7 @@ describe("intake notes and date inputs", () => {
     const input = screen.getByLabelText("Qəbul tarixi") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "2026-09-30" } });
     fireEvent.blur(input);
-    expect(input.value).toBe("09/30/2026");
+    expect(input.value).toBe("30/09/2026");
     expect(input.type).toBe("text");
   });
   it("shows optional insurance amount only for insurance funding", () => {

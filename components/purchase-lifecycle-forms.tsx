@@ -15,8 +15,15 @@ import {
 } from "@/app/actions/purchase-lifecycle";
 import type { DbPurchase } from "@/lib/supabase/queries";
 import type { FinanceAccount, FinanceData } from "@/lib/finance";
-import { multiplyMoney, parseLocalizedDecimal } from "@/lib/decimal";
+import {
+  multiplyMoney,
+  parseLocalizedDecimal,
+  decimalMinor,
+  fromMinor,
+} from "@/lib/decimal";
 import { formatMoney } from "@/lib/format";
+import { vatPricing, type VatAmounts } from "@/lib/vat";
+import { VatMode } from "@/components/vat-mode";
 export function PurchaseChange({
   purchase: p,
   accounts = [],
@@ -33,25 +40,53 @@ export function PurchaseChange({
     String(exchange ? 1 : remainingQuantity),
   );
   const [price, setPrice] = useState("");
+  const [vatEnabled, setVatEnabled] = useState(!!p.vat_enabled);
+  let preview: VatAmounts | null = null;
   let refundable = 0;
   try {
     const qty = parseLocalizedDecimal(quantity, 3);
-    refundable = exchange
-      ? Math.max(
-          0,
-          Number(p.settled ?? p.paid_amount) -
-            Number(multiplyMoney(qty, parseLocalizedDecimal(price, 2))),
-        )
-      : Math.max(
-          0,
-          Number(multiplyMoney(qty, p.unit_price)) -
-            Math.max(
-              0,
-              Number(
-                p.remaining ?? Number(p.total_price) - Number(p.paid_amount),
-              ),
+    if (exchange) {
+      preview = vatPricing(
+        multiplyMoney(qty, parseLocalizedDecimal(price, 2)),
+        vatEnabled,
+      );
+      refundable = Math.max(
+        0,
+        Number(p.settled ?? p.paid_amount) - Number(preview.gross),
+      );
+    } else {
+      const cumulative = vatPricing(
+        multiplyMoney(
+          fromMinor(
+            decimalMinor(p.returned_quantity ?? 0, 3) + decimalMinor(qty, 3),
+            3,
+          ),
+          p.unit_price,
+        ),
+        !!p.vat_enabled,
+      );
+      const net =
+        decimalMinor(cumulative.net) -
+        decimalMinor(p.returned_net ?? p.returned ?? 0);
+      const gross =
+        decimalMinor(cumulative.gross) - decimalMinor(p.returned ?? 0);
+      preview = {
+        net: fromMinor(net),
+        vat: fromMinor(gross - net),
+        gross: fromMinor(gross),
+      };
+      refundable = Math.max(
+        0,
+        Number(preview.gross) -
+          Math.max(
+            0,
+            Number(
+              p.remaining ??
+                Number(p.gross_amount ?? p.total_price) - Number(p.paid_amount),
             ),
-        );
+          ),
+      );
+    }
   } catch {
     /* Incomplete numeric input has no settlement preview. */
   }
@@ -86,6 +121,13 @@ export function PurchaseChange({
         />
         {exchange ? (
           <>
+            <div className="sm:col-span-2">
+              <VatMode
+                name="new_vat_enabled"
+                value={vatEnabled}
+                onChange={setVatEnabled}
+              />
+            </div>
             <label className="text-sm sm:col-span-2">
               Yeni detal
               <input
@@ -159,6 +201,65 @@ export function PurchaseChange({
               className="field mt-1"
             />
           </label>
+        )}
+        {preview && (
+          <dl className="grid grid-cols-3 gap-3 text-sm sm:col-span-2">
+            <div>
+              <dt>Net {exchange ? "yeni alış" : "qaytarma"}</dt>
+              <dd>{formatMoney(Number(preview.net))}</dd>
+            </div>
+            <div>
+              <dt>ƏDV</dt>
+              <dd>{formatMoney(Number(preview.vat))}</dd>
+            </div>
+            <div>
+              <dt>Yekun</dt>
+              <dd>{formatMoney(Number(preview.gross))}</dd>
+            </div>
+            {exchange && (
+              <>
+                <div>
+                  <dt>Net fərq</dt>
+                  <dd>
+                    {formatMoney(
+                      Number(
+                        fromMinor(
+                          decimalMinor(preview.net) -
+                            decimalMinor(p.net_amount ?? p.total_price),
+                        ),
+                      ),
+                    )}
+                  </dd>
+                </div>
+                <div>
+                  <dt>ƏDV fərqi</dt>
+                  <dd>
+                    {formatMoney(
+                      Number(
+                        fromMinor(
+                          decimalMinor(preview.vat) -
+                            decimalMinor(p.vat_amount ?? 0),
+                        ),
+                      ),
+                    )}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Yekun fərq</dt>
+                  <dd>
+                    {formatMoney(
+                      Number(
+                        fromMinor(
+                          decimalMinor(preview.gross) -
+                            decimalMinor(p.gross_amount ?? p.total_price),
+                        ),
+                      ),
+                    )}
+                  </dd>
+                </div>
+              </>
+            )}
+          </dl>
         )}
         {refundable > 0 ? (
           <>

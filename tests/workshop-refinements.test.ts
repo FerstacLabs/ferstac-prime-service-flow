@@ -189,7 +189,7 @@ describe("archive and cashier refinements", () => {
     const report = buildWorkshopReport("kassa", data, f),
       text = JSON.stringify(report);
     expect(report.filters).toContain("Emre Altin");
-    expect(report.filters).toContain("01.09.2026");
+    expect(report.filters).toContain("01/09/2026");
     expect(text).not.toContain("500,00"); // Customer sale prices are not worker settlement data.
     expect(text).toContain("250,00");
     expect(text).toContain("150,00");

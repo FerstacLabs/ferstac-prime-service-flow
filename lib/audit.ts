@@ -15,6 +15,14 @@ import {
 import { resolveAuditContext } from "@/lib/supabase/audit-context";
 
 export const auditActions = [
+  "VAT_MODE_CHANGED",
+  "VAT_OPENING",
+  "VAT_CUSTOMER_RECEIPT",
+  "VAT_SUPPLIER_PAYMENT",
+  "VAT_SUPPLIER_REFUND",
+  "VAT_FUNDING",
+  "VAT_BUDGET_PAYMENT",
+  "VAT_REVERSAL",
   "RECONCILIATION_CREATED",
   "RECONCILIATION_SIGNED_FILE_UPLOADED",
   "RECONCILIATION_CONFIRMED",
@@ -104,6 +112,7 @@ export const auditActions = [
   "PAYMENT_REVERSED",
 ] as const;
 export const auditEntities = [
+  "vat_ledger",
   "account",
   "category",
   "unit_catalog",
@@ -139,6 +148,14 @@ export type AuditLog = {
   created_at: string;
 };
 const auditDescriptions: Record<(typeof auditActions)[number], string> = {
+  VAT_MODE_CHANGED: "ƏDV rejimini dəyişdi",
+  VAT_OPENING: "ƏDV başlanğıc qalığı daxil etdi",
+  VAT_CUSTOMER_RECEIPT: "müştəridən ƏDV mədaxili qeydə aldı",
+  VAT_SUPPLIER_PAYMENT: "təchizatçıya ƏDV ödədi",
+  VAT_SUPPLIER_REFUND: "təchizatçıdan ƏDV geri aldı",
+  VAT_FUNDING: "ƏDV depozitini artırdı",
+  VAT_BUDGET_PAYMENT: "ƏDV büdcə ödənişi qeydə aldı",
+  VAT_REVERSAL: "ƏDV əməliyyatını ləğv etdi",
   RECONCILIATION_CREATED: "hesablaşma sənədi yaratdı",
   RECONCILIATION_SIGNED_FILE_UPLOADED: "imzalı hesablaşma sənədini yüklədi",
   RECONCILIATION_CONFIRMED: "hesablaşmanı təsdiqlədi",
@@ -237,9 +254,11 @@ export function auditDescription(log: AuditLog) {
     return `${log.actor_username_snapshot} istifadəçisi “${name}” ${log.action === "SERVICE_WORK_REMOVED" ? "işini" : "detalını"} ${log.plate ? `${log.plate} ` : ""}servis kartından sildi.`;
   }
   const assignment = log.changes.assigned_worker_id as
-    { before?: unknown; after?: unknown } | undefined;
+    | { before?: unknown; after?: unknown }
+    | undefined;
   const status = log.changes.status as
-    { before?: unknown; after?: unknown } | undefined;
+    | { before?: unknown; after?: unknown }
+    | undefined;
   if (
     log.action === "WORKER_ASSIGNED" &&
     assignment?.before == null &&

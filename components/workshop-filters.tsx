@@ -1,3 +1,4 @@
+import { IntakeDateInput } from "@/components/intake-date-input";
 import Link from "next/link";
 import { FilterForm } from "@/components/filter-form";
 import { Filter, RotateCcw, ChevronLeft, ChevronRight } from "lucide-react";
@@ -153,18 +154,16 @@ export function WorkshopFilters({
           })}
           <label className="text-xs text-[var(--muted)]">
             Başlanğıc
-            <input
+            <IntakeDateInput
               name="from"
-              type="date"
               defaultValue={f.from}
               className="field mt-1"
             />
           </label>
           <label className="text-xs text-[var(--muted)]">
             Son
-            <input
+            <IntakeDateInput
               name="to"
-              type="date"
               defaultValue={f.to}
               className="field mt-1"
             />

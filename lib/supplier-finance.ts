@@ -1,6 +1,12 @@
 import { selectPurchases, type WorkshopData } from "@/lib/supabase/workshop";
 import { supplierDisplayName } from "@/lib/supabase/queries";
-import { paidFor, purchaseCost, purchaseDue, sumMoney } from "@/lib/workshop";
+import {
+  paidFor,
+  purchaseCost,
+  purchaseDue,
+  sumMoney,
+  subtractMoney,
+} from "@/lib/workshop";
 import type { WorkshopFilters } from "@/lib/filters";
 
 export function supplierFinance(data: WorkshopData, f: WorkshopFilters) {
@@ -10,11 +16,37 @@ export function supplierFinance(data: WorkshopData, f: WorkshopFilters) {
   const paid = sumMoney(
     items.map((p) => paidFor(data.cash, "SUPPLIER_PURCHASE", p.id)),
   );
+  const vat = sumMoney(
+    items.map((p) =>
+      subtractMoney(
+        Number(p.vat_amount ?? 0),
+        subtractMoney(p.returned ?? 0, p.returned_net ?? p.returned ?? 0),
+      ),
+    ),
+  );
+  const paidVat = sumMoney(
+    data.cash
+      .filter(
+        (t) =>
+          !t.voided_at &&
+          t.allocation_type === "SUPPLIER_PURCHASE" &&
+          items.some((p) => p.id === t.purchase_id),
+      )
+      .map((t) => t.vat_amount ?? 0),
+  );
+  const remaining = sumMoney(items.map((p) => purchaseDue(p, data.cash)));
+  const remainingVat = sumMoney(items.map((p) => p.remaining_vat ?? 0));
   return {
     items,
     cost,
     paid,
-    remaining: sumMoney(items.map((p) => purchaseDue(p, data.cash))),
+    vat,
+    gross: sumMoney([cost, vat]),
+    paidVat,
+    paidNet: subtractMoney(paid, paidVat),
+    remaining,
+    remainingVat,
+    remainingNet: subtractMoney(remaining, remainingVat),
   };
 }
 export function selectSupplierFinances(data: WorkshopData, f: WorkshopFilters) {

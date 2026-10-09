@@ -15,7 +15,11 @@ export function dbPurchaseTotal(
 export function dbPurchaseOutstanding(purchase: DbPurchase) {
   return purchase.source_type !== "SUPPLIER"
     ? 0
-    : subtractMoney(dbPurchaseTotal(purchase), purchase.paid_amount);
+    : (purchase.remaining ??
+        subtractMoney(
+          Number(purchase.gross_amount ?? dbPurchaseTotal(purchase)),
+          purchase.paid_amount,
+        ));
 }
 export function dbFinancialSummary(
   agreedBudget: number,
@@ -76,6 +80,7 @@ export async function getFinance(): Promise<FinanceData> {
     advanceAllocations,
     purchaseReturns,
     supplierCredits,
+    vatLedger,
   ] = await Promise.all([
     read<FinanceData["jobs"][number]>("jobs"),
     read<FinanceData["work"][number]>("work"),
@@ -94,6 +99,7 @@ export async function getFinance(): Promise<FinanceData> {
     read<NonNullable<FinanceData["supplierCredits"]>[number]>(
       "supplier_credit_allocations",
     ),
+    read<NonNullable<FinanceData["vatLedger"]>[number]>("vat_ledger"),
   ]);
   return {
     jobs,
@@ -107,5 +113,6 @@ export async function getFinance(): Promise<FinanceData> {
     advanceAllocations,
     purchaseReturns,
     supplierCredits,
+    vatLedger,
   };
 }

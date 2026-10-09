@@ -18,13 +18,14 @@ import { FundingFields } from "@/components/funding-fields";
 import { IntakeDateInput } from "@/components/intake-date-input";
 import { bakuDate } from "@/lib/filters";
 import { RemoveServiceRow } from "@/components/remove-service-row";
+import { VatMode } from "@/components/vat-mode";
 
 export default async function EditIntakePage({
   params,
 }: {
   params: Promise<{ jobId: string }>;
 }) {
-  await requireAccess(["ADMIN", "INTAKE"]);
+  const { profile } = await requireAccess(["ADMIN", "INTAKE"]);
   const { jobId } = await params,
     data = await getWorkshop(jobId),
     job = data.jobs[0];
@@ -71,6 +72,7 @@ export default async function EditIntakePage({
         <section className="grid gap-4 border-t border-[var(--border)] pt-6 sm:grid-cols-2 xl:grid-cols-3">
           {fields(jobIntakeFields, job)}
           <FundingFields job={job} />
+          <VatMode initial={job.vat_enabled ?? false} />
           <label className="text-sm text-[var(--muted)]">
             Qəbul tarixi
             <IntakeDateInput
@@ -132,6 +134,9 @@ export default async function EditIntakePage({
                   {kind === "work"
                     ? "Planlaşdırılan işlər"
                     : "Alınacaq detallar"}
+                  <span className="ml-2 text-sm font-normal text-[var(--muted)]">
+                    {rows.length}
+                  </span>
                 </h2>
                 {[
                   ...rows,
@@ -151,11 +156,29 @@ export default async function EditIntakePage({
                     costNote: "",
                   },
                 ].map((row) => (
-                  <div key={row.id}>
+                  <div
+                    key={row.id}
+                    className="mb-3 rounded-md border border-[var(--border)] bg-white/[0.02] p-3 sm:p-4"
+                  >
+                    {row.catalog && (
+                      <div className="mb-3 flex flex-wrap items-start justify-between gap-3 border-b border-[var(--border)] pb-3">
+                        <h3 className="min-w-0 flex-1 break-words text-sm font-semibold">
+                          {row.title}
+                        </h3>
+                        {profile.role === "ADMIN" &&
+                          !job.financially_closed_at && (
+                            <RemoveServiceRow
+                              job={jobId}
+                              id={row.id}
+                              kind={kind}
+                            />
+                          )}
+                      </div>
+                    )}
                     <ActionForm
                       key={row.id}
                       action={saveQuoteLineAction}
-                      className="grid items-end gap-3 border-b border-[var(--border)] py-4 sm:grid-cols-2 xl:grid-cols-4"
+                      className="grid items-end gap-3 sm:grid-cols-2 xl:grid-cols-4"
                     >
                       <input
                         type="hidden"
@@ -164,14 +187,11 @@ export default async function EditIntakePage({
                       />
                       <input type="hidden" name="kind" value={kind} />
                       {row.catalog ? (
-                        <div className="sm:col-span-2 xl:col-span-4">
-                          <input
-                            type="hidden"
-                            name="catalog_id"
-                            value={row.catalog}
-                          />
-                          <strong>{row.title}</strong>
-                        </div>
+                        <input
+                          type="hidden"
+                          name="catalog_id"
+                          value={row.catalog}
+                        />
                       ) : (
                         <SearchSelect
                           label={kind === "work" ? "Yeni iş" : "Yeni detal"}
@@ -201,9 +221,6 @@ export default async function EditIntakePage({
                         {row.catalog ? "Təklifi saxla" : "Əlavə et"}
                       </SubmitButton>
                     </ActionForm>
-                    {row.id !== "new" && !job.financially_closed_at && (
-                      <RemoveServiceRow job={jobId} id={row.id} kind={kind} />
-                    )}
                   </div>
                 ))}
               </section>

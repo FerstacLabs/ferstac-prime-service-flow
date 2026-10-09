@@ -43,6 +43,7 @@ export async function changePurchaseAction(f: FormData) {
                   .parse(text(f, "unit_name")),
                 new_quantity: quantitySchema.parse(f.get("new_quantity")),
                 new_unit_price: moneySchema.parse(f.get("new_unit_price")),
+                new_vat_enabled: text(f, "new_vat_enabled") === "true",
                 document_no: text(f, "document_no"),
                 part_code_oem: text(f, "part_code_oem"),
               }

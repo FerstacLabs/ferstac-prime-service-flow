@@ -3,7 +3,13 @@ import { supplierFinance } from "@/lib/supplier-finance";
 import { partTitle, supplierDisplayName } from "@/lib/supabase/queries";
 import type { WorkshopFilters } from "@/lib/filters";
 import { formatQuantity } from "@/lib/decimal";
-import { paidFor, purchaseDue, purchaseLifecycleLabel } from "@/lib/workshop";
+import {
+  paidFor,
+  purchaseDue,
+  purchaseLifecycleLabel,
+  subtractMoney,
+  sumMoney,
+} from "@/lib/workshop";
 import {
   formatReportMoney,
   formatReportDate,
@@ -154,6 +160,60 @@ export function purchaseReport(
       }),
     },
   });
+  if (items.some((p) => p.vat_enabled))
+    report.sections.push({
+      title: "Alış və ödənişlərin ƏDV bölgüsü",
+      table: {
+        columns: [
+          "Detal",
+          "Net alış",
+          "ƏDV",
+          "Yekun alış",
+          "Net ödənilib",
+          "ƏDV ödənilib",
+          "Yekun ödənilib",
+          "Qalıq net",
+          "Qalıq ƏDV",
+          "Yekun borc",
+        ].map((label, i) => ({
+          key: String(i),
+          label,
+          width: i === 0 ? 19 : 9,
+          align: i === 0 ? "left" : "right",
+        })),
+        rows: items.map((p) => {
+          const paid = paidFor(data.cash, "SUPPLIER_PURCHASE", p.id);
+          const paidVat = sumMoney(
+            data.cash
+              .filter(
+                (t) =>
+                  !t.voided_at &&
+                  t.allocation_type === "SUPPLIER_PURCHASE" &&
+                  t.purchase_id === p.id,
+              )
+              .map((t) => t.vat_amount ?? 0),
+          );
+          const due = purchaseDue(p, data.cash);
+          return {
+            id: p.id,
+            cells: Object.fromEntries(
+              [
+                partTitle(p),
+                money(Number(p.net_amount ?? p.total_price)),
+                money(Number(p.vat_amount ?? 0)),
+                money(Number(p.gross_amount ?? p.total_price)),
+                money(subtractMoney(paid, paidVat)),
+                money(paidVat),
+                money(paid),
+                money(subtractMoney(due, p.remaining_vat ?? 0)),
+                money(p.remaining_vat ?? 0),
+                money(due),
+              ].map((v, i) => [String(i), v]),
+            ),
+          };
+        }),
+      },
+    });
   const selected = new Set(items.map((p) => p.id));
   const events = [
     ...(data.purchaseReturns ?? [])
@@ -164,6 +224,7 @@ export function purchaseReport(
         type: r.replacement_purchase_id ? "Dəyişdirmə" : "Qaytarma",
         item: partTitle(data.purchases.find((p) => p.id === r.purchase_id)),
         amount: r.amount,
+        vat: r.vat_amount ?? 0,
         quantity: formatQuantity(r.quantity),
         reference: [r.reason, r.reference_number].filter(Boolean).join(" · "),
       })),
@@ -181,6 +242,7 @@ export function purchaseReport(
         type: "Kredit tətbiqi (pul deyil)",
         item: partTitle(data.purchases.find((p) => p.id === a.purchase_id)),
         amount: a.amount,
+        vat: a.vat_amount ?? 0,
         quantity: "-",
         reference: "",
       })),
@@ -206,6 +268,7 @@ export function purchaseReport(
           ),
         ),
         amount: t.amount,
+        vat: t.vat_amount ?? 0,
         quantity: "-",
         reference: t.reference_number || "",
       })),
@@ -219,8 +282,10 @@ export function purchaseReport(
           { key: "type", label: "Əməliyyat", width: 23 },
           { key: "item", label: "Detal", width: 18 },
           { key: "quantity", label: "Miqdar", width: 5 },
-          { key: "amount", label: "Məbləğ (AZN)", width: 12, align: "right" },
-          { key: "reference", label: "Səbəb / sənəd", width: 30 },
+          { key: "net", label: "Net", width: 9, align: "right" },
+          { key: "vat", label: "ƏDV", width: 9, align: "right" },
+          { key: "amount", label: "Yekun (AZN)", width: 12, align: "right" },
+          { key: "reference", label: "Səbəb / sənəd", width: 12 },
         ],
         rows: events.map((e) => ({
           id: e.id,
@@ -230,6 +295,8 @@ export function purchaseReport(
             item: e.item,
             quantity: e.quantity,
             amount: money(e.amount),
+            net: money(subtractMoney(e.amount, e.vat)),
+            vat: money(e.vat),
             reference: e.reference.replace(/([^\s]{20})(?=\S)/g, "$1\n"),
           },
         })),

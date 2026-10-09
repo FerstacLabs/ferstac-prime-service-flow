@@ -1,4 +1,5 @@
 "use client";
+import { IntakeDateInput } from "@/components/intake-date-input";
 import { useState } from "react";
 import Link from "next/link";
 import type { FinanceData, JournalFilters } from "@/lib/finance";
@@ -70,22 +71,15 @@ export function ReconciliationFilters({
       </label>
       <label className="text-sm">
         Başlanğıc tarix
-        <input
+        <IntakeDateInput
           className="field mt-1"
-          type="date"
           name="from"
           defaultValue={f.from}
         />
       </label>
       <label className="text-sm">
         Son tarix
-        <input
-          className="field mt-1"
-          type="date"
-          name="to"
-          defaultValue={f.to}
-          min={f.from || undefined}
-        />
+        <IntakeDateInput className="field mt-1" name="to" defaultValue={f.to} />
       </label>
       <div className="flex items-end gap-2">
         <button className="btn btn-primary">Tətbiq et</button>

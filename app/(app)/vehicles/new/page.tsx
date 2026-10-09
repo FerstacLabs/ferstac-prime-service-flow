@@ -63,9 +63,8 @@ export default async function NewVehiclePage() {
                 <input name="production_year" type="number" className="field" />
               </Field>
               <Field label="ilk qeydiyyat tarixi">
-                <input
+                <IntakeDateInput
                   name="first_registration_date"
-                  type="date"
                   className="field"
                 />
               </Field>
@@ -94,9 +93,8 @@ export default async function NewVehiclePage() {
                 />
               </Field>
               <Field label="etibarlılıq tarixi">
-                <input
+                <IntakeDateInput
                   name="registration_valid_until"
-                  type="date"
                   className="field"
                 />
               </Field>

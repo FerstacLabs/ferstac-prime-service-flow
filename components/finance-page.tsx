@@ -1,3 +1,4 @@
+import { IntakeDateInput } from "@/components/intake-date-input";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { ReconciliationFilters } from "@/components/reconciliation-filters";
@@ -14,6 +15,7 @@ import {
   vehicleSettlement,
   moneySum,
   moneyDiff,
+  operatingAmount,
   type FinanceData,
 } from "@/lib/finance";
 import { formatMoney, formatDate } from "@/lib/format";
@@ -35,6 +37,9 @@ import { voidPaymentAction } from "@/app/actions/finance";
 import { ReportActions } from "@/components/report-actions";
 import { SupplierCreditActions } from "@/components/purchase-lifecycle-forms";
 import { financeReport } from "@/lib/reports/finance-report";
+import { vatReport } from "@/lib/reports/vat-report";
+import { vatEventLabels, vatLedgerPosition } from "@/lib/vat-ledger";
+import { VatAdjustmentForm } from "@/components/vat-adjustment-form";
 import {
   WorkerAdvanceButton,
   AdvanceAllocationButton,
@@ -75,6 +80,8 @@ export function FinancePage({
         )
       : null;
   const listView = ["operations", "reports"].includes(view);
+  const vatView = view === "reports" && f.reportType === "vat";
+  const vatDocument = vatView ? vatReport(data, f) : null;
   const resetQuery = new URLSearchParams({
     view,
     ...(settlementJob ? { settlementJob } : {}),
@@ -204,7 +211,11 @@ export function FinancePage({
                         ),
                       ] as [string, number],
                   ),
-                ["Ümumi vəsait", ledgerBalance(data.ledger)],
+                [
+                  "ƏDV depozit qalığı",
+                  vatLedgerPosition(data.vatLedger ?? []).balance,
+                ],
+                ["Sərbəst əməliyyat vəsaiti", ledgerBalance(data.ledger)],
               ]}
             />
           </section>
@@ -216,6 +227,7 @@ export function FinancePage({
               <NewMovement data={data} direction="IN" channel="CASH" opening />
             ) : null}
           </div>
+          {admin && <VatAdjustmentForm entries={data.vatLedger ?? []} />}
         </>
       ) : null}
       {listView ? (
@@ -229,6 +241,7 @@ export function FinancePage({
               ? select("reportType", "Hesabat növü", [
                   { id: "ledger", name: "Mədaxil / Məxaric jurnalı" },
                   { id: "opening", name: "Başlanğıc qalıqlar" },
+                  { id: "vat", name: "ƏDV hesabatı" },
                 ])
               : null}
             {settlementJob ? (
@@ -240,8 +253,7 @@ export function FinancePage({
             ].map(([name, label]) => (
               <label key={name} className="text-xs text-[var(--muted)]">
                 {label}
-                <input
-                  type="date"
+                <IntakeDateInput
                   name={name}
                   defaultValue={f[name as "from" | "to"]}
                   className="field mt-1"
@@ -254,12 +266,22 @@ export function FinancePage({
                   { id: "BANK", name: "Bank" },
                 ])
               : null}
-            {select("direction", "İstiqamət", [
-              { id: "IN", name: "Mədaxil" },
-              { id: "OUT", name: "Məxaric" },
-            ])}
-            {select("account", "Bank hesabı", data.accounts)}
-            {select("category", "Təyinat", data.categories)}
+            {!vatView &&
+              select("direction", "İstiqamət", [
+                { id: "IN", name: "Mədaxil" },
+                { id: "OUT", name: "Məxaric" },
+              ])}
+            {!vatView && select("account", "Bank hesabı", data.accounts)}
+            {!vatView && select("category", "Təyinat", data.categories)}
+            {vatView &&
+              select(
+                "vatKind",
+                "ƏDV əməliyyatı",
+                Object.entries(vatEventLabels).map(([id, name]) => ({
+                  id,
+                  name,
+                })),
+              )}
             {select(
               "job",
               "Avtomobil",
@@ -282,40 +304,44 @@ export function FinancePage({
                 ).values(),
               ),
             )}
-            {select(
-              "worker",
-              "İşçi",
-              Array.from(
-                new Map(
-                  (
-                    data.workers ??
-                    data.work
-                      .filter((w) => w.worker_id)
-                      .map((w) => ({ id: w.worker_id!, name: w.worker }))
-                  ).map((w) => [w.id, { id: w.id, name: w.name }]),
-                ).values(),
-              ),
+            {!vatView &&
+              select(
+                "worker",
+                "İşçi",
+                Array.from(
+                  new Map(
+                    (
+                      data.workers ??
+                      data.work
+                        .filter((w) => w.worker_id)
+                        .map((w) => ({ id: w.worker_id!, name: w.worker }))
+                    ).map((w) => [w.id, { id: w.id, name: w.name }]),
+                  ).values(),
+                ),
+              )}
+            {!vatView &&
+              select(
+                "actor",
+                "Daxil edən",
+                Array.from(
+                  new Map(
+                    data.ledger.map((t) => [
+                      t.owner_user_id,
+                      { id: t.owner_user_id, name: t.created_by_name || "-" },
+                    ]),
+                  ).values(),
+                ),
+              )}
+            {!vatView && (
+              <label className="text-xs text-[var(--muted)]">
+                Tərəf
+                <input
+                  name="party"
+                  defaultValue={f.party}
+                  className="field mt-1"
+                />
+              </label>
             )}
-            {select(
-              "actor",
-              "Daxil edən",
-              Array.from(
-                new Map(
-                  data.ledger.map((t) => [
-                    t.owner_user_id,
-                    { id: t.owner_user_id, name: t.created_by_name || "-" },
-                  ]),
-                ).values(),
-              ),
-            )}
-            <label className="text-xs text-[var(--muted)]">
-              Tərəf
-              <input
-                name="party"
-                defaultValue={f.party}
-                className="field mt-1"
-              />
-            </label>
             <div className="flex items-end gap-2">
               <button className="btn btn-primary">Tətbiq et</button>
               <Link className="btn btn-secondary" href={`/kassa?${resetQuery}`}>
@@ -323,22 +349,41 @@ export function FinancePage({
               </Link>
             </div>
           </form>
-          <MoneyGrid
-            items={[
-              ["Nağd mədaxil", cash.income],
-              ["Nağd məxaric", cash.expense],
-              ["Nağd net", cash.net],
-              ["Bank mədaxil", bank.income],
-              ["Bank məxaric", bank.expense],
-              ["Bank net", bank.net],
-              ["Ümumi mədaxil", total.income],
-              ["Ümumi məxaric", total.expense],
-              ["Net pul axını", total.net],
-            ]}
-          />
+          {!vatView && (
+            <MoneyGrid
+              items={[
+                ["Nağd mədaxil", cash.income],
+                ["Nağd məxaric", cash.expense],
+                ["Nağd net", cash.net],
+                ["Bank mədaxil", bank.income],
+                ["Bank məxaric", bank.expense],
+                ["Bank net", bank.net],
+                ["Ümumi mədaxil", total.income],
+                ["Ümumi məxaric", total.expense],
+                ["Net pul axını", total.net],
+              ]}
+            />
+          )}
         </>
       ) : null}
+      {vatDocument && (
+        <>
+          <dl className="my-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {vatDocument.summary.map((item) => (
+              <div
+                key={item.label}
+                className="border-b border-[var(--border)] py-3"
+              >
+                <dt className="text-xs text-[var(--muted)]">{item.label}</dt>
+                <dd className="mt-2 text-base font-semibold">{item.value}</dd>
+              </div>
+            ))}
+          </dl>
+          <ReconciliationTables report={vatDocument} />
+        </>
+      )}
       {view === "reports" &&
+      !vatView &&
       (f.account || f.channel === "CASH") &&
       !f.worker &&
       !f.supplier &&
@@ -732,7 +777,7 @@ export function FinancePage({
           </details>
         </section>
       ) : null}
-      {listView ? (
+      {listView && !vatView ? (
         <section className="my-8">
           <h2 className="mb-3 text-lg font-semibold">Ümumi jurnal</h2>
           <div
@@ -753,8 +798,10 @@ export function FinancePage({
                     "Avtomobil / İş №",
                     "Əlavə izah",
                     "Reference",
-                    "Mədaxil",
-                    "Məxaric",
+                    "Net mədaxil",
+                    "Net məxaric",
+                    "ƏDV",
+                    "Yekun hesablaşma",
                     "Hesab üzrə qalıq",
                     "Daxil edən",
                     "Sənəd",
@@ -802,10 +849,20 @@ export function FinancePage({
                     <td className="max-w-64 break-words">{t.purpose}</td>
                     <td>{t.bank_reference || t.reference_number || "-"}</td>
                     <td>
-                      {t.direction === "IN" ? formatMoney(t.amount) : "-"}
+                      {t.direction === "IN"
+                        ? formatMoney(operatingAmount(t))
+                        : "-"}
                     </td>
                     <td>
-                      {t.direction === "OUT" ? formatMoney(t.amount) : "-"}
+                      {t.direction === "OUT"
+                        ? formatMoney(operatingAmount(t))
+                        : "-"}
+                    </td>
+                    <td className="whitespace-nowrap tabular-nums">
+                      {formatMoney(t.vat_amount ?? 0)}
+                    </td>
+                    <td className="whitespace-nowrap tabular-nums">
+                      {formatMoney(t.amount)}
                     </td>
                     <td className="whitespace-nowrap tabular-nums">
                       {balances.has(t.id)

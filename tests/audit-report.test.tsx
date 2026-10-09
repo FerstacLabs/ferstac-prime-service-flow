@@ -58,8 +58,8 @@ describe("audit descriptions and reports", () => {
     });
     expect(result.changes).toContainEqual({
       label: "Hədəf təhvil tarixi",
-      before: "01.10.2026",
-      after: "05.10.2026",
+      before: "01/10/2026",
+      after: "05/10/2026",
     });
     expect(result.changes).toContainEqual({
       label: "Qeyd",
@@ -110,7 +110,7 @@ describe("audit descriptions and reports", () => {
       actor: "kassa",
     });
     expect(db.range).toHaveBeenLastCalledWith(50, 99);
-    expect(report.filters).toContain("Dövr: 01.09.2026 - 21.09.2026");
+    expect(report.filters).toContain("Dövr: 01/09/2026 - 21/09/2026");
     expect(report.filters).toContain("İstifadəçi: kassa");
     const table = report.sections[0].table!;
     expect(table.columns.reduce((sum, column) => sum + column.width!, 0)).toBe(

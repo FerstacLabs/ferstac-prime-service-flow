@@ -57,15 +57,22 @@ describe("localized exact financial inputs", () => {
   });
 });
 describe("keyboard and paste intake dates", () => {
-  it.each(["09/23/2026", "09-23-2026", "2026-09-23"])(
+  it.each(["23/09/2026", "23-09-2026", "2026-09-23"])(
     "persists %s as ISO",
     (input) => {
       expect(parseIntakeDate(input)).toBe("2026-09-23");
-      expect(formatIntakeDate(parseIntakeDate(input))).toBe("09/23/2026");
+      expect(formatIntakeDate(parseIntakeDate(input))).toBe("23/09/2026");
     },
   );
-  it.each(["23/09/2026", "02/29/2025", "04/31/2026", "nonsense"])(
+  it.each(["09/23/2026", "29/02/2025", "31/04/2026", "nonsense"])(
     "rejects invalid date %s",
     (input) => expect(() => parseIntakeDate(input)).toThrow(),
+  );
+  it.each(["07/10/2026", "07-10-2026", "2026-10-07"])(
+    "interprets %s as October 7",
+    (input) => {
+      expect(parseIntakeDate(input)).toBe("2026-10-07");
+      expect(formatIntakeDate(parseIntakeDate(input))).toBe("07/10/2026");
+    },
   );
 });

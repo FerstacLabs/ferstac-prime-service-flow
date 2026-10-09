@@ -14,6 +14,7 @@ export function supplierReport(
   const rows = selectSupplierFinances(data, f);
   return {
     ...report,
+    orientation: "landscape",
     title: "Təchizatçılar üzrə ümumi hesabat",
     subtitle:
       f.from || f.to
@@ -30,9 +31,11 @@ export function supplierReport(
         value: String(rows.filter((n) => !n.supplier.active).length),
       },
       {
-        label: "Ümumi alış məbləği",
+        label: "Net alış (qaytarmalar çıxılıb)",
         value: money(sumMoney(rows.map((n) => n.cost))),
       },
+      { label: "Giriş ƏDV-si", value: money(sumMoney(rows.map((n) => n.vat))) },
+      { label: "Yekun alış", value: money(sumMoney(rows.map((n) => n.gross))) },
       { label: "Ödənilib", value: money(sumMoney(rows.map((n) => n.paid))) },
       {
         label: "Qalıq borc",
@@ -46,17 +49,20 @@ export function supplierReport(
           columns: [
             "Təchizatçı",
             "VÖEN",
-            "Telefon",
-            "Status",
-            "Alış sayı",
-            "Alış məbləği",
-            "Ödənilib",
-            "Qalıq borc",
+            "Net alış",
+            "ƏDV",
+            "Yekun alış",
+            "Net ödənilib",
+            "ƏDV ödənilib",
+            "Yekun ödənilib",
+            "Qalıq net",
+            "Qalıq ƏDV",
+            "Yekun borc",
           ].map((label, i) => ({
             key: String(i),
             label,
-            width: [22, 12, 14, 9, 7, 12, 12, 12][i],
-            align: i >= 4 ? "right" : "left",
+            width: i === 0 ? 19 : i === 1 ? 9 : 8,
+            align: i >= 2 ? "right" : "left",
           })),
           rows: rows.map((n) => ({
             id: n.supplier.id,
@@ -64,11 +70,14 @@ export function supplierReport(
               [
                 supplierDisplayName(n.supplier),
                 n.supplier.tax_id_voen || "-",
-                n.supplier.phone || "-",
-                n.supplier.active ? "Aktiv" : "Arxiv",
-                String(n.items.length),
                 money(n.cost),
+                money(n.vat),
+                money(n.gross),
+                money(n.paidNet),
+                money(n.paidVat),
                 money(n.paid),
+                money(n.remainingNet),
+                money(n.remainingVat),
                 money(n.remaining),
               ].map((value, i) => [String(i), value]),
             ),

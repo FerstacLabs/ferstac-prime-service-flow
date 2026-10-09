@@ -37,6 +37,8 @@ export type DbVehicle = {
 };
 
 export type DbServiceJob = {
+  vat_enabled?: boolean;
+  vat_rate?: number;
   financially_closed_at?: string | null;
   deleted_at?: string | null;
   has_line_quotes?: boolean;
@@ -90,6 +92,14 @@ export type DbWorkItem = QuoteMeasure & {
 };
 
 export type DbPurchase = {
+  vat_enabled?: boolean;
+  vat_rate?: number;
+  net_amount?: number;
+  vat_amount?: number;
+  gross_amount?: number;
+  returned_net?: number;
+  remaining_net?: number;
+  remaining_vat?: number;
   lifecycle_closed?: boolean;
   unit_name?: string | null;
   returned?: number;

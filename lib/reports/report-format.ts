@@ -7,6 +7,7 @@ import type {
 } from "@/lib/types";
 import { bakuDate } from "@/lib/filters";
 import { formatMoneyAZN } from "@/lib/decimal";
+import { formatIntakeDate } from "@/lib/intake-date";
 
 export const reportJobStatusLabels: Record<JobStatus, string> = {
   RECEIVED: "Qəbul edilib",
@@ -50,8 +51,7 @@ export function formatReportDate(value: string | null | undefined) {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  const [year, month, day] = bakuDate(value).split("-");
-  return `${day}.${month}.${year}`;
+  return formatIntakeDate(bakuDate(value));
 }
 
 export function formatReportDateTime(value: Date | string = new Date()) {

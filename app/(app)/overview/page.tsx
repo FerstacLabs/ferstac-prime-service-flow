@@ -8,6 +8,7 @@ import { jobFinance, sumMoney } from "@/lib/workshop";
 import { formatMoney } from "@/lib/format";
 import { EmptyState } from "@/components/empty-state";
 import { profitReason, profitSummary } from "@/lib/profit-status";
+import { vatLedgerPosition } from "@/lib/vat-ledger";
 export const dynamic = "force-dynamic";
 export default async function OverviewPage() {
   await requireAccess(["ADMIN"]);
@@ -37,8 +38,14 @@ export default async function OverviewPage() {
       <MoneyGrid
         items={[
           [
-            "Müştəri təklifləri / əvvəlki büdcələr",
+            "ƏDV-siz təkliflər / əvvəlki büdcələr",
             sumMoney(totals.map((n) => n.quotedTotal)),
+          ],
+          ["Çıxış ƏDV-si", sumMoney(totals.map((n) => n.quotedVat))],
+          ["Yekun təkliflər", sumMoney(totals.map((n) => n.quotedGross))],
+          [
+            "ƏDV depozit qalığı",
+            vatLedgerPosition(data.vatLedger ?? []).balance,
           ],
           ["Məlum faktiki maya", sumMoney(totals.map((n) => n.totalCost))],
           ["Müştəridən alınıb", sumMoney(totals.map((n) => n.customerPaid))],
@@ -78,7 +85,13 @@ export default async function OverviewPage() {
               </div>
               <div className="metric-grid mt-4 grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
                 {[
-                  ["Təklif", formatMoney(n.quotedTotal)],
+                  ["ƏDV-siz təklif", formatMoney(n.quotedTotal)],
+                  ...(j.vat_enabled
+                    ? [
+                        ["ƏDV (18%)", formatMoney(n.quotedVat)],
+                        ["Yekun ƏDV-li təklif", formatMoney(n.quotedGross)],
+                      ]
+                    : []),
                   ["Məlum maya", formatMoney(n.totalCost)],
                   ["Müştəri borcu", formatMoney(n.customerReceivable)],
                   [

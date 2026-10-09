@@ -1,3 +1,4 @@
+import { IntakeDateInput } from "@/components/intake-date-input";
 import Link from "next/link";
 import { Filter, RotateCcw } from "lucide-react";
 import { requireAccess } from "@/lib/supabase/auth";
@@ -55,8 +56,7 @@ export default async function SuppliersPage({
         </label>
         <label className="text-xs text-[var(--muted)]">
           Başlanğıc
-          <input
-            type="date"
+          <IntakeDateInput
             name="from"
             defaultValue={f.from}
             className="field mt-1"
@@ -64,8 +64,7 @@ export default async function SuppliersPage({
         </label>
         <label className="text-xs text-[var(--muted)]">
           Son
-          <input
-            type="date"
+          <IntakeDateInput
             name="to"
             defaultValue={f.to}
             className="field mt-1"

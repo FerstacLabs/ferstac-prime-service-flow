@@ -5,7 +5,7 @@ export function parseIntakeDate(value: unknown): string {
   const [year, month, day] = iso
     ? iso.slice(1).map(Number)
     : local
-      ? [Number(local[3]), Number(local[1]), Number(local[2])]
+      ? [Number(local[3]), Number(local[2]), Number(local[1])]
       : [];
   const date = new Date(Date.UTC(year, month - 1, day));
   if (
@@ -16,11 +16,11 @@ export function parseIntakeDate(value: unknown): string {
     date.getUTCMonth() !== month - 1 ||
     date.getUTCDate() !== day
   )
-    throw new Error("Tarixi AY/GÜN/İL formatında daxil edin.");
+    throw new Error("Tarixi GÜN/AY/İL formatında daxil edin.");
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 export function formatIntakeDate(iso: string | null | undefined) {
   if (!iso) return "";
   const [year, month, day] = iso.slice(0, 10).split("-");
-  return `${month}/${day}/${year}`;
+  return `${day}/${month}/${year}`;
 }

@@ -9,6 +9,7 @@ import {
   vehicleSettlement,
   moneySum,
   accountRunningBalances,
+  operatingAmount,
   type FinanceData,
   type JournalFilters,
 } from "@/lib/finance";
@@ -21,6 +22,7 @@ import { getFinance } from "@/lib/supabase/finance";
 import type { SearchParams } from "@/lib/filters";
 import { workerReconciliation } from "@/lib/reports/worker-reconciliation";
 import { supplierReconciliation } from "@/lib/reports/supplier-reconciliation";
+import { vatReport } from "@/lib/reports/vat-report";
 export async function loadFinanceReport(params: SearchParams) {
   await requireAccess(["ADMIN", "CASHIER"]);
   return financeReport(await getFinance(), journalFilters(params));
@@ -29,6 +31,7 @@ export function financeReport(
   data: FinanceData,
   f: JournalFilters,
 ): PrimeReport | null {
+  if (f.reportType === "vat") return vatReport(data, f);
   if (f.reportType === "worker" && !f.worker) return null;
   if (f.reportType === "supplier" && !f.supplier) return null;
   if (
@@ -394,6 +397,19 @@ export function financeReport(
               ? ("right" as const)
               : ("left" as const),
         })),
+        ...(rows.some((t) => Number(t.vat_amount) > 0) &&
+        !f.worker &&
+        !["worker", "supplier"].includes(f.reportType)
+          ? [
+              { key: "vat", label: "ƏDV", width: 9, align: "right" as const },
+              {
+                key: "gross",
+                label: "Yekun hesablaşma",
+                width: 10,
+                align: "right" as const,
+              },
+            ]
+          : []),
         ...(f.reportType === "opening"
           ? [{ key: "actor", label: "Daxil edən", width: 12 }]
           : []),
@@ -431,8 +447,10 @@ export function financeReport(
             /([^\s]{16})(?=\S)/g,
             "$1\n",
           ),
-          in: t.direction === "IN" ? money(t.amount) : "-",
-          out: t.direction === "OUT" ? money(t.amount) : "-",
+          in: t.direction === "IN" ? money(operatingAmount(t)) : "-",
+          out: t.direction === "OUT" ? money(operatingAmount(t)) : "-",
+          vat: money(t.vat_amount ?? 0),
+          gross: money(t.amount),
           actor: t.created_by_name || "-",
           notes: t.notes || t.purpose || "-",
           balance: balances.has(t.id) ? money(balances.get(t.id)!) : "-",

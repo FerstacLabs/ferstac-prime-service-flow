@@ -94,6 +94,8 @@ export async function savePurchaseAction(formData: FormData) {
       quantity,
       unit_price: unitPrice,
       source_type: sourceType,
+      vat_enabled:
+        sourceType === "SUPPLIER" && formData.get("vat_enabled") === "true",
       supplier_id:
         sourceType === "SUPPLIER" ? text(formData.get("supplier_id")) : null,
       purchased_by_worker_id:

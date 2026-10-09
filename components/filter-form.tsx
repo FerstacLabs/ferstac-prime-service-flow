@@ -10,8 +10,14 @@ export function FilterForm({ children }: { children: React.ReactNode }) {
         )
           return;
         for (const element of Array.from(event.currentTarget.elements)) {
-          if (element instanceof HTMLInputElement && element.type !== "hidden")
+          if (
+            element instanceof HTMLInputElement &&
+            (element.type !== "hidden" ||
+              element.hasAttribute("data-date-value"))
+          ) {
             element.value = "";
+            element.setCustomValidity("");
+          }
           if (element instanceof HTMLSelectElement) element.value = "";
         }
       }}
@@ -22,14 +28,17 @@ export function FilterForm({ children }: { children: React.ReactNode }) {
           target.name === "period" &&
           !target.value
         ) {
-          for (const name of ["from", "to"]) {
+          for (const name of ["from", "to", "from_display", "to_display"]) {
             const input = event.currentTarget.elements.namedItem(name);
-            if (input instanceof HTMLInputElement) input.value = "";
+            if (input instanceof HTMLInputElement) {
+              input.value = "";
+              input.setCustomValidity("");
+            }
           }
         }
         if (
           target instanceof HTMLInputElement &&
-          (target.name === "from" || target.name === "to")
+          ["from", "to"].includes(target.dataset.dateField || target.name)
         ) {
           const period = event.currentTarget.elements.namedItem("period");
           if (period instanceof HTMLSelectElement) period.value = "custom";

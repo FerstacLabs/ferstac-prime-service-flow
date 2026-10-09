@@ -69,6 +69,15 @@ export function PurchaseList({
                     : "Məlumat daxil edilməyib",
                 ],
                 ["Maya", formatMoney(cost)],
+                ["ƏDV-siz məbləğ", formatMoney(p.net_amount ?? p.total_price)],
+                ["ƏDV", formatMoney(p.vat_amount ?? 0)],
+                ["Yekun məbləğ", formatMoney(p.gross_amount ?? p.total_price)],
+                ...(p.vat_enabled
+                  ? [
+                      ["Qalıq net", formatMoney(p.remaining_net ?? 0)],
+                      ["Qalıq ƏDV", formatMoney(p.remaining_vat ?? 0)],
+                    ]
+                  : []),
                 ["Ödənilib", formatMoney(paid)],
                 ["Qaytarılıb", formatMoney(p.returned ?? 0)],
                 ["Yaranmış kredit", formatMoney(p.credit_created ?? 0)],
@@ -140,6 +149,13 @@ export function PurchaseList({
                   {r.replacement_purchase_id ? "Dəyişdirilib" : "Qaytarılıb"} ·{" "}
                   {formatMoney(r.amount)} · {r.reason} ·{" "}
                   {r.reference_number || ""}
+                  {p.vat_enabled ? (
+                    <span className="block">
+                      Net: {formatMoney(r.net_amount ?? 0)} · ƏDV:{" "}
+                      {formatMoney(r.vat_amount ?? 0)} · Yekun:{" "}
+                      {formatMoney(r.amount)}
+                    </span>
+                  ) : null}
                 </p>
               ))}
             {editable &&

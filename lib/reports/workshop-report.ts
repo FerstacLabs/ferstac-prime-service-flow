@@ -28,6 +28,7 @@ import { workerWorkFinance } from "@/lib/worker-finance";
 import { workerReport } from "@/lib/reports/worker-report";
 import { supplierReport } from "@/lib/reports/supplier-report";
 import { profitSummary, profitReason } from "@/lib/profit-status";
+import { vatLedgerPosition } from "@/lib/vat-ledger";
 import {
   formatReportMoney as money,
   formatReportDate as date,
@@ -124,7 +125,9 @@ export async function loadWorkshopReport(
     const n = jobFinance(job, data.work, data.parts, data.purchases, data.cash);
     finance.title = "Servis kartı maliyyə hesabatı";
     finance.summary = pairs([
-      ["Müştəri yekun məbləği", money(n.quotedTotal)],
+      ["ƏDV-siz təklif", money(n.quotedTotal)],
+      ["Çıxış ƏDV-si", money(n.quotedVat)],
+      ["Müştəri yekun məbləği", money(n.quotedGross)],
       ["Məlum ümumi maya", money(n.totalCost)],
       ["Brüt mənfəət", value(n.grossProfit)],
       ["Müştəridən alınıb", money(n.customerPaid)],
@@ -286,8 +289,14 @@ export function buildWorkshopReport(
   report.summary = pairs([
     ["Avtomobil sayı", String(jobs.length)],
     [
-      "Ümumi təklif / əvvəlki büdcə",
+      "ƏDV-siz təklif / əvvəlki büdcə",
       money(sumMoney(totals.map((n) => n.quotedTotal))),
+    ],
+    ["Çıxış ƏDV-si", money(sumMoney(totals.map((n) => n.quotedVat)))],
+    ["Yekun təklif", money(sumMoney(totals.map((n) => n.quotedGross)))],
+    [
+      "ƏDV depozit qalığı",
+      money(vatLedgerPosition(data.vatLedger ?? []).balance),
     ],
     ["Məlum maya", money(sumMoney(totals.map((n) => n.totalCost)))],
     ["Müştəridən alınıb", money(sumMoney(totals.map((n) => n.customerPaid)))],
@@ -311,7 +320,9 @@ export function buildWorkshopReport(
         [
           "Avtomobil",
           "Status",
-          "Təklif (AZN)",
+          "ƏDV-siz təklif",
+          "ƏDV",
+          "Yekun təklif",
           "Məlum maya (AZN)",
           "Müştəridən alınıb",
           "Müştəri qalıq borcu",
@@ -329,6 +340,8 @@ export function buildWorkshopReport(
               `${j.vehicles?.plate} · ${j.vehicles?.make} ${j.vehicles?.model}`,
               reportJobStatusLabels[j.status],
               money(n.quotedTotal),
+              money(n.quotedVat),
+              money(n.quotedGross),
               money(n.totalCost),
               money(n.customerPaid),
               money(n.customerReceivable),
@@ -407,7 +420,9 @@ function vehicleSections(
       summary: pairs([
         ["İş təklifi", n.detailed ? money(n.quotedWork) : missingValue],
         ["Detal təklifi", n.detailed ? money(n.quotedParts) : missingValue],
-        ["Ümumi təklif / əvvəlki büdcə", money(n.quotedTotal)],
+        ["ƏDV-siz təklif / əvvəlki büdcə", money(n.quotedTotal)],
+        ["Çıxış ƏDV-si", money(n.quotedVat)],
+        ["Yekun təklif", money(n.quotedGross)],
         ["Razılaşdırılmış büdcə", money(job.agreed_budget)],
         ["Detal mayası", money(n.partsCost)],
         ["Usta mayası", money(n.workCost)],

@@ -193,45 +193,97 @@ describe("customer quotation whitelist and totals", () => {
     expect(report.sections[3].paragraphs?.[0]).not.toContain("3 600,00");
   });
 
-  it("paginates a larger quotation without dropping rows or the confirmation", async () => {
-    const data = sevenLineFixture();
-    data.work = Array.from({ length: 40 }, (_, i) => ({
-      ...data.work[i % 4],
-      id: `long-${i}`,
-      custom_title: `İş ${i + 1}: ${data.work[i % 4].custom_title}`,
-    }));
+  it("renders quotation VAT and uses gross in the damage sentence without internal balances", () => {
+    const data = fixture();
+    data.jobs[0].vat_enabled = true;
     const report = reportFor(data);
-    type Node = { value?: string; children?: Node[] };
-    let text = "";
-    const walk = (node: Node) => {
-      if (node.value) text += node.value + " ";
-      node.children?.forEach(walk);
-    };
-    const pdf = await renderToBuffer(
-      cloneElement(ReportDocument({ report }), {
-        onRender: (data: { _INTERNAL__LAYOUT__DATA_: Node }) =>
-          walk(data._INTERNAL__LAYOUT__DATA_),
-      }),
-    );
-    expect(
-      pdf.toString("latin1").match(/\/Type \/Page\b/g)!.length,
-    ).toBeGreaterThan(1);
-    for (let i = 1; i <= 40; i++) expect(text).toContain(`İş ${i}:`);
-    expect(text).toContain("dəymiş zərərin həcmi 18 450,00 AZN təşkil edir.");
-    expect(text).toContain("Servis nümayəndəsi");
-    expect(text).not.toContain("INTERNAL");
-    if (process.env.PRIME_REPORT_QA_DIR) {
-      mkdirSync(process.env.PRIME_REPORT_QA_DIR, { recursive: true });
-      writeFileSync(
-        path.join(process.env.PRIME_REPORT_QA_DIR, "quotation-long.pdf"),
-        pdf,
+    expect(report.sections[3].summary).toContainEqual({
+      label: "ƏDV-siz cəm",
+      value: "3 202,00 AZN",
+    });
+    expect(report.sections[3].summary).toContainEqual({
+      label: "ƏDV (18%)",
+      value: "576,36 AZN",
+    });
+    expect(report.sections[3].summary).toContainEqual({
+      label: "Yekun ƏDV-li məbləğ",
+      value: "3 778,36 AZN",
+    });
+    expect(report.sections[3].paragraphs?.[0]).toContain("3 778,36 AZN");
+    const print = renderToStaticMarkup(<PrintReport report={report} />);
+    expect(print).toContain("PRIME TUNING &amp; DETAILING");
+    expect(print).not.toContain("Prime Performance");
+    expect(print).not.toContain("Sığorta tərəfindən təsdiqlənmiş");
+    expect(print).not.toContain("ƏDV depozit");
+  });
+  it.each([false, true])(
+    "paginates a larger quotation without dropping rows or the confirmation (VAT %s)",
+    async (vatEnabled) => {
+      const data = sevenLineFixture();
+      data.jobs[0].vat_enabled = vatEnabled;
+      if (vatEnabled)
+        data.parts = Array.from({ length: 18 }, (_, i) => ({
+          ...data.parts[i % 3],
+          id: `long-part-${i}`,
+        }));
+      data.work = Array.from({ length: 40 }, (_, i) => ({
+        ...data.work[i % 4],
+        id: `long-${i}`,
+        custom_title: `İş ${i + 1}: ${data.work[i % 4].custom_title}`,
+      }));
+      const report = reportFor(data);
+      type Node = {
+        type?: string;
+        value?: string;
+        box?: { top: number; height: number };
+        children?: Node[];
+      };
+      let text = "";
+      const textTops: number[] = [];
+      const walk = (node: Node, parentTop = 0) => {
+        const top = node.type === "PAGE" ? 0 : parentTop + (node.box?.top ?? 0);
+        if (node.type === "TEXT" && node.box) textTops.push(top);
+        if (node.value) text += node.value + " ";
+        node.children?.forEach((child) => walk(child, top));
+      };
+      const pdf = await renderToBuffer(
+        cloneElement(ReportDocument({ report }), {
+          onRender: (data: { _INTERNAL__LAYOUT__DATA_: Node }) =>
+            walk(data._INTERNAL__LAYOUT__DATA_),
+        }),
       );
-      writeFileSync(
-        path.join(process.env.PRIME_REPORT_QA_DIR, "quotation-long.html"),
-        renderToStaticMarkup(<PrintReport report={report} />),
+      expect(
+        pdf.toString("latin1").match(/\/Type \/Page\b/g)!.length,
+      ).toBeGreaterThan(1);
+      for (let i = 1; i <= 40; i++) expect(text).toContain(`İş ${i}:`);
+      expect(text).toContain(
+        `dəymiş zərərin həcmi ${vatEnabled ? "33 276,00" : "18 450,00"} AZN təşkil edir.`,
       );
-    }
-  }, 20000);
+      if (vatEnabled) expect(text).toContain("5 076,00");
+      expect(text).toContain("Servis nümayəndəsi");
+      expect(text).not.toContain("INTERNAL");
+      expect(textTops.length).toBeGreaterThan(0);
+      expect(Math.min(...textTops)).toBeGreaterThanOrEqual(22);
+      if (process.env.PRIME_REPORT_QA_DIR) {
+        mkdirSync(process.env.PRIME_REPORT_QA_DIR, { recursive: true });
+        writeFileSync(
+          path.join(
+            process.env.PRIME_REPORT_QA_DIR,
+            vatEnabled ? "quotation-vat-long.pdf" : "quotation-long.pdf",
+          ),
+          pdf,
+        );
+        writeFileSync(
+          path.join(
+            process.env.PRIME_REPORT_QA_DIR,
+            vatEnabled ? "quotation-vat-long.html" : "quotation-long.html",
+          ),
+          renderToStaticMarkup(<PrintReport report={report} />),
+        );
+      }
+    },
+    20000,
+  );
   it("does not represent missing legacy quotes as zero or substitute the old budget", () => {
     const data = fixture();
     data.jobs[0].has_line_quotes = false;
@@ -296,7 +348,12 @@ describe("customer quotation whitelist and totals", () => {
       label: "Yekun məbləğ",
       value: "3 248,00 AZN",
     });
-    expect(JSON.stringify(report)).toContain("6 500,75 AZN");
+    expect(JSON.stringify(report)).not.toContain("6 500,75 AZN");
+    expect(JSON.stringify(report)).not.toContain(
+      "Sığorta tərəfindən təsdiqlənmiş",
+    );
+    expect(JSON.stringify(report)).toContain("Test Sığorta");
+    expect(data.jobs[0].insurance_approved_amount).toBe(6500.75);
     expect(report.sections[1].table?.rows[2].cells).toMatchObject({
       "2": "Litr",
       "3": "2,5",

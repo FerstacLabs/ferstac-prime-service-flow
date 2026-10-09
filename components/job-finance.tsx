@@ -1,3 +1,4 @@
+import { IntakeDateInput } from "@/components/intake-date-input";
 import { recordPaymentAction, voidPaymentAction } from "@/app/actions/finance";
 import Link from "next/link";
 import { ActionForm } from "@/components/action-form";
@@ -70,7 +71,16 @@ export function FinanceSummary({
         items={[
           ["Müştəriyə deyilən işçilik", n.detailed ? n.quotedWork : null],
           ["Müştəriyə deyilən detallar", n.detailed ? n.quotedParts : null],
-          [n.detailed ? "Ümumi təklif" : "Əvvəlki büdcə", n.quotedTotal],
+          [
+            n.detailed ? "ƏDV-siz təklif" : "Əvvəlki büdcə (ƏDV-siz)",
+            n.quotedTotal,
+          ],
+          ...(job.vat_enabled
+            ? ([
+                ["Çıxış ƏDV-si (18%)", n.quotedVat],
+                ["Yekun ƏDV-li təklif", n.quotedGross],
+              ] as Array<[string, number]>)
+            : []),
           ["Razılaşdırılmış ümumi büdcə", job.agreed_budget],
           ["Faktiki detal mayası", n.partsCost],
           ["Məlum usta mayası", n.workCost],
@@ -141,9 +151,8 @@ export function PaymentForm({
         </label>
         <label className="text-xs text-[var(--muted)]">
           Tarix
-          <input
+          <IntakeDateInput
             name="transaction_date"
-            type="date"
             required
             defaultValue={bakuDate()}
             className="field mt-1"
@@ -335,6 +344,12 @@ function PurchaseBalance({
       <MoneyGrid
         items={[
           ["Alış mayası", purchaseCost(p)],
+          ...(p.vat_enabled
+            ? ([
+                ["Giriş ƏDV-si (18%)", Number(p.vat_amount)],
+                ["Yekun alış", Number(p.gross_amount)],
+              ] as Array<[string, number]>)
+            : []),
           ["Təchizatçıya ödənilib", paid],
           ["Təchizatçı borcu", remaining],
         ]}

@@ -31,6 +31,7 @@ vi.mock("@/components/filter-form", () => ({
   ),
 }));
 vi.mock("@/app/actions/ledger", () => ({
+  recordVatAdjustmentAction: vi.fn(),
   saveFinancialMasterAction: vi.fn(),
   reopenVehicleAction: vi.fn(),
 }));

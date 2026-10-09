@@ -4,6 +4,7 @@ import type {
   DbWorkItem,
 } from "@/lib/supabase/queries";
 import { decimalMinor, multiplyMoney } from "@/lib/decimal";
+import { vatPricing } from "@/lib/vat";
 
 export type QuoteMeasure = {
   is_additional?: boolean;
@@ -38,6 +39,8 @@ export type AllocationType =
   | "SUPPLIER_PURCHASE"
   | "WORKER_WORK_ITEM";
 export type CashTransaction = {
+  vat_amount?: number;
+  net_amount?: number;
   occurred_at?: string;
   worker_identity_id?: string | null;
   reference_number?: string | null;
@@ -109,13 +112,25 @@ export const purchaseCost = (p: DbPurchase) =>
     ? 0
     : subtractMoney(
         cents(p.total_price ?? multiplyMoney(p.quantity, p.unit_price)) / 100,
-        p.returned ?? 0,
+        p.returned_net ?? p.returned ?? 0,
       );
 export const purchaseDue = (p: DbPurchase, cash: CashTransaction[]) =>
   p.source_type !== "SUPPLIER"
     ? 0
     : (p.remaining ??
-      subtractMoney(purchaseCost(p), paidFor(cash, "SUPPLIER_PURCHASE", p.id)));
+      subtractMoney(
+        subtractMoney(
+          Number(
+            p.gross_amount ??
+              vatPricing(
+                p.total_price ?? multiplyMoney(p.quantity, p.unit_price),
+                !!p.vat_enabled,
+              ).gross,
+          ),
+          p.returned ?? 0,
+        ),
+        paidFor(cash, "SUPPLIER_PURCHASE", p.id),
+      ));
 export const purchaseLifecycleLabel = (
   p: Pick<
     DbPurchase,
@@ -198,6 +213,7 @@ export function jobFinance(
         ...work.filter((w) => w.is_additional).map((w) => w.quoted_price),
         ...required.filter((p) => p.is_additional).map((p) => p.quoted_price),
       ]);
+  const quotation = vatPricing(quotedTotal, job.vat_enabled ?? false);
   const activeWork = work.filter((w) => w.status !== "CANCELLED");
   const workCost = sumMoney(
     activeWork.filter(costKnown).map((w) => w.labor_cost),
@@ -246,6 +262,8 @@ export function jobFinance(
     quotedWork,
     quotedParts,
     quotedTotal,
+    quotedVat: Number(quotation.vat),
+    quotedGross: Number(quotation.gross),
     workCost,
     partsCost,
     otherCost,
@@ -253,7 +271,7 @@ export function jobFinance(
     missingWork,
     missingParts,
     customerPaid,
-    customerReceivable: subtractMoney(quotedTotal, customerPaid),
+    customerReceivable: subtractMoney(Number(quotation.gross), customerPaid),
     supplierPaid,
     workerPaid,
     workerEarned,
@@ -282,10 +300,14 @@ export function cashFlow(cash: CashTransaction[]) {
       !t.allocation_type.startsWith("OPENING_"),
   );
   const cashIn = sumMoney(
-    live.filter((t) => t.direction === "IN").map((t) => t.amount),
+    live
+      .filter((t) => t.direction === "IN")
+      .map((t) => t.net_amount ?? subtractMoney(t.amount, t.vat_amount ?? 0)),
   );
   const cashOut = sumMoney(
-    live.filter((t) => t.direction === "OUT").map((t) => t.amount),
+    live
+      .filter((t) => t.direction === "OUT")
+      .map((t) => t.net_amount ?? subtractMoney(t.amount, t.vat_amount ?? 0)),
   );
   return { cashIn, cashOut, netCashFlow: subtractMoney(cashIn, cashOut) };
 }

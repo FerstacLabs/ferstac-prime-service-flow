@@ -8,7 +8,7 @@ import {
   reportJobStatusLabels,
   reportPaymentLabels,
   reportPurchaseSourceLabels,
-  reportWorkStatusLabels
+  reportWorkStatusLabels,
 } from "@/lib/reports/report-format";
 
 describe("report formatting", () => {
@@ -19,8 +19,10 @@ describe("report formatting", () => {
   });
 
   it("formats dates and quantities consistently", () => {
-    expect(formatReportDate("2026-09-07")).toBe("07.09.2026");
-    expect(formatReportDateTime(new Date("2026-09-07T17:04:00"))).toContain("17:04");
+    expect(formatReportDate("2026-09-07")).toBe("07/09/2026");
+    expect(formatReportDateTime(new Date("2026-09-07T17:04:00"))).toContain(
+      "17:04",
+    );
     expect(formatReportQuantity(1)).toBe("1");
     expect(formatReportQuantity(1.5)).toBe("1,5");
   });

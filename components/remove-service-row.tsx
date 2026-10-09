@@ -16,7 +16,7 @@ export function RemoveServiceRow({
 }) {
   const [confirm, setConfirm] = useState(false);
   return (
-    <div className="pb-4">
+    <div className={confirm ? "w-full" : "shrink-0"}>
       <button
         type="button"
         className="btn btn-secondary"

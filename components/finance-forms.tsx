@@ -28,6 +28,9 @@ import type {
 } from "@/lib/finance";
 import { vehicleSettlement } from "@/lib/finance";
 import { formatMoney } from "@/lib/format";
+import { splitVatSettlement, type VatAmounts } from "@/lib/vat";
+import { parseLocalizedDecimal } from "@/lib/decimal";
+import { moneyDiff } from "@/lib/finance";
 const nowBaku = () =>
   new Date(Date.now() + 4 * 3600000).toISOString().slice(0, 16);
 const CloseFinanceDialog = createContext<() => void>(() => {});
@@ -243,6 +246,23 @@ export function NewMovement({
   const [category, setCategory] = useState("");
   const [worker, setWorker] = useState("");
   const [target, setTarget] = useState("");
+  const [amount, setAmount] = useState("");
+  let split: VatAmounts | null = null;
+  if (job?.vat_enabled && amount) {
+    try {
+      split = splitVatSettlement(
+        {
+          net: String(job.net_quotation),
+          vat: String(job.vat_quotation),
+          gross: String(job.gross_quotation),
+        },
+        parseLocalizedDecimal(amount),
+        moneyDiff(Number(job.gross_quotation), job.customer_due),
+      );
+    } catch {
+      /* Keep incomplete or invalid input available for validation. */
+    }
+  }
   const purposeName = data.categories.find((c) => c.id === category)?.name;
   const bonus =
     !opening && !job && direction === "OUT" && purposeName === "İşçi bonusu";
@@ -314,15 +334,29 @@ export function NewMovement({
           </label>
         ) : null}
         <label className="text-sm">
-          Məbləğ (AZN)
+          {job?.vat_enabled ? "Yekun ödəniş (ƏDV daxil, AZN)" : "Məbləğ (AZN)"}
           <DecimalInput
             name="amount"
             required
             min="0.01"
             max={job?.customer_due}
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
             className="field mt-1"
           />
         </label>
+        {split && (
+          <dl className="grid grid-cols-2 gap-3 text-sm sm:col-span-2">
+            <div>
+              <dt>Nağd / banka net</dt>
+              <dd>{formatMoney(Number(split.net))}</dd>
+            </div>
+            <div>
+              <dt>ƏDV depozitinə</dt>
+              <dd>{formatMoney(Number(split.vat))}</dd>
+            </div>
+          </dl>
+        )}
         <PaymentSource
           accounts={data.accounts}
           initial={channel}
@@ -491,8 +525,25 @@ export function SettlementDialog({
                     {o.title}
                     <br />
                     <span className="text-[var(--muted)]">
-                      Maya: {formatMoney(o.cost)} · Ödənilib:{" "}
+                      Öhdəlik: {formatMoney(o.cost)} · Ödənilib:{" "}
                       {formatMoney(o.paid)} · Qalıq: {formatMoney(o.remaining)}
+                      {o.type === "SUPPLIER_PURCHASE" &&
+                        data.purchases.find((p) => p.id === o.id)
+                          ?.vat_enabled && (
+                          <>
+                            <br />
+                            Qalıq net:{" "}
+                            {formatMoney(
+                              data.purchases.find((p) => p.id === o.id)
+                                ?.remaining_net ?? 0,
+                            )}{" "}
+                            · ƏDV:{" "}
+                            {formatMoney(
+                              data.purchases.find((p) => p.id === o.id)
+                                ?.remaining_vat ?? 0,
+                            )}
+                          </>
+                        )}
                     </span>
                   </span>
                 </label>
