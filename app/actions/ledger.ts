@@ -7,6 +7,7 @@ import { moneySchema, uuidValue } from "@/lib/workshop-validation";
 import { z } from "zod";
 import { serverMutation } from "@/lib/server-mutation";
 import { parseIntakeDate } from "@/lib/intake-date";
+import { isCustomerSettlementCategory } from "@/lib/payment-linkage";
 const text = (f: FormData, k: string) => String(f.get(k) || "").trim();
 const optionalId = (f: FormData, k: string) =>
   text(f, k) ? uuidValue(f, k) : null;
@@ -74,7 +75,21 @@ function details(f: FormData) {
 export async function recordLedgerAction(f: FormData) {
   return serverMutation(async () => {
     const { supabase } = await getAuthedSupabase("ADMIN", "CASHIER");
-    const type = text(f, "allocation_type");
+    let type = text(f, "allocation_type");
+    const categoryId = optionalId(f, "category_id");
+    if (categoryId && ["GENERAL_IN", "CUSTOMER_VEHICLE"].includes(type)) {
+      const { data: category, error } = await supabase
+        .from("transaction_categories")
+        .select("name,direction,active")
+        .eq("id", categoryId)
+        .single();
+      if (error || !category?.active || category.direction !== "IN")
+        throw new Error("Aktiv mədaxil təyinatı seçin.");
+      if (isCustomerSettlementCategory(category.name)) {
+        uuidValue(f, "service_job_id");
+        type = "CUSTOMER_VEHICLE";
+      }
+    }
     const workerFlow = type === "WORKER_PAYMENT" || type === "WORKER_ADVANCE";
     const { error } = await supabase.rpc(
       workerFlow
@@ -94,7 +109,7 @@ export async function recordLedgerAction(f: FormData) {
               : {}),
           },
           amount: moneySchema.parse(f.get("amount")),
-          allocation_type: text(f, "allocation_type"),
+          allocation_type: type,
           service_job_id: optionalId(f, "service_job_id"),
           target_id: optionalId(f, "target_id"),
           category_id: optionalId(f, "category_id"),

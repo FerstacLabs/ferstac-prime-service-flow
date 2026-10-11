@@ -19,6 +19,8 @@ import { subtractMoney } from "@/lib/workshop";
 import { AdditionalMeasureFields } from "@/components/work-costing";
 import { VatMode } from "@/components/vat-mode";
 import { VatTotals } from "@/components/vat-totals";
+import { PaymentSource } from "@/components/finance-forms";
+import type { FinanceAccount } from "@/lib/finance";
 export function PurchaseEntry({
   jobId,
   part,
@@ -27,6 +29,7 @@ export function PurchaseEntry({
   workers,
   catalog,
   units = [],
+  accounts = [],
 }: {
   jobId: string;
   part?: RequiredPart;
@@ -35,12 +38,16 @@ export function PurchaseEntry({
   workers: SelectOption[];
   catalog?: SelectOption[];
   units?: SelectOption[];
+  accounts?: FinanceAccount[];
 }) {
   const [source, setSource] = useState(purchase?.source_type ?? "SUPPLIER");
   const [buyer, setBuyer] = useState(
     purchase?.purchased_by_admin === false ? "worker" : "admin",
   );
-  const [payment, setPayment] = useState("UNPAID");
+  const [payment, setPayment] = useState(purchase?.payment_status ?? "UNPAID");
+  const [paymentAt] = useState(() =>
+    new Date(Date.now() + 4 * 3600000).toISOString().slice(0, 16),
+  );
   const [vatEnabled, setVatEnabled] = useState(purchase?.vat_enabled ?? false);
   const [cost, setCost] = useState(String(purchase?.unit_price ?? ""));
   let actualTotal: number | null = null;
@@ -179,41 +186,54 @@ export function PurchaseEntry({
       {source === "SUPPLIER" && (
         <VatMode value={vatEnabled} onChange={setVatEnabled} />
       )}
-      {source === "SUPPLIER" && vatEnabled && (
-        <input type="hidden" name="payment_status" value="UNPAID" />
-      )}
       {source === "SUPPLIER" && vatEnabled && actualTotal !== null && (
         <div className="sm:col-span-2 xl:col-span-3">
           <VatTotals net={actualTotal} enabled />
         </div>
       )}
-      {!purchase && source === "SUPPLIER" && !vatEnabled ? (
+      {source === "SUPPLIER" ? (
         <>
           <label className="text-xs text-[var(--muted)]">
             Ödəniş
             <select
               name="payment_status"
               value={payment}
-              onChange={(e) => setPayment(e.target.value)}
+              onChange={(e) => setPayment(e.target.value as typeof payment)}
               className="field mt-1"
             >
               <option value="UNPAID">Ödənilməyib</option>
               <option value="PARTIAL">Qismən ödənilib</option>
-              <option value="PAID">Ödənilib</option>
+              <option value="PAID">Tam ödənilib</option>
             </select>
           </label>
           {payment === "PARTIAL" ? (
             <label className="text-xs text-[var(--muted)]">
-              İndi ödənən (AZN)
+              Cəmi ödənilmiş məbləğ (ƏDV daxil, AZN)
               <DecimalInput
                 name="paid_amount"
                 required
                 min="0.01"
                 step="0.01"
+                defaultValue={purchase?.paid_amount || ""}
                 className="field mt-1"
               />
             </label>
           ) : null}
+          {payment !== "UNPAID" && (
+            <>
+              <PaymentSource accounts={accounts} />
+              <label className="text-xs text-[var(--muted)]">
+                Ödəniş tarixi və saatı
+                <input
+                  type="datetime-local"
+                  name="payment_at"
+                  required
+                  className="field mt-1"
+                  defaultValue={paymentAt}
+                />
+              </label>
+            </>
+          )}
         </>
       ) : null}
       <label className="text-xs text-[var(--muted)]">

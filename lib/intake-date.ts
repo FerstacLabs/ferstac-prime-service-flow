@@ -1,7 +1,7 @@
 export function parseIntakeDate(value: unknown): string {
   const text = String(value ?? "").trim();
   const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
-  const local = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/.exec(text);
+  const local = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(text);
   const [year, month, day] = iso
     ? iso.slice(1).map(Number)
     : local

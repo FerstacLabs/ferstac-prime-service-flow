@@ -372,7 +372,7 @@ export function financeReport(
           ["out", "Məxaric", 10],
         ]
       : ([
-          ["date", "Tarix", 9],
+          ["date", "Tarix", 11],
           ["channel", "Kanal / hesab", 10],
           ["direction", "İstiqamət", 8],
           ["category", "Təyinat", 10],

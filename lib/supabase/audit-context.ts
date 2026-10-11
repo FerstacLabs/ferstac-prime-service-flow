@@ -80,7 +80,7 @@ export async function resolveAuditContext(
     const { data, error } = await supabase
       .from("cash_transactions")
       .select(
-        "id,counterparty_name_snapshot,financial_account_id,channel,allocation_type,purpose,notes,bank_reference,reference_number,voided_at,void_reason",
+        "id,counterparty_name_snapshot,financial_account_id,channel,allocation_type,purpose,notes,bank_reference,reference_number,voided_at,void_reason,amount,net_amount,vat_amount,service_job_id,category_id",
       )
       .eq("organization_id", org)
       .in("id", transactionIds);
@@ -99,6 +99,11 @@ export async function resolveAuditContext(
         "notes",
         "bank_reference",
         "reference_number",
+        "amount",
+        "net_amount",
+        "vat_amount",
+        "service_job_id",
+        "category_id",
       ]) {
         if (transaction[key] != null && log.metadata[key] == null)
           log.metadata[key] = transaction[key];

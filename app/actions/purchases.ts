@@ -8,11 +8,13 @@ import {
   noteValue,
   uuidValue,
 } from "@/lib/workshop-validation";
-import { decimalMinor, multiplyMoney } from "@/lib/decimal";
+import { decimalMinor, multiplyMoney, fromMinor } from "@/lib/decimal";
 import { bakuDate } from "@/lib/filters";
 import { z } from "zod";
 import { databaseActionError, duplicatePartFailure } from "@/lib/action-errors";
 import { serverMutation } from "@/lib/server-mutation";
+import { vatPricing } from "@/lib/vat";
+import { createHash } from "node:crypto";
 
 const text = (value: FormDataEntryValue | null) => {
   const next = String(value ?? "").trim();
@@ -71,12 +73,19 @@ export async function savePurchaseAction(formData: FormData) {
     const { supabase, user } = await getAuthedSupabase("ADMIN");
     const quantity = quantitySchema.parse(formData.get("quantity") || 1);
     const unitPrice = moneySchema.parse(formData.get("unit_price") || 0);
+    const vatEnabled =
+      formData.get("source_type") === "SUPPLIER" &&
+      formData.get("vat_enabled") === "true";
+    const gross = vatPricing(
+      multiplyMoney(quantity, unitPrice),
+      vatEnabled,
+    ).gross;
     const status = z
       .enum(["PAID", "PARTIAL", "UNPAID"])
       .parse(formData.get("payment_status") || "UNPAID");
     const paidAmount =
       status === "PAID"
-        ? multiplyMoney(quantity, unitPrice)
+        ? gross
         : status === "UNPAID"
           ? "0.00"
           : moneySchema.parse(formData.get("paid_amount") || 0);
@@ -88,7 +97,7 @@ export async function savePurchaseAction(formData: FormData) {
       id,
       required_part_id: text(formData.get("required_part_id")),
       owner_user_id: user.id,
-      service_job_id: String(formData.get("service_job_id") ?? ""),
+      service_job_id: uuidValue(formData, "service_job_id"),
       part_catalog_id: text(formData.get("part_catalog_id")),
       custom_item_name: text(formData.get("custom_item_name")),
       quantity,
@@ -103,8 +112,8 @@ export async function savePurchaseAction(formData: FormData) {
           ? text(formData.get("purchased_by_worker_id"))
           : null,
       purchased_by_admin: formData.get("purchased_by") !== "worker",
-      payment_status: status,
-      paid_amount: paidAmount,
+      payment_status: "UNPAID",
+      paid_amount: "0.00",
       part_code_oem: text(formData.get("part_code_oem")),
       brand_model: text(formData.get("brand_model")),
       serial_no: text(formData.get("serial_no")),
@@ -134,16 +143,49 @@ export async function savePurchaseAction(formData: FormData) {
     if (
       status === "PARTIAL" &&
       (decimalMinor(paidAmount) <= 0n ||
-        decimalMinor(paidAmount) >=
-          decimalMinor(multiplyMoney(quantity, unitPrice)))
+        decimalMinor(paidAmount) >= decimalMinor(gross))
     )
       throw new Error(
-        "Qismən ödəniş maya dəyərindən kiçik və sıfırdan böyük olmalıdır.",
+        "Qismən ödəniş yekun məbləğdən kiçik və sıfırdan böyük olmalıdır.",
       );
-    const { error } = await supabase.rpc("save_workshop_purchase", {
-      p_data: payload,
-      p_key: uuidValue(formData, "idempotency_key"),
-    });
+    const key = uuidValue(formData, "idempotency_key");
+    if (id && sourceType === "SUPPLIER") {
+      const { data: existing, error: existingError } = await supabase
+        .from("purchases")
+        .select("paid_amount")
+        .eq("id", uuidValue(formData, "id"))
+        .single();
+      if (existingError) return { error: databaseActionError(existingError) };
+      if (decimalMinor(existing.paid_amount) > decimalMinor(paidAmount))
+        return {
+          error:
+            "Əvvəlki ödənişi azaltmaq üçün Kassa ləğvetməsindən istifadə edin.",
+        };
+    }
+    const channel = z
+      .enum(["CASH", "BANK"])
+      .parse(formData.get("channel") || "CASH");
+    const account =
+      channel === "BANK" ? uuidValue(formData, "financial_account_id") : null;
+    const method =
+      channel === "BANK"
+        ? z
+            .enum(["TRANSFER", "POS", "ONLINE", "OTHER"])
+            .parse(formData.get("payment_method"))
+        : "CASH";
+    const paymentAt =
+      sourceType === "SUPPLIER" && status !== "UNPAID"
+        ? z.iso
+            .datetime({ offset: true })
+            .parse(`${String(formData.get("payment_at"))}:00+04:00`)
+        : null;
+    const { data: purchaseId, error } = await supabase.rpc(
+      "save_workshop_purchase",
+      {
+        p_data: payload,
+        p_key: key,
+      },
+    );
     if (error)
       return {
         error:
@@ -151,10 +193,67 @@ export async function savePurchaseAction(formData: FormData) {
             ? duplicatePartFailure
             : databaseActionError(error),
       };
-    revalidatePath("/purchases");
-    revalidatePath("/overview");
-    revalidatePath("/vehicles");
-    revalidatePath("/kassa");
+    if (sourceType === "SUPPLIER" && status !== "UNPAID") {
+      // A stable, separate key allows a failed payment to be retried without
+      // duplicating either the saved purchase or its canonical ledger payment.
+      const hash = createHash("sha256")
+        .update(`purchase-payment:${key}`)
+        .digest("hex");
+      const paymentKey = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
+      const { data: prior, error: lookupError } = await supabase
+        .from("cash_transactions")
+        .select("id")
+        .eq("idempotency_key", paymentKey)
+        .maybeSingle();
+      if (lookupError) return { error: databaseActionError(lookupError) };
+      if (!prior) {
+        const { data: saved, error: readError } = await supabase
+          .from("purchases")
+          .select("paid_amount,gross_amount")
+          .eq("id", purchaseId)
+          .single();
+        if (readError) return { error: databaseActionError(readError) };
+        if (decimalMinor(saved.gross_amount) !== decimalMinor(gross))
+          return {
+            error:
+              "Saxlanmış alış məbləği fərqlidir. Alışı yenidən açıb yoxlayın; ödəniş edilmədi.",
+          };
+        const due = decimalMinor(paidAmount) - decimalMinor(saved.paid_amount);
+        if (due < 0n)
+          return {
+            error:
+              "Əvvəlki ödənişi azaltmaq üçün Kassa ləğvetməsindən istifadə edin.",
+          };
+        if (due > 0n) {
+          const { error: paymentError } = await supabase.rpc(
+            "record_financial_transaction",
+            {
+              p_key: paymentKey,
+              p_data: {
+                allocation_type: "SUPPLIER_PURCHASE",
+                service_job_id: payload.service_job_id,
+                target_id: purchaseId,
+                amount: fromMinor(due),
+                channel,
+                financial_account_id: account,
+                payment_method: method,
+                occurred_at: paymentAt,
+                bank_reference: text(formData.get("bank_reference")),
+                reference_number: payload.document_no,
+                purpose: "Alış zamanı ödəniş",
+                notes: payload.notes,
+              },
+            },
+          );
+          if (paymentError) {
+            return {
+              error: `Alış saxlanıldı, ödəniş edilmədi. ${databaseActionError(paymentError)} Yenidən cəhd edə və ya Kassa vasitəsilə ödəyə bilərsiniz.`,
+            };
+          }
+        }
+      }
+    }
+    revalidatePath("/", "layout");
   });
 }
 

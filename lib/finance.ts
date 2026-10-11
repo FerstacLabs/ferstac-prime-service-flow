@@ -417,7 +417,8 @@ export function vehicleSettlement(data: FinanceData, jobId: string) {
                   "VEHICLE_EXPENSE",
                 ].includes(t.allocation_type)),
         )
-        .map(operatingAmount),
+        // Customer settlement is gross; only operating account totals exclude VAT.
+        .map((t) => (dir === "IN" ? Number(t.amount) : operatingAmount(t))),
     );
   return {
     job,

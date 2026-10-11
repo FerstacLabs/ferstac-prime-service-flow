@@ -171,6 +171,7 @@ export function PurchaseList({
                     jobId={p.service_job_id}
                     part={part}
                     purchase={p}
+                    accounts={data.accounts ?? []}
                     suppliers={data.suppliers
                       .filter((s) => s.active || s.id === p.supplier_id)
                       .map((s) => ({

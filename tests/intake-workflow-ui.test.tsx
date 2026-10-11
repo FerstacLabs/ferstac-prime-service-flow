@@ -22,7 +22,7 @@ vi.mock("@/app/actions/purchases", () => ({
 }));
 afterEach(cleanup);
 describe("intake notes and date inputs", () => {
-  it("restores supplier VAT mode and submits gross-mode pricing without an inline payment", () => {
+  it("restores supplier VAT and payment status independently", () => {
     const purchase = {
       ...workerCashFixture().purchases[0],
       quantity: 1,
@@ -46,12 +46,28 @@ describe("intake notes and date inputs", () => {
     expect(
       container.querySelector<HTMLInputElement>('[name="payment_status"]')
         ?.value,
-    ).toBe("UNPAID");
+    ).toBe("PAID");
     fireEvent.click(screen.getByLabelText("ƏDV-siz"));
     expect((screen.getByLabelText("ƏDV-siz") as HTMLInputElement).checked).toBe(
       true,
     );
     expect(screen.queryByText("Yekun ƏDV-li məbləğ")).toBeNull();
+    expect((screen.getByLabelText("Ödəniş") as HTMLSelectElement).value).toBe(
+      "PAID",
+    );
+    fireEvent.change(screen.getByLabelText("Ödəniş"), {
+      target: { value: "PARTIAL" },
+    });
+    const amount = container.querySelector<HTMLInputElement>(
+      '[name="paid_amount"]',
+    )!;
+    fireEvent.change(amount, { target: { value: "59" } });
+    fireEvent.click(screen.getByLabelText("ƏDV-li (18%)"));
+    expect((screen.getByLabelText("Ödəniş") as HTMLSelectElement).value).toBe(
+      "PARTIAL",
+    );
+    expect(amount.value).toBe("59");
+    expect(container.querySelector('[name="channel"]')).not.toBeNull();
   });
   it("routes payments through vehicle settlement without inline cost or payment forms", () => {
     const data = workerCashFixture();

@@ -212,6 +212,7 @@ export default async function PurchasesPage({
                       part={part}
                       suppliers={suppliers}
                       workers={workers}
+                      accounts={data.accounts ?? []}
                     />
                   )}
                 </div>
@@ -234,6 +235,7 @@ export default async function PurchasesPage({
                     suppliers={suppliers}
                     workers={workers}
                     units={master.units}
+                    accounts={data.accounts ?? []}
                   />
                 </div>
               </details>

@@ -31,6 +31,7 @@ import { formatMoney } from "@/lib/format";
 import { splitVatSettlement, type VatAmounts } from "@/lib/vat";
 import { parseLocalizedDecimal } from "@/lib/decimal";
 import { moneyDiff } from "@/lib/finance";
+import { isCustomerSettlementCategory } from "@/lib/payment-linkage";
 const nowBaku = () =>
   new Date(Date.now() + 4 * 3600000).toISOString().slice(0, 16);
 const CloseFinanceDialog = createContext<() => void>(() => {});
@@ -247,23 +248,30 @@ export function NewMovement({
   const [worker, setWorker] = useState("");
   const [target, setTarget] = useState("");
   const [amount, setAmount] = useState("");
+  const purposeName = data.categories.find((c) => c.id === category)?.name;
+  const customer =
+    !opening &&
+    direction === "IN" &&
+    (!!job || isCustomerSettlementCategory(purposeName));
+  const paymentJob = customer
+    ? (job ?? data.jobs.find((j) => j.id === selected))
+    : undefined;
   let split: VatAmounts | null = null;
-  if (job?.vat_enabled && amount) {
+  if (paymentJob?.vat_enabled && amount) {
     try {
       split = splitVatSettlement(
         {
-          net: String(job.net_quotation),
-          vat: String(job.vat_quotation),
-          gross: String(job.gross_quotation),
+          net: String(paymentJob.net_quotation),
+          vat: String(paymentJob.vat_quotation),
+          gross: String(paymentJob.gross_quotation),
         },
         parseLocalizedDecimal(amount),
-        moneyDiff(Number(job.gross_quotation), job.customer_due),
+        moneyDiff(Number(paymentJob.gross_quotation), paymentJob.customer_due),
       );
     } catch {
       /* Keep incomplete or invalid input available for validation. */
     }
   }
-  const purposeName = data.categories.find((c) => c.id === category)?.name;
   const bonus =
     !opening && !job && direction === "OUT" && purposeName === "İşçi bonusu";
   const workerMovement =
@@ -301,7 +309,7 @@ export function NewMovement({
                   : "WORKER_PAYMENT"
                 : opening
                   ? "OPENING_" + direction
-                  : job
+                  : customer
                     ? "CUSTOMER_VEHICLE"
                     : direction === "OUT" && selected
                       ? "VEHICLE_EXPENSE"
@@ -315,6 +323,7 @@ export function NewMovement({
             Avtomobil / servis kartı
             <select
               name="service_job_id"
+              required={customer}
               className="field mt-1"
               value={selected}
               onChange={(e) => {
@@ -334,12 +343,14 @@ export function NewMovement({
           </label>
         ) : null}
         <label className="text-sm">
-          {job?.vat_enabled ? "Yekun ödəniş (ƏDV daxil, AZN)" : "Məbləğ (AZN)"}
+          {paymentJob?.vat_enabled
+            ? "Yekun ödəniş (ƏDV daxil, AZN)"
+            : "Məbləğ (AZN)"}
           <DecimalInput
             name="amount"
             required
             min="0.01"
-            max={job?.customer_due}
+            max={paymentJob?.customer_due}
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             className="field mt-1"
