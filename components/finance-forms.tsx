@@ -381,7 +381,9 @@ export function NewMovement({
             onChange={setCategory}
             required
             options={data.categories
-              .filter((c) => c.active && c.direction === direction)
+              .filter(
+                (c) => !c.deleted_at && c.active && c.direction === direction,
+              )
               .map((c) => ({ id: c.id, name: c.name }))}
           />
         ) : null}

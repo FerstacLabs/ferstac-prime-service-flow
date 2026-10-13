@@ -41,9 +41,8 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const allowedOrigin = new URL(process.env.NEXT_PUBLIC_APP_URL || request.url)
-    .origin;
-  if (request.headers.get("origin") !== allowedOrigin)
+  const requestOrigin = new URL(request.url).origin;
+  if (request.headers.get("origin") !== requestOrigin)
     return failure("Giriş icazəsi yoxdur.", 403);
   const id = (await params).id;
   const result = await authorized(id);

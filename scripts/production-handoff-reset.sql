@@ -22,11 +22,12 @@ begin
     or current_setting('prime.handoff_database')<>current_database() then
     raise exception 'Missing explicit organization approval, verified backup, write freeze or matching database';
   end if;
-  -- Lock auth and public rows BEFORE taking the comparison snapshot. No login/write traffic during reset.
+  -- Self-hosted Supabase auth tables are owned by supabase_auth_admin.
+  -- All PRIME app/auth/rest/storage/gateway writers must be stopped externally before reset.
+  -- Lock public tables exclusively; auth data is still fingerprinted and verified unchanged.
   for t in select n.nspname,c.relname from pg_class c join pg_namespace n on n.oid=c.relnamespace
-    where n.nspname in ('public','auth') and c.relkind='r' order by n.nspname,c.relname loop
-    execute format('lock table %I.%I in %s mode',t.nspname,t.relname,
-      case when t.nspname='auth' then 'share' else 'access exclusive' end);
+    where n.nspname='public' and c.relkind='r' order by n.nspname,c.relname loop
+    execute format('lock table %I.%I in access exclusive mode',t.nspname,t.relname);
   end loop;
   if (select count(*) from public.user_profiles p join auth.users u on u.id=p.auth_user_id
     where p.organization_id=org and p.is_active and not p.must_change_password and

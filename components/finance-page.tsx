@@ -272,7 +272,12 @@ export function FinancePage({
                 { id: "OUT", name: "Məxaric" },
               ])}
             {!vatView && select("account", "Bank hesabı", data.accounts)}
-            {!vatView && select("category", "Təyinat", data.categories)}
+            {!vatView &&
+              select(
+                "category",
+                "Təyinat",
+                data.categories.filter((c) => !c.deleted_at),
+              )}
             {vatView &&
               select(
                 "vatKind",
