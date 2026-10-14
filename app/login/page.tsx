@@ -2,6 +2,7 @@ import Image from "next/image";
 import { redirect } from "next/navigation";
 import { signInAction } from "@/app/actions/auth";
 import { SubmitButton } from "@/components/submit-button";
+import { FerstacLabsAttribution } from "@/components/ferstaclabs-attribution";
 import { getCurrentAccess } from "@/lib/supabase/auth";
 import { roleHome } from "@/lib/security";
 
@@ -66,6 +67,10 @@ export default async function LoginPage({
           </label>
           <SubmitButton pendingText="Yoxlanılır...">Daxil ol</SubmitButton>
         </form>
+
+        <div className="mt-6 border-t border-[var(--border)] pt-4">
+          <FerstacLabsAttribution className="mx-auto max-w-[12rem]" />
+        </div>
       </section>
     </main>
   );

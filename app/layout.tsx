@@ -12,6 +12,14 @@ export const metadata: Metadata = {
   icons: { icon: "/brand/prime-logo.png" },
   description:
     "PRIME Tuning & Detailing üçün servis, satınalma, işçi və maliyyə idarəetməsi",
+  authors: [
+    {
+      name: "FerstacLabs",
+      url: "https://www.ferstaclabs.com/",
+    },
+  ],
+  creator: "FerstacLabs",
+  publisher: "FerstacLabs",
 };
 
 export default function RootLayout({

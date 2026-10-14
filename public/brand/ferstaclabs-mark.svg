@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 112">
+  <g fill="none" stroke="#222222" stroke-width="12" stroke-linecap="butt" stroke-linejoin="miter">
+    <!-- outer hexagonal frame -->
+    <path d="M10 93 V38 L49 11 L90 38 V92 L62 111"/>
+    <!-- stylized F -->
+    <path d="M39 105 V57 L70 36 M39 78 L67 60"/>
+  </g>
+</svg>

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { LogOut, Search, KeyRound } from "lucide-react";
 import { QuickActions } from "@/components/quick-actions";
 import { SidebarNav } from "@/components/sidebar-nav";
+import { FerstacLabsAttribution } from "@/components/ferstaclabs-attribution";
 import { signOutAction } from "@/app/actions/auth";
 import { roleHome, type AppRole } from "@/lib/security";
 
@@ -37,6 +38,10 @@ export function AppShell({
         </div>
 
         <SidebarNav role={role} />
+
+        <div className="mt-auto hidden shrink-0 border-t border-[var(--border)] px-3 py-3 lg:block">
+          <FerstacLabsAttribution />
+        </div>
       </aside>
 
       <main className="min-w-0">
