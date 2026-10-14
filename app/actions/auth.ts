@@ -13,7 +13,6 @@ import {
   validPassword,
 } from "@/lib/security";
 import {
-  roleLoginUrl,
   roleOriginConfigIsValid,
   roleOriginMatches,
 } from "@/lib/role-origins";
@@ -68,10 +67,7 @@ export async function signInAction(formData: FormData) {
 
   if (!roleOriginMatches(profile.role, requestOrigin)) {
     await supabase.auth.signOut({ scope: "local" });
-    const target = roleLoginUrl(profile.role);
-    const message =
-      "Bu hesab üçün düzgün giriş səhifəsinə yönləndirildiniz. Yenidən daxil olun.";
-    redirect(`${target}?error=${encodeURIComponent(message)}`);
+    loginError("Bu hesab bu giriş səhifəsi üçün deyil.");
   }
 
   const { error: eventError } = await admin.rpc("record_security_event", {
