@@ -21,44 +21,57 @@ pnpm dev
 
 Configure Supabase before using operational pages. The proxy protects the operational routes and redirects unauthenticated users to `/login`; report APIs also require an authenticated session. No production signup is exposed.
 
-## Supabase Setup
+## Supabase / Runtime Setup
 
-1. Create a Supabase project.
-2. In SQL Editor, run `supabase/migrations/0001_prime_flow_schema.sql`.
-3. Run `supabase/seed.sql` for master data.
-4. Run `supabase/migrations/0002_workshop_finance.sql`.
-5. Run `supabase/migrations/0003_worker_advances.sql`.
-6. Run `supabase/migrations/0004_rbac_audit_security.sql`.
-7. Add these values to `.env.local` and Vercel (the service-role key is server-only):
+Production uses self-hosted Supabase on the VPS. PostgreSQL is not exposed
+publicly, public signup is disabled, and the application reaches the Supabase
+gateway through the private Docker network.
+
+Runtime configuration is supplied outside Git and the Docker image:
 
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
-NEXT_PUBLIC_APP_URL=
+
+PRIME_ADMIN_ORIGIN=https://admin.primetuning.ferstaclabs.com
+PRIME_CASHIER_ORIGIN=https://kassa.primetuning.ferstaclabs.com
+PRIME_INTAKE_ORIGIN=https://qeydiyyat.primetuning.ferstaclabs.com
 ```
 
-8. Run `node scripts/provision-prime-users.mjs` in a trusted operator environment; transfer the one-time temporary passwords securely. Disable public signup in Supabase Auth. Complete first-login password changes.
+`SUPABASE_SERVICE_ROLE_KEY` is server-only and must never be exposed to client
+code, logs or the image.
 
-The data model uses UUID primary keys and organization-scoped RLS. The three staff users share the same records; historical `owner_user_id` values remain creator metadata. Plates are unique within the organization. See [Production Security](docs/PRODUCTION_SECURITY.md) for the role matrix, provisioning, migration safety, backups and production checklist.
+The three role origins enforce separate ADMIN, CASHIER and INTAKE portals.
+Authentication cookies remain host-specific. Do not configure a shared cookie
+Domain across the three hostnames.
 
-### Existing Production Database
+For an existing production system, the verified production database dump is the
+source of truth. Do not replay seed data or already-applied migrations onto a
+restored production database.
 
-Back up the existing database, then apply only pending migrations in order through `supabase/migrations/0004_rbac_audit_security.sql` before deploying this version. If 0001-0003 are already applied, apply only 0004. Do not rerun 0001-0003 or reseed production. Use the SQL Editor or your existing migration runner. This repository does not automatically apply remote migrations. 0004 preserves original creator IDs, historical rows and balances, bootstraps the original owner as admin, and aborts rather than silently merging ambiguous legacy owners.
+## VPS / GHCR Deployment
 
-`0002` adds private custom catalogs, customer quote lines, required parts and an owner-scoped payment ledger. Existing supplier `paid_amount` values are backfilled once into the ledger; the purchase field subsequently becomes a compatibility mirror, never an extra payment. Historical non-supplier paid amounts are retained without inventing cash transactions. Existing `labor_cost` remains actual worker cost; unknown historical zero costs and missing line quotes remain explicitly unknown.
+1. Push the reviewed commit to GitHub `main`.
+2. GitHub Actions runs lint, typecheck, tests and the production build.
+3. A successful main build publishes an immutable Linux/AMD64 image to GHCR,
+   tagged with the full Git commit SHA.
+4. Runtime secrets stay only in the root-owned VPS environment file.
+5. Deploy the reviewed SHA with:
 
-`0003` replaces two financial guard functions to allow worker advances for TODO/IN_PROGRESS work against known agreed cost. It creates no tables and rewrites no transactions. Apply it before using the new payment controls; `0002` alone still rejects active-work payments.
+   ```bash
+   sudo /opt/ferstaclabs-prime-flow/tools/deploy.sh <40-character-git-sha>
+   ```
 
-Normal workshop reads and writes use the public Supabase key with the user's session and RLS. The server-only service-role key is required for protected username lookup, password/security operations and operator provisioning; it must never be exposed in client code. Audit is append-only; only ADMIN can void payments, retaining the original and an immutable reversal reference.
+6. The app is bound only to `127.0.0.1:3001`; Nginx terminates HTTPS and proxies:
 
-## Vercel Deployment
+   - `admin.prmetuning.ferstaclabs.com` — ADMIN
+   - `kassa.primetuning.ferstaclabs.com` — CASHIER
+   - `qeydiyyat.primetuning.ferstaclabs.com` — INTAKE
 
-1. Push this repository to GitHub.
-2. Import the project in Vercel.
-3. Set the environment variables listed above.
-4. Deploy with the default Next.js build command: `pnpm build`.
-5. Later, add `app.<client-domain>` in Vercel Domains and keep `NEXT_PUBLIC_APP_URL` aligned.
+7. PostgreSQL stays private and Supabase Studio must not be exposed publicly.
+8. The production VPS runtime uses the GHCR image and does not require application
+   source code.
 
 ## Main Routes
 

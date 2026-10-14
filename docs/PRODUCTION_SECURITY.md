@@ -244,17 +244,22 @@ reconcile balances, document the incident and notify the designated data owner.
    financial totals. Take and verify a restorable backup. Schedule maintenance.
 2. Review and apply `supabase/migrations/0004_rbac_audit_security.sql` once. If it
    rejects ambiguous ownership, stop and review; never bypass by deleting rows.
-3. Configure server-only `SUPABASE_SERVICE_ROLE_KEY` and existing public Supabase
-   URL/anon key in the app deployment. Set `NEXT_PUBLIC_APP_URL` to the production
-   HTTPS URL. Do not set a public service-key variable.
+3. Configure server-only `SUPABASE_SERVICE_ROLE_KEY`, the Supabase URL/anon key,
+   and all three HTTPS role origins: `PRIME_ADMIN_ORIGIN`,
+   `PRIME_CASHIER_ORIGIN`, and `PRIME_INTAKE_ORIGIN`. Do not set a public
+   service-key variable.
 4. Run `node scripts/provision-prime-users.mjs` in the secured operator environment.
    Run again to confirm idempotency. Transfer newly generated credentials securely.
 5. Disable public signup; verify Auth rate limits, password policy and WAF login
-   throttling. Confirm production HTTPS, cookie handling and security headers.
+   throttling. Confirm production HTTPS, Secure/SameSite cookie handling and
+   security headers. Authentication cookies must remain host-specific; do not
+   configure a shared parent-domain cookie.
 6. Deploy the matching main commit. Until migration/provisioning/configuration are
    complete, new code intentionally fails closed instead of using legacy owner access.
-7. Use three separate browser contexts; complete forced password change. Verify
-   ADMIN all panels/audit/security, CASHIER only Kassa, INTAKE only vehicles/quote.
+7. Verify all three role-specific HTTPS portals. Confirm ADMIN has all
+   panels/audit/security, CASHIER only Kassa, and INTAKE only vehicles/quote.
+   Verify sessions remain isolated between hostnames and a role used on the
+   wrong portal is sent to its correct login hostname.
 8. INTAKE creates a card/work/part; ADMIN sees the same IDs and assigns work;
    CASHIER sees the same job, sets cost and pays. Check all actors in Audit.
 9. Test direct disallowed URLs, PDF/print and forged server actions; test raw

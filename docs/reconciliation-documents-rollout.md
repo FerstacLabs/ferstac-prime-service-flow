@@ -10,7 +10,12 @@ The migration adds durable supplier identities, party-period reconciliation docu
 
 1. Schedule a short finance maintenance window. Take and verify the normal database backup/PITR recovery point. Retain the existing Storage backup procedure; database backups alone do not contain uploaded PDF bytes.
 2. Verify the target project and confirm migrations 0001-0012 are already applied. Review the complete 0013 file. It uses one transaction and must run once, as the database owner through the approved migration runner or Supabase SQL Editor.
-3. Verify server-only `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and the exact public HTTPS `NEXT_PUBLIC_APP_URL`. The last value is the trusted upload Origin, not an internal reverse-proxy address. Do not expose the service key to the browser or logs.
+3. Verify server-only `SUPABASE_SERVICE_ROLE_KEY`,
+   `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and the three
+   configured HTTPS role origins. Signed-file uploads validate the browser
+   `Origin` against the actual public request origin, so each approved role
+   hostname remains same-origin without trusting an internal reverse-proxy
+   address. Do not expose the service key to the browser or logs.
 4. Rehearse the rollout on a staging copy. For self-hosted Storage, verify its JWT/JWKS configuration matches Auth. Managed Supabase handles this infrastructure; do not copy local QA keys or containers into production.
 
 ## Apply And Deploy

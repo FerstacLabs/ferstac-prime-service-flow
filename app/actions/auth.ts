@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentAccess, requireAccess } from "@/lib/supabase/auth";
@@ -11,6 +12,11 @@ import {
   roleHome,
   validPassword,
 } from "@/lib/security";
+import {
+  roleLoginUrl,
+  roleOriginConfigIsValid,
+  roleOriginMatches,
+} from "@/lib/role-origins";
 
 function loginError(message: string): never {
   redirect(`/login?error=${encodeURIComponent(message)}`);
@@ -44,6 +50,30 @@ export async function signInAction(formData: FormData) {
     await supabase.auth.signOut();
     loginError(disabledAccount);
   }
+
+  if (!roleOriginConfigIsValid(profile.role)) {
+    await supabase.auth.signOut({ scope: "local" });
+    loginError("Giriş ünvanı konfiqurasiyası yanlışdır.");
+  }
+
+  const requestHeaders = await headers();
+  const forwardedHost = requestHeaders
+    .get("x-forwarded-host")
+    ?.split(",")[0]
+    ?.trim();
+  const requestHost = forwardedHost || requestHeaders.get("host");
+  const requestOrigin =
+    requestHeaders.get("origin") ||
+    (requestHost ? `https://${requestHost}` : "");
+
+  if (!roleOriginMatches(profile.role, requestOrigin)) {
+    await supabase.auth.signOut({ scope: "local" });
+    const target = roleLoginUrl(profile.role);
+    const message =
+      "Bu hesab üçün düzgün giriş səhifəsinə yönləndirildiniz. Yenidən daxil olun.";
+    redirect(`${target}?error=${encodeURIComponent(message)}`);
+  }
+
   const { error: eventError } = await admin.rpc("record_security_event", {
     p_actor: data.user.id,
     p_event: "LOGIN_SUCCESS",
