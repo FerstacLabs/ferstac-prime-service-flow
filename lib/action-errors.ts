@@ -31,3 +31,4 @@ export function databaseActionError(error: {
     ? visibleActionError(error.message)
     : actionFailure;
 }
+export const workerSelectionRequired = "Usta seçilməyib. Maya dəyərini yadda saxlamaq üçün əvvəlcə işi görəcək ustanı seçin.";

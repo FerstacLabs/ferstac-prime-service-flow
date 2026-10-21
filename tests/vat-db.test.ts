@@ -156,6 +156,33 @@ describe("0015 customer discounts", () => {
       JSON.stringify([{ catalogId: catalog, quotedPrice: "1000", quantity: 1 }]), key,
     ]);
   }
+  it("0016 rejects missing/invalid costing workers atomically and preserves assignments and earnings", async () => {
+    await user(admin);
+    const id = await createDiscount("NONE", 0);
+    const work = await value("select id v from job_work_items where service_job_id=$1", [id]);
+    const worker = await value("insert into workers(owner_user_id,first_name,last_name,role_id) select auth.uid(),'Cost','QA',id from worker_roles limit 1 returning id v");
+    const snapshot = () => value("select to_jsonb(w) v from job_work_items w where id=$1", [work]);
+    const unassigned = await snapshot();
+    for (const percentage of [false, true]) {
+      await expect(value("select set_work_compensation($1,null,$2,125.50) v", [work, percentage]))
+        .rejects.toThrow("Usta seçilməyib.");
+      expect(await snapshot()).toEqual(unassigned);
+    }
+    const cashBefore = await value("select count(*) v from cash_transactions");
+    await value("select set_work_compensation($1,$2,false,125.50) v", [work, worker]);
+    const assigned = await snapshot();
+    expect(assigned).toMatchObject({ assigned_worker_id: worker, labor_cost: 125.5, earning_finalized_at: null });
+    for (const invalid of [null, randomUUID()]) {
+      const auditBefore = await value("select count(*) v from audit_logs");
+      await expect(value("select set_work_compensation($1,$2,false,999) v", [work, invalid]))
+        .rejects.toThrow("Usta seçilməyib.");
+      expect(await snapshot()).toEqual(assigned);
+      expect(await value("select count(*) v from audit_logs")).toBe(auditBefore);
+    }
+    expect(await value("select count(*) v from cash_transactions")).toBe(cashBefore);
+    await user(cashier);
+    await expect(value("select set_work_compensation($1,$2,false,200) v", [work, worker])).rejects.toThrow();
+  });
   it.each([
     ["NONE", 0, 1000], ["PERCENT", 0, 1000], ["PERCENT", 10, 900],
     ["PERCENT", 25, 750], ["PERCENT", 100, 0], ["AMOUNT", 50, 950], ["AMOUNT", 150, 850],

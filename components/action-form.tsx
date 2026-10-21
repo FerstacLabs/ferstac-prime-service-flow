@@ -15,12 +15,14 @@ function ActionFormInner({
   className,
   reset = false,
   onSuccess,
+  validate,
 }: {
   action: (form: FormData) => Promise<void | { error: string }>;
   children: React.ReactNode;
   className?: string;
   reset?: boolean;
   onSuccess?: () => void;
+  validate?: (form: FormData) => string | undefined;
 }) {
   const [error, setError] = useState("");
   const key = useRef<string | null>(null);
@@ -39,6 +41,13 @@ function ActionFormInner({
     <form
       ref={formRef}
       className={className}
+      onSubmit={(event) => {
+        const message = validate?.(new FormData(event.currentTarget));
+        if (message) {
+          event.preventDefault();
+          setError(message);
+        }
+      }}
       onChange={() => { if (draft && formRef.current) captureDraft(formRef.current, draft); }}
       onInput={() => { if (draft && formRef.current) captureDraft(formRef.current, draft); }}
       onReset={(event) => {

@@ -65,15 +65,34 @@ PostgreSQL tests, not against production.
 
 ## Validation record and limitations
 
+### Worker selection follow-up
+
+Labor cost save now requires a real worker selection. The client displays
+"Usta seçilməyib. Maya dəyərini yadda saxlamaq üçün əvvəlcə işi görəcək ustanı seçin."
+before submitting and preserves the cost, percentage checkbox and other inputs.
+The Server Action rejects missing/malformed worker IDs before calling the RPC.
+Forward-only `0016_require_costing_worker.sql` additionally rejects null,
+nonexistent and foreign-organization workers inside `set_work_compensation`
+before any assignment/cost update. Existing function grants and underlying
+assignment, completion, compensation and debt logic are unchanged.
+No existing rows are rewritten. Apply 0016 after 0015 during the approved window;
+never edit/replay previously applied migrations. Both migrations remain unapplied
+to production. Include an authenticated missing-worker RPC rejection and a valid
+cost save in isolated staging, using synthetic data and separate credentials.
+Keep staging on a private network, with no production integrations or customer
+data; verify all three role portals and ADMIN/INTAKE PDF/Print there before release.
+
 Local ESLint, TypeScript, Vitest and optimized Next.js build are required gates.
 Final local verification on 2026-10-21: `pnpm lint` PASS, `pnpm typecheck`
-PASS, `pnpm test` **470/470 tests in 42 files PASS**, and `pnpm build` PASS.
-The full suite includes the 27 VAT/discount database tests using isolated PGlite.
+PASS, `pnpm test` **481/481 tests in 44 files PASS**, and `pnpm build` PASS.
+The full suite includes 28 VAT/discount/worker-validation database tests using isolated PGlite.
+The follow-up adds 11 cases: three UI tests, seven Server Action tests and one
+atomic database regression. Existing worker-finance and draft tests still pass.
 The final Cashier dialog test verifies original net quote, discount, final gross,
 received payments and remaining debt, preserves the payment cap, and performs no
 transaction. Build-time Supabase configuration was overridden with local dummy
 values; no production database was used. Changed-file credential-pattern scan:
-44 files, zero matches (pattern scanning is not an exhaustive security audit).
+9 follow-up files, zero matches (pattern scanning is not an exhaustive security audit).
 `git diff --check` passed. No remote CI run is claimed; final commits remain local.
 Feature tests: customer-discount, form-draft, customer-documents-render and the
 0015 group in vat-db. Existing security, VAT, ledger, worker advance, privacy,
@@ -113,11 +132,11 @@ role-specific portals intentionally have independent origin storage.
    needed) and Storage backup. Verify restore in an isolated database, not merely
    dump size. Record baseline row counts and financial totals privately.
 4. Preflight: verify 0001-0014 in the deployment migration registry, match the
-   reviewed 0015 checksum, and check the target database identity privately.
-   Confirm expected RPCs/columns and that 0015 has not already been applied.
+   reviewed 0015/0016 checksums, and check the target database identity privately.
+   Confirm expected RPCs/columns and which of 0015/0016 have already been applied.
    Confirm no long-running writers, sufficient disk space and a tested restore.
    Do not rerun this migration blindly: renamed RPC wrappers make it non-idempotent.
-   Apply only 0015 with ON_ERROR_STOP through the established secure local-to-VPS
+   Apply only unapplied 0015 then 0016 with ON_ERROR_STOP through the established secure local-to-VPS
    administrative procedure, with bounded lock/statement timeouts. If a timeout
    occurs, abort and investigate; do not disable constraints/triggers or rerun
    old migrations. Reload the PostgREST schema cache after commit.

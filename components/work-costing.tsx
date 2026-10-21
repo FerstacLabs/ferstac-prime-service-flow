@@ -18,6 +18,7 @@ import {
 import { costKnown } from "@/lib/workshop";
 import type { DbWorkItem } from "@/lib/supabase/queries";
 import { statusLabels } from "@/components/app-shell";
+import { workerSelectionRequired } from "@/lib/action-errors";
 
 export function AdditionalMeasureFields({ units }: { units: SelectOption[] }) {
   const [quantity, setQuantity] = useDraftState("measure:quantity", "1"),
@@ -92,9 +93,15 @@ export function WorkerCostForm({
   const [percentage, setPercentage] = useState(
     work.compensation_mode === "PERCENTAGE",
   );
+  const [cost, setCost] = useDraftState(`worker-cost:${work.id}`, costKnown(work) ? String(work.labor_cost) : "");
   return (
     <ActionForm
       action={saveWorkCostingAction}
+      validate={(form) => {
+        const selected = form.get("assigned_worker_id");
+        if (!selected || !workers.some((worker) => worker.id === selected))
+          return workerSelectionRequired;
+      }}
       className="grid max-w-4xl items-end gap-3 sm:grid-cols-2"
     >
       <input type="hidden" name="id" value={work.id} />
@@ -133,10 +140,12 @@ export function WorkerCostForm({
         Usta maya dəyəri
         <DecimalInput
           name="labor_cost"
+          data-draft-managed
           disabled={percentage}
           min={0}
           required
-          defaultValue={costKnown(work) ? work.labor_cost : ""}
+          value={cost}
+          onChange={(event) => setCost(event.target.value)}
           className="field mt-1"
         />
       </label>
