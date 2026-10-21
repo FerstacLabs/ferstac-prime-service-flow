@@ -28,8 +28,24 @@ export function IntakeDateInput({
           ? parseIntakeDate(defaultValue.slice(0, 10))
           : "";
     };
+    const restore = () => {
+      if (!input) return;
+      previous.current = input.value;
+      try {
+        const iso = input.value.trim() ? parseIntakeDate(input.value) : "";
+        if (normalized.current) normalized.current.value = iso;
+        input.setCustomValidity("");
+      } catch (error) {
+        if (normalized.current) normalized.current.value = "";
+        input.setCustomValidity((error as Error).message);
+      }
+    };
     form?.addEventListener("reset", reset);
-    return () => form?.removeEventListener("reset", reset);
+    form?.addEventListener("prime:draft-restored", restore);
+    return () => {
+      form?.removeEventListener("reset", reset);
+      form?.removeEventListener("prime:draft-restored", restore);
+    };
   }, [defaultValue]);
   const validate = (input: HTMLInputElement) => {
     try {

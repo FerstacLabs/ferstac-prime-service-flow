@@ -11,6 +11,7 @@ import {
 } from "@/lib/reports/report-format";
 
 export const auditEventLabels: Record<string, string> = {
+  CUSTOMER_DISCOUNT_CHANGED: "Müştəri endirimi yeniləndi",
   VAT_MODE_CHANGED: "ƏDV rejimi dəyişdirildi",
   VAT_OPENING: "ƏDV başlanğıc qalığı",
   VAT_CUSTOMER_RECEIPT: "Müştəridən ƏDV mədaxili",
@@ -145,6 +146,10 @@ export const auditRoleLabel = (code: string) =>
 
 // Explicit allowlist: credentials, tokens and unknown metadata never reach display.
 const fields: Record<string, string> = {
+  discount_type: "Endirim növü",
+  discount_value: "Endirim dəyəri",
+  before_discount: "Endirimdən əvvəl (ƏDV-siz)",
+  discount_amount: "Endirim məbləği",
   vat_enabled: "ƏDV rejimi",
   vat_amount: "ƏDV məbləği",
   net_amount: "ƏDV-siz məbləğ",
@@ -267,6 +272,8 @@ const fields: Record<string, string> = {
   insurance_approved_amount: "Təsdiqlənmiş sığorta məbləği",
 };
 const moneyFields = new Set([
+  "before_discount",
+  "discount_amount",
   "net_amount",
   "vat_amount",
   "gross_amount",
@@ -354,6 +361,7 @@ export function auditValue(
       ? references[`${field}:${value}`] || "Əlaqəli qeyd (adı saxlanmayıb)"
       : "Əlaqəli qeyd";
   if (field === "vat_enabled") return value ? "ƏDV-li" : "ƏDV-siz";
+  if (field === "discount_type") return ({ NONE: "Endirimsiz", PERCENT: "Faizlə (%)", AMOUNT: "Məbləğlə (AZN)" } as Record<string, string>)[String(value)] ?? "-";
   if (typeof value === "boolean") return value ? "Bəli" : "Xeyr";
   if (typeof value !== "string" && typeof value !== "number")
     return "Dəyişdirilib";

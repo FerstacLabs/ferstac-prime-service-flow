@@ -3,7 +3,7 @@ import { workTitle } from "@/lib/supabase/queries";
 import type { RequiredPart } from "@/lib/workshop";
 import { sumMoney, missingValue } from "@/lib/workshop";
 import { formatMoneyAZN, formatQuantity } from "@/lib/decimal";
-import { vatPricing } from "@/lib/vat";
+import { discountedPricing } from "@/lib/discount";
 import {
   formatReportDate as date,
   formatReportDateTime,
@@ -16,8 +16,10 @@ export function customerQuotation(
   works: DbWorkItem[],
   parts: RequiredPart[],
 ): PrimeReport {
-  works = works.filter((row) => !row.is_additional);
-  parts = parts.filter((row) => !row.is_additional);
+  const discounted = !!job.discount_type && job.discount_type !== "NONE";
+  // A contract-wide discount includes additional work; legacy undiscounted quotations keep their scope.
+  works = works.filter((row) => discounted || !row.is_additional);
+  parts = parts.filter((row) => discounted || !row.is_additional);
   const fields: ReportField[] = [];
   const add = (label: string, value: string | number | null | undefined) => {
     if (value !== null && value !== undefined && value !== "")
@@ -42,11 +44,12 @@ export function customerQuotation(
       : missingValue;
   const netQuotationTotal = total([...parts, ...works]);
   const pricing =
-    netQuotationTotal === missingValue
+    netQuotationTotal === missingValue && !discounted
       ? null
-      : vatPricing(
-          sumMoney([...parts, ...works].map((row) => row.quoted_price)),
-          job.vat_enabled ?? false,
+      : discountedPricing(
+          job.has_line_quotes ? sumMoney([...parts, ...works].map((row) => row.quoted_price))
+            : sumMoney([job.agreed_budget, ...[...parts, ...works].filter((row) => row.is_additional).map((row) => row.quoted_price)]),
+          job,
         );
   const quotationTotal = pricing
     ? formatMoneyAZN(pricing.gross, "AZN")
@@ -120,9 +123,13 @@ export function customerQuotation(
             label: "İşçilik cəmi",
             value: total(works),
           },
+          ...(discounted && pricing ? [
+            { label: "Endirimdən əvvəl (ƏDV-siz)", value: formatMoneyAZN(pricing.beforeDiscount, "AZN") },
+            { label: job.discount_type === "PERCENT" ? `Endirim (${job.discount_value}%)` : "Endirim", value: formatMoneyAZN(pricing.discount, "AZN") },
+          ] : []),
           ...(job.vat_enabled
             ? [
-                { label: "ƏDV-siz cəm", value: netQuotationTotal },
+                { label: "ƏDV-siz cəm", value: pricing ? formatMoneyAZN(pricing.net, "AZN") : netQuotationTotal },
                 {
                   label: "ƏDV (18%)",
                   value: pricing

@@ -15,6 +15,7 @@ import {
 import { resolveAuditContext } from "@/lib/supabase/audit-context";
 
 export const auditActions = [
+  "CUSTOMER_DISCOUNT_CHANGED",
   "VAT_MODE_CHANGED",
   "VAT_OPENING",
   "VAT_CUSTOMER_RECEIPT",
@@ -149,6 +150,7 @@ export type AuditLog = {
 };
 const auditDescriptions: Record<(typeof auditActions)[number], string> = {
   VAT_MODE_CHANGED: "ƏDV rejimini dəyişdi",
+  CUSTOMER_DISCOUNT_CHANGED: "Müştəri endirimini dəyişdi",
   VAT_OPENING: "ƏDV başlanğıc qalığı daxil etdi",
   VAT_CUSTOMER_RECEIPT: "müştəridən ƏDV mədaxili qeydə aldı",
   VAT_SUPPLIER_PAYMENT: "təchizatçıya ƏDV ödədi",

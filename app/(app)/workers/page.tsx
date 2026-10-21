@@ -39,6 +39,7 @@ export default async function WorkersPage({
       <details className="mb-5 border-y border-[var(--border)] py-4">
         <summary className="cursor-pointer font-semibold">Yeni işçi</summary>
         <ActionForm
+          draftKey="worker:new"
           action={saveWorkerAction}
           className="mt-4 grid items-end gap-3 md:grid-cols-4"
           reset

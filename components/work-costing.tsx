@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useDraftState } from "@/components/form-draft";
 import { ActionForm } from "@/components/action-form";
 import { SubmitButton } from "@/components/submit-button";
 import { SearchSelect, type SelectOption } from "@/components/search-select";
@@ -19,8 +20,8 @@ import type { DbWorkItem } from "@/lib/supabase/queries";
 import { statusLabels } from "@/components/app-shell";
 
 export function AdditionalMeasureFields({ units }: { units: SelectOption[] }) {
-  const [quantity, setQuantity] = useState("1"),
-    [price, setPrice] = useState("0");
+  const [quantity, setQuantity] = useDraftState("measure:quantity", "1"),
+    [price, setPrice] = useDraftState("measure:price", "0");
   let total: string | null = null;
   try {
     total = multiplyMoney(
@@ -34,6 +35,7 @@ export function AdditionalMeasureFields({ units }: { units: SelectOption[] }) {
         Miqdar
         <DecimalInput
           name="quoted_quantity"
+          data-draft-managed
           scale={3}
           min="0.001"
           max="100000"
@@ -54,6 +56,7 @@ export function AdditionalMeasureFields({ units }: { units: SelectOption[] }) {
         Müştəri vahid qiyməti (AZN)
         <DecimalInput
           name="customer_unit_price"
+          data-draft-managed
           required
           value={price}
           onChange={(e) => setPrice(e.target.value)}

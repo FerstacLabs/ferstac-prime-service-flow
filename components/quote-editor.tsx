@@ -3,8 +3,8 @@ import { useEffect, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { SearchSelect, type SelectOption } from "@/components/search-select";
 import { DecimalInput } from "@/components/decimal-input";
-import { VatMode } from "@/components/vat-mode";
-import { VatTotals } from "@/components/vat-totals";
+import { DiscountFields } from "@/components/discount-fields";
+import { useDraftState } from "@/components/form-draft";
 import {
   decimalMinor,
   formatMoneyAZN,
@@ -140,8 +140,13 @@ export function QuoteEditor({
   units?: Unit[];
   onTotalChange?: (total: string) => void;
 }) {
-  const [lines, setLines] = useState<(QuoteLine & { key: number })[]>([]);
-  const [next, setNext] = useState(0);
+  const [lines, setLines] = useDraftState<(QuoteLine & { key: number })[]>(`${kind}:lines`, [],
+    (value) => Array.isArray(value) && value.length <= 500 && value.every((line) =>
+      line && Number.isSafeInteger(line.key) && line.key >= 0 &&
+      ["catalogId", "quotedPrice", "quantity", "unitId", "note", "costNote"].every((field) => typeof line[field] === "string")) &&
+      new Set(value.map((line) => line.key)).size === value.length);
+  const [next, setNext] = useDraftState(`${kind}:next`, 0,
+    (value) => typeof value === "number" && Number.isSafeInteger(value) && value >= 0);
   const total = fromMinor(
     lines.reduce((sum, line) => sum + decimalMinor(lineTotal(line) ?? 0), 0n),
   );
@@ -257,7 +262,6 @@ export function IntakeQuotes({
 }) {
   const [workTotal, setWorkTotal] = useState("0.00"),
     [partTotal, setPartTotal] = useState("0.00");
-  const [vatEnabled, setVatEnabled] = useState(false);
   return (
     <>
       <QuoteEditor
@@ -272,10 +276,8 @@ export function IntakeQuotes({
         units={units}
         onTotalChange={setPartTotal}
       />
-      <VatMode value={vatEnabled} onChange={setVatEnabled} />
-      <VatTotals
-        net={fromMinor(decimalMinor(workTotal) + decimalMinor(partTotal))}
-        enabled={vatEnabled}
+      <DiscountFields
+        base={fromMinor(decimalMinor(workTotal) + decimalMinor(partTotal))}
       />
     </>
   );

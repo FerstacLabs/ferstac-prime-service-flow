@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useDraftState } from "@/components/form-draft";
 
 export function VatMode({
   initial = false,
@@ -12,7 +12,7 @@ export function VatMode({
   value?: boolean;
   onChange?: (enabled: boolean) => void;
 }) {
-  const [selected, setSelected] = useState(initial);
+  const [selected, setSelected] = useDraftState(`vat:${name}`, initial);
   const enabled = value ?? selected;
   return (
     <fieldset className="min-w-0">
@@ -24,6 +24,7 @@ export function VatMode({
           <label key={String(option)} className="flex items-center gap-2">
             <input
               type="radio"
+              data-draft-managed
               name={name}
               value={String(option)}
               checked={enabled === option}

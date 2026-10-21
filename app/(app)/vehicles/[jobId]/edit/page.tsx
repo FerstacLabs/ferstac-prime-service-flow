@@ -18,7 +18,8 @@ import { FundingFields } from "@/components/funding-fields";
 import { IntakeDateInput } from "@/components/intake-date-input";
 import { bakuDate } from "@/lib/filters";
 import { RemoveServiceRow } from "@/components/remove-service-row";
-import { VatMode } from "@/components/vat-mode";
+import { DiscountFields } from "@/components/discount-fields";
+import { jobFinance } from "@/lib/workshop";
 
 export default async function EditIntakePage({
   params,
@@ -31,6 +32,7 @@ export default async function EditIntakePage({
     job = data.jobs[0];
   if (!job || job.archived_at) notFound();
   const master = await getMasterData();
+  const totals = jobFinance(job, data.work, data.parts, data.purchases, data.cash);
   const fields = (list: typeof vehicleIntakeFields, values: object) =>
     list.map(({ name, label, type, required }) => (
       <label key={name} className="text-sm text-[var(--muted)]">
@@ -64,7 +66,7 @@ export default async function EditIntakePage({
           </Link>
         }
       />
-      <ActionForm action={updateVehicleIntakeAction} className="space-y-6">
+      <ActionForm draftKey={`vehicle:edit:${job.id}`} action={updateVehicleIntakeAction} className="space-y-6">
         <input type="hidden" name="service_job_id" value={jobId} />
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {fields(vehicleIntakeFields, job.vehicles!)}
@@ -72,7 +74,6 @@ export default async function EditIntakePage({
         <section className="grid gap-4 border-t border-[var(--border)] pt-6 sm:grid-cols-2 xl:grid-cols-3">
           {fields(jobIntakeFields, job)}
           <FundingFields job={job} />
-          <VatMode initial={job.vat_enabled ?? false} />
           <label className="text-sm text-[var(--muted)]">
             Qəbul tarixi
             <IntakeDateInput
@@ -91,6 +92,9 @@ export default async function EditIntakePage({
             />
           </label>
         </section>
+        <DiscountFields base={totals.beforeDiscount} initialType={job.discount_type}
+          initialValue={job.discount_value} initialVat={job.vat_enabled} paid={totals.customerPaid}
+          showPayments={profile.role === "ADMIN"} />
         <SubmitButton>
           <Save size={16} />
           Qeydiyyatı saxla

@@ -70,6 +70,10 @@ export type FinanceCategory = {
 export type FinanceJob = {
   vat_enabled?: boolean;
   net_quotation?: number;
+  discount_type?: import("@/lib/discount").DiscountType;
+  discount_value?: number;
+  before_discount?: number;
+  discount_amount?: number;
   vat_quotation?: number;
   gross_quotation?: number;
   id: string;

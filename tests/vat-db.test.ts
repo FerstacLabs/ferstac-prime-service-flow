@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 import { readFileSync, readdirSync } from "node:fs";
 import { randomUUID } from "node:crypto";
@@ -134,13 +134,91 @@ afterAll(async () => {
   await db?.close();
 });
 
+describe("0015 customer discounts", () => {
+  beforeEach(async () => { await db.exec("begin"); });
+  afterEach(async () => { await db.exec("rollback"); });
+  async function value<T = string>(sql: string, args: unknown[] = []) {
+    await db.exec("savepoint discount_statement");
+    try {
+      const result = (await db.query<{ v: T }>(sql, args)).rows[0]?.v;
+      await db.exec("release savepoint discount_statement");
+      return result;
+    } catch (error) {
+      await db.exec("rollback to savepoint discount_statement; release savepoint discount_statement");
+      throw error;
+    }
+  }
+  async function createDiscount(type: string, amount: number, vat = false, key = randomUUID()) {
+    const catalog = await value("select id v from work_catalog limit 1");
+    return value("select create_workshop_job($1,$2,$3,'[]',$4) v", [
+      JSON.stringify({ plate: "90-DS-015", make: "BMW", model: "Discount QA" }),
+      JSON.stringify({ funding_source: "CUSTOMER_FUNDED", vat_enabled: vat, discount_type: type, discount_value: amount }),
+      JSON.stringify([{ catalogId: catalog, quotedPrice: "1000", quantity: 1 }]), key,
+    ]);
+  }
+  it.each([
+    ["NONE", 0, 1000], ["PERCENT", 0, 1000], ["PERCENT", 10, 900],
+    ["PERCENT", 25, 750], ["PERCENT", 100, 0], ["AMOUNT", 50, 950], ["AMOUNT", 150, 850],
+  ])("persists %s %s without creating cash or changing costs", async (type, amount, expected) => {
+    await user(admin);
+    const before = await value("select count(*) v from cash_transactions");
+    const id = await createDiscount(String(type), Number(amount));
+    const jobs = await value<Array<{ id: string; net_quotation: number }>>("select jsonb_agg(r) v from finance_data('jobs', $1) r", [id]);
+    expect(jobs.find((r) => r.id === id)?.net_quotation).toBe(expected);
+    expect(await value("select count(*) v from cash_transactions")).toBe(before);
+    expect(await value("select sum(labor_cost)::text v from job_work_items where service_job_id=$1", [id])).toBe("0");
+  });
+  it.each([["PERCENT", 101], ["PERCENT", -1], ["AMOUNT", 1001], ["NONE", 10], ["INVALID", 5]])(
+    "atomically rejects invalid %s %s", async (type, amount) => {
+      await user(admin);
+      const before = await value("select count(*) v from service_jobs");
+      await expect(createDiscount(String(type), Number(amount))).rejects.toThrow();
+      expect(await value("select count(*) v from service_jobs")).toBe(before);
+    },
+  );
+  it("allows intake creation, rejects cashier edits, retains idempotency and audited pricing", async () => {
+    await user(intake);
+    const key = randomUUID();
+    const id = await createDiscount("AMOUNT", 150, false, key);
+    expect(await createDiscount("AMOUNT", 150, false, key)).toBe(id);
+    await expect(value("select count(*) v from finance_data('jobs',$1)", [id])).rejects.toThrow();
+    await expect(value("select update_vehicle_intake_0014($1,'{}','{}') v", [id])).rejects.toThrow();
+    await user(cashier);
+    await expect(value("select update_vehicle_intake($1,'{}','{\"discount_type\":\"NONE\",\"discount_value\":0}') v", [id])).rejects.toThrow();
+    await user(admin);
+    expect(Number(await value("select count(*) v from audit_logs where action='CUSTOMER_DISCOUNT_CHANGED' and service_job_id=$1", [id]))).toBe(1);
+  });
+  it("splits discounted VAT payments, caps gross debt and freezes paid pricing", async () => {
+    await user(admin);
+    const id = await createDiscount("PERCENT", 10, true);
+    const pay = (amount: number) => value("select record_financial_transaction($1,$2) v", [
+      JSON.stringify({ allocation_type: "CUSTOMER_VEHICLE", service_job_id: id, target_id: id,
+        amount, channel: "CASH", purpose: "Discount QA", occurred_at: "2026-10-20T10:00:00Z" }), randomUUID(),
+    ]);
+    const payment = await pay(531);
+    expect(await value("select jsonb_build_object('net',net_amount,'vat',vat_amount,'gross',amount) v from cash_transactions where id=$1", [payment]))
+      .toEqual({ net: 450, vat: 81, gross: 531 });
+    await expect(value("select update_vehicle_intake($1,'{}','{\"discount_type\":\"AMOUNT\",\"discount_value\":50}') v", [id])).rejects.toThrow();
+    await expect(pay(532)).rejects.toThrow();
+    const finalPayment = await pay(531);
+    expect(Number(await value("select sum(amount) v from cash_transactions where service_job_id=$1 and voided_at is null", [id]))).toBe(1062);
+    await expect(pay(0.01)).rejects.toThrow();
+    await value("select void_cash_payment($1,'Discount QA reversal') v", [finalPayment]);
+    await value("select void_cash_payment($1,'Discount QA reversal') v", [payment]);
+    await value("select update_vehicle_intake($1,'{}','{\"discount_type\":\"AMOUNT\",\"discount_value\":150}') v", [id]);
+    const jobs = await value<Array<{ id: string; net_quotation: number; gross_quotation: number; customer_due: number }>>(
+      "select jsonb_agg(r) v from finance_data('jobs',$1) r", [id]);
+    expect(jobs.find((r) => r.id === id)).toMatchObject({ net_quotation: 850, gross_quotation: 1003, customer_due: 1003 });
+  });
+});
+
 describe("0014 VAT persistence and protected deposit", () => {
   it("backfills historical jobs VAT-off without changing their budget", async () => {
     expect(
       await value(
-        "select jsonb_build_object('enabled',vat_enabled,'budget',agreed_budget) v from service_jobs where job_no='LEGACY-VAT'",
+        "select jsonb_build_object('enabled',vat_enabled,'budget',agreed_budget,'discount_type',discount_type,'discount_value',discount_value) v from service_jobs where job_no='LEGACY-VAT'",
       ),
-    ).toEqual({ enabled: false, budget: 100 });
+    ).toEqual({ enabled: false, budget: 100, discount_type: 'NONE', discount_value: 0 });
   });
   it("persists vehicle VAT and exact supplier net/VAT/gross", async () => {
     expect(

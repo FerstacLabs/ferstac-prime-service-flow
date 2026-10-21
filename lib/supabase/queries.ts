@@ -37,6 +37,8 @@ export type DbVehicle = {
 };
 
 export type DbServiceJob = {
+  discount_type?: import("@/lib/discount").DiscountType;
+  discount_value?: number;
   vat_enabled?: boolean;
   vat_rate?: number;
   financially_closed_at?: string | null;

@@ -69,6 +69,10 @@ export function FinanceSummary({
       <h2 className="text-lg font-semibold">Maliyyə yekunu</h2>
       <MoneyGrid
         items={[
+          ...(job.discount_type && job.discount_type !== "NONE" ? ([
+            ["Endirimdən əvvəl (ƏDV-siz)", n.beforeDiscount],
+            ["Müştəri endirimi", n.discountAmount],
+          ] as Array<[string, number]>) : []),
           ["Müştəriyə deyilən işçilik", n.detailed ? n.quotedWork : null],
           ["Müştəriyə deyilən detallar", n.detailed ? n.quotedParts : null],
           [
@@ -236,7 +240,7 @@ export function JobFinance({
                   ["Qazanılmış qalıq", worker.outstanding],
                   ["Qalan razılaşdırılmış usta məbləği", worker.remaining],
                   [
-                    "İş mənfəəti",
+                    job.discount_type && job.discount_type !== "NONE" ? "İş marjası (endirimdən əvvəl)" : "İş mənfəəti",
                     w.quoted_price != null && costKnown(w)
                       ? subtractMoney(
                           w.quoted_price,
@@ -278,7 +282,7 @@ export function JobFinance({
                   ["Müştəri qiyməti", r.quoted_price],
                   ["Faktiki maya", matches.length ? cost : null],
                   [
-                    "Detal mənfəəti",
+                    job.discount_type && job.discount_type !== "NONE" ? "Detal marjası (endirimdən əvvəl)" : "Detal mənfəəti",
                     matches.length ? subtractMoney(r.quoted_price, cost) : null,
                   ],
                 ]}

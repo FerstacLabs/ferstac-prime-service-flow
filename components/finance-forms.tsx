@@ -1,5 +1,6 @@
 "use client";
 import { createContext, useContext, useState } from "react";
+import { useDraftState } from "@/components/form-draft";
 import * as Dialog from "@radix-ui/react-dialog";
 import {
   ArrowDownLeft,
@@ -103,7 +104,7 @@ export function PaymentSource({
   initial?: MoneyChannel;
   defaultAccount?: string;
 }) {
-  const [channel, setChannel] = useState<MoneyChannel>(initial);
+  const [channel, setChannel] = useDraftState<MoneyChannel>("payment:channel", initial);
   return (
     <>
       <label className="text-sm">
@@ -111,6 +112,7 @@ export function PaymentSource({
         <select
           className="field mt-1"
           name="channel"
+          data-draft-managed
           value={channel}
           onChange={(e) => setChannel(e.target.value as MoneyChannel)}
         >
@@ -342,6 +344,17 @@ export function NewMovement({
             </select>
           </label>
         ) : null}
+        {paymentJob?.discount_type && paymentJob.discount_type !== "NONE" && (
+          <dl className="grid gap-3 border-y border-[var(--border)] py-3 text-sm sm:col-span-2 sm:grid-cols-3">
+            {[
+              ["Endirimdən əvvəl (ƏDV-siz)", paymentJob.before_discount],
+              ["Müştəri endirimi", paymentJob.discount_amount],
+              ["Müştəri yekun məbləği", paymentJob.gross_quotation],
+              ["Alınmış ödənişlər", moneyDiff(Number(paymentJob.gross_quotation), paymentJob.customer_due)],
+              ["Müştərinin qalıq borcu", paymentJob.customer_due],
+            ].map(([label, value]) => <div key={String(label)}><dt>{label}</dt><dd>{formatMoney(Number(value))}</dd></div>)}
+          </dl>
+        )}
         <label className="text-sm">
           {paymentJob?.vat_enabled
             ? "Yekun ödəniş (ƏDV daxil, AZN)"

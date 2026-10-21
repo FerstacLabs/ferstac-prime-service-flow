@@ -231,14 +231,18 @@ describe("workshop finance and report boundary", () => {
     );
     expect(report.sections[0].table?.rows).toHaveLength(0);
   });
-  it("reproduces blank signatures and current-date handover without customer names", () => {
+  it("renders current job acceptance with blank acceptance signatures and planned work", () => {
     const report = buildWorkshopReport(
       "handover",
       data,
       parseFilters({ job: "job" }),
     );
-    expect(report.sections).toHaveLength(2);
-    expect(report.sections.flatMap((s) => s.signatures)).toHaveLength(4);
+    expect(report.sections).toHaveLength(3);
+    expect(report.sections.flatMap((s) => s.signatures ?? [])).toEqual([
+      "Təhvil verdi (müştəri)", "Təhvil aldı (servis əməkdaşı)",
+    ]);
+    expect(report.sections[2].title).toBe("İşlər");
+    expect(JSON.stringify(report)).toContain("qaytarılması bu sənədlə təsdiqlənmir");
     expect(JSON.stringify(report)).toContain("99-AA-999");
     expect(JSON.stringify(report)).not.toContain("2026-cı il");
   });

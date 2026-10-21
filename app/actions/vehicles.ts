@@ -9,6 +9,7 @@ import { z } from "zod";
 import { serverMutation } from "@/lib/server-mutation";
 import { databaseActionError } from "@/lib/action-errors";
 import { parseIntakeDate } from "@/lib/intake-date";
+import { discountFromForm } from "@/lib/discount";
 import {
   moneySchema,
   noteValue,
@@ -100,6 +101,7 @@ export async function createServiceJobAction(formData: FormData) {
       p_works: works,
       p_parts: parts,
       p_job: {
+        ...discountFromForm(formData),
         vat_enabled: formData.get("vat_enabled") === "true",
         customer_name: nullable(formData.get("customer_name")),
         customer_phone: nullable(formData.get("customer_phone")),
@@ -188,6 +190,7 @@ export async function updateVehicleIntakeAction(form: FormData) {
     p_job: uuidValue(form, "service_job_id"),
     p_vehicle: vehicle,
     p_details: {
+      ...discountFromForm(form),
       vat_enabled: form.get("vat_enabled") === "true",
       ...readFields(jobIntakeFields),
       insurance_company: nullable(form.get("insurance_company")),

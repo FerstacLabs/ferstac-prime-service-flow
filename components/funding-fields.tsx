@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useDraftState } from "@/components/form-draft";
 import { DecimalInput } from "@/components/decimal-input";
 export function FundingFields({
   job,
@@ -11,15 +11,19 @@ export function FundingFields({
     insurance_approved_amount: number | null;
   };
 }) {
-  const [source, setSource] = useState(
+  const [source, setSource] = useDraftState("funding:source",
     job?.funding_source ?? "CUSTOMER_FUNDED",
   );
+  const [company, setCompany] = useDraftState("funding:company", job?.insurance_company ?? "");
+  const [claim, setClaim] = useDraftState("funding:claim", job?.insurance_claim_no ?? "");
+  const [approved, setApproved] = useDraftState("funding:approved", String(job?.insurance_approved_amount ?? ""));
   return (
     <>
       <label className="text-sm text-[var(--muted)]">
         Mənbə
         <select
           name="funding_source"
+          data-draft-managed
           className="field mt-1"
           value={source}
           onChange={(e) => setSource(e.target.value)}
@@ -35,7 +39,9 @@ export function FundingFields({
             <input
               name="insurance_company"
               className="field mt-1"
-              defaultValue={job?.insurance_company ?? ""}
+              data-draft-managed
+              value={company}
+              onChange={(e) => setCompany(e.target.value)}
             />
           </label>
           <label className="text-sm text-[var(--muted)]">
@@ -43,7 +49,9 @@ export function FundingFields({
             <input
               name="insurance_claim_no"
               className="field mt-1"
-              defaultValue={job?.insurance_claim_no ?? ""}
+              data-draft-managed
+              value={claim}
+              onChange={(e) => setClaim(e.target.value)}
             />
           </label>
           <label className="text-sm text-[var(--muted)]">
@@ -51,7 +59,9 @@ export function FundingFields({
             <DecimalInput
               name="insurance_approved_amount"
               className="field mt-1"
-              defaultValue={job?.insurance_approved_amount ?? ""}
+              data-draft-managed
+              value={approved}
+              onChange={(e) => setApproved(e.target.value)}
             />
           </label>
         </>

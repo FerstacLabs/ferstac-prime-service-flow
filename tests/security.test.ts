@@ -129,7 +129,7 @@ describe("role routes and report matrix", () => {
         role === "ADMIN" ||
         (role === "CASHIER"
           ? ["kassa", "workers"].includes(scope)
-          : ["quotation", "work"].includes(scope));
+          : ["quotation", "work", "handover"].includes(scope));
       expect(canReport(role, scope)).toBe(expected);
       expect(canAccessPath(role, `/api/reports/${scope}/pdf`)).toBe(expected);
       expect(canAccessPath(role, `/reports/${scope}/print`)).toBe(expected);

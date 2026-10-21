@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useDraftState } from "@/components/form-draft";
 import { isValidAzPlate, normalizeAzPlate } from "@/lib/plate";
 
 export function PlateInput() {
-  const [plate, setPlate] = useState("");
+  const [plate, setPlate] = useDraftState("vehicle:plate", "");
   return (
     <>
       <input
+        data-draft-managed
         name="plate"
         value={plate}
         onChange={(event) => setPlate(normalizeAzPlate(event.target.value))}
