@@ -2,8 +2,10 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { RotateCcw } from "lucide-react";
 
-const prefix = "prime:draft:v1:";
-const lifetime = 8 * 60 * 60 * 1000;
+export const draftPrefix = "prime:draft:v1:";
+const prefix = draftPrefix;
+export const draftLifetime = 8 * 60 * 60 * 1000;
+const lifetime = draftLifetime;
 type Draft = {
   version: 1;
   updated: number;
@@ -23,6 +25,8 @@ type Store = {
   getStatus: () => number;
 };
 const Scope = createContext("");
+export const DraftLocation = createContext("");
+export const useDraftScope = () => useContext(Scope);
 const Context = createContext<Store | null>(null);
 const logoutEvent = "prime:draft-logout";
 export function clearFormDrafts() {
@@ -70,6 +74,9 @@ const subscribeHydration = () => () => {};
 function LoadedDraft({ storageKey, scope, discard, children }: {
   storageKey: string; scope: string; discard: () => void; children: React.ReactNode;
 }) {
+  const location = useContext(DraftLocation);
+  const sourceLocation = useRef(location);
+  useEffect(() => { sourceLocation.current = location; }, [location]);
   const [store] = useState<Store>(() => {
     let draft: Draft = { version: 1, updated: Date.now(), key: crypto.randomUUID(), fields: {}, state: {} };
     try {
@@ -103,7 +110,18 @@ function LoadedDraft({ storageKey, scope, discard, children }: {
         } catch { updateStatus(status | 2); }
       },
       clear: () => { try { sessionStorage.removeItem(storageKey); } catch {} },
-      complete: () => { active = false; value.clear(); discard(); },
+      complete: () => {
+        if (!active) return;
+        active = false;
+        // A remounted form may already contain a replacement draft for the same workflow.
+        try {
+          const raw = sessionStorage.getItem(storageKey);
+          if (raw && JSON.parse(raw).key !== draft.key) return;
+        } catch { /* Storage may be unavailable; the in-memory form still needs clearing. */ }
+        value.clear();
+        window.dispatchEvent(new CustomEvent("prime:draft-completed", { detail: { href: sourceLocation.current, scope } }));
+        discard();
+      },
       writeState: (name, state) => { draft.state[name] = state; value.persist(); },
       writeFields: (fields) => { draft.fields = fields; value.persist(); },
       setPending: (pending) => updateStatus(pending ? status | 1 : status & ~1),

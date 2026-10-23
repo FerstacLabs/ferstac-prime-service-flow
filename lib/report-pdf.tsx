@@ -209,7 +209,7 @@ export function ReportDocument({ report }: { report: PrimeReport }) {
             <View
               key={section.title}
               style={{ border: "1px solid #222", padding: 9, marginBottom: 10 }}
-              wrap
+              wrap={false}
             >
               {section.paragraphs?.map((p, i) => (
                 <Text key={i} style={{ marginBottom: 3 }}>

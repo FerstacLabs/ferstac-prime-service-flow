@@ -244,10 +244,7 @@ export function buildWorkshopReport(
   const job = data.jobs.find((j) => j.id === f.job) ?? data.jobs[0];
   if (scope === "handover") {
     if (!job) return report;
-    return handoverReport(job.vehicles?.plate ?? "", {
-      job,
-      work: data.work.filter((w) => w.service_job_id === job.id).map(workTitle),
-    });
+    return handoverReport(job.vehicles?.plate ?? "");
   }
   if (scope === "quotation") {
     if (!job) return report;

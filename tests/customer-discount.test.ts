@@ -54,22 +54,26 @@ describe("shared customer discount pricing", () => {
     expect(jobFinance(discounted, work, [], [], []).workerEarned).toBe(500);
   });
 });
-describe("acceptance versus return document", () => {
-  it.each(["RECEIVED", "IN_PROGRESS", "READY"] as const)("does not attest return at %s", (status) => {
-    const report = handoverReport("90-DS-015", { job: { ...job, status }, work: ["Təmir"] });
+describe("original two-section paper document", () => {
+  it.each(["2026-10-20", "2026-10-22"])("keeps both sections and a dynamic document date %s", (date) => {
+    const report = handoverReport("90-DS-015", date);
     const text = JSON.stringify(report);
-    expect(text).toContain("Test müştəri");
-    expect(text).toContain("20/10/2026");
-    expect(text).toContain("qaytarılması bu sənədlə təsdiqlənmir");
-    expect(text).not.toContain("müştəriyə qaytarılmışdır");
-    expect(text).toContain("Təmir");
+    expect(report.sections).toHaveLength(2);
+    expect(report.sections.flatMap((s) => s.signatures)).toHaveLength(4);
+    expect(text).not.toContain("qaytarılması bu sənədlə təsdiqlənmir");
+    expect(text).not.toContain("Servis kartı:");
+    expect(text).not.toContain('"İşlər"');
+    expect(text).toContain("müştəriyə qaytarılmışdır");
+    expect(text).toContain("90-DS-015");
+    expect(text).toContain(date.split("-").reverse().join("/"));
     expect(job.status).toBe("IN_PROGRESS");
   });
-  it("retains return wording and actual return date for delivered vehicles", () => {
-    const text = JSON.stringify(handoverReport("90-DS-015", {
-      job: { ...job, status: "DELIVERED", delivered_at: "2026-10-22T08:00:00Z" }, work: [],
-    }));
-    expect(text).toContain("müştəriyə qaytarılmış");
-    expect(text).toContain("22/10/2026");
+  it("preserves the full original return clauses and signature arrangement", () => {
+    const section = handoverReport("90-DS-015").sections[1];
+    expect(section.paragraphs?.slice(1, 3)).toEqual([
+      "a) Avtomobili təhvil alan (müştəri) hazırkı aktın 2-ci hissəsini imzalamaqla təsdiq edir ki, avtomobili təhvil alarkən onun vəziyyətini hərtərəfli yoxlamışdır və avtomobillə, habelə təmir edilmişdirsə təmiri ilə bağlı servisə qarşı hər hansı şikayəti, iddia və ya tələbi yoxdur və gələcəkdə də olmayacaqdır;",
+      "b) Zəmanət çərçivəsində dəyişdirilən ehtiyat hissələri istisna edilməklə, avtomobildə hər hansı ehtiyat hissəsi yenisi ilə əvəz olunmuşdursa, köhnə ehtiyat hissəsi avtomobili təhvil alana (müştəriyə) təqdim edilmişdir.",
+    ]);
+    expect(section.signatures).toEqual(["Təhvil aldı (müştəri)", "Təhvil verdi (servis əməkdaşı)"]);
   });
 });

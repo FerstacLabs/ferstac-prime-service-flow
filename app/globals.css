@@ -50,6 +50,9 @@
   .handover {
     padding: 0 !important;
   }
+  .handover-section {
+    margin-right: 1px;
+  }
 }
 
 :root {

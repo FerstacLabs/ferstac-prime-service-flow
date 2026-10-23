@@ -18,28 +18,28 @@ const work = Array.from({ length: 4 }, (_, i) => ({ id: String(i), service_job_i
   customer_unit_price: 250, quantity: 1, work_catalog: { name: `İş ${i + 1}: Ön qanadın təmiri, ölçü və şüşə yoxlanışı` },
   notes: "Azərbaycan hərfləri: ə ı ö ü ç ş ğ" })) as DbWorkItem[];
 const reports = {
-  acceptance: handoverReport("90-DS-015", { job, work: work.map((w) => w.work_catalog!.name) }),
-  delivered: handoverReport("90-DS-015", { job: { ...job, status: "DELIVERED", delivered_at: "2026-10-21T08:00:00Z" }, work: [] }),
+  acceptance: handoverReport("90-DS-015", "2026-10-22"),
+  delivered: handoverReport("90-DS-016", "2026-10-23"),
   discounted: customerQuotation(job, work, []),
-  "acceptance-long": handoverReport("90-DS-015", { job, work: Array.from({ length: 50 }, (_, i) => `${i + 1}. Ön qanad və mühərrik yoxlanışı`) }),
 };
 describe("customer document PDF and print", () => {
   it.each(Object.entries(reports))("renders %s with matching print content", async (name, report) => {
     const pdf = await renderToBuffer(<ReportDocument report={report} />);
     expect(pdf.subarray(0, 4).toString()).toBe("%PDF");
     const html = renderToStaticMarkup(<PrintReport report={report} />);
-    expect(html).toContain("Əli Məmmədov");
-    expect(html).toContain("90-DS-015");
+    expect(html).toContain(name === "delivered" ? "90-DS-016" : "90-DS-015");
     expect(html).not.toContain("Hesab üzrə qalıq");
-    if (name.startsWith("acceptance")) {
-      expect(html).toContain("qaytarılması bu sənədlə təsdiqlənmir");
-      expect(html).not.toContain("müştəriyə qaytarılmışdır");
+    if (report.scope === "handover") {
+      expect(html).not.toContain("qaytarılması bu sənədlə təsdiqlənmir");
+      expect(html).toContain("müştəriyə qaytarılmışdır");
+      expect(html).not.toContain("Servis kartı:");
+      expect(html).not.toContain("İşlər");
+      expect(pdf.toString("latin1").match(/\/Type \/Page\b/g)).toHaveLength(1);
     }
     if (name === "discounted") {
       expect(html).toContain("Endirim (10%)");
       expect(html).toContain("1 062,00");
     }
-    if (name === "acceptance-long") expect(pdf.toString("latin1").match(/\/Type \/Page\b/g)!.length).toBeGreaterThan(1);
     if (process.env.PRIME_REPORT_QA_DIR) {
       mkdirSync(process.env.PRIME_REPORT_QA_DIR, { recursive: true });
       writeFileSync(path.join(process.env.PRIME_REPORT_QA_DIR, `${name}.pdf`), pdf);

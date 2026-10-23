@@ -4,13 +4,12 @@ import {
   formatReportDateTime,
 } from "@/lib/reports/report-format";
 import { bakuDate } from "@/lib/filters";
-import type { DbServiceJob } from "@/lib/supabase/queries";
 // Transcription of the supplied printed form. Handwritten details are deliberately excluded.
 export function handoverReport(
   plate: string,
-  context?: { job: DbServiceJob; work: string[] },
+  documentDate = bakuDate(),
 ): PrimeReport {
-  const date = formatReportDate(context?.job.received_at ?? bakuDate());
+  const date = formatReportDate(documentDate);
   const report: PrimeReport = {
     scope: "handover",
     documentContext: [plate],
@@ -48,28 +47,5 @@ export function handoverReport(
       },
     ],
   };
-  if (context) {
-    const { job, work } = context;
-    const returned = job.status === "DELIVERED" && !!job.delivered_at;
-    report.sections[0].paragraphs!.splice(1, 0,
-      `Servis kartı: ${job.job_no}. Müştəri: ${job.customer_name || "________________"}. Avtomobil: ${job.vehicles?.make ?? ""} ${job.vehicles?.model ?? ""}. Qəbul tarixi: ${date}.`,
-    );
-    if (!returned) {
-      report.subtitle = "(avtomobilin servisə qəbulu; yekun təhvil təsdiqi deyil)";
-      report.sections = [report.sections[0], {
-        title: "2.",
-        paragraphs: [
-          "Avtomobilin müştəriyə qaytarılması bu sənədlə təsdiqlənmir. Yekun təhvil zamanı ayrıca təhvil hissəsi imzalanmalıdır.",
-        ],
-      }];
-    } else {
-      const paragraphs = report.sections[1].paragraphs!;
-      paragraphs[paragraphs.length - 1] = `Tarix: ${formatReportDate(job.delivered_at!)}`;
-    }
-    if (work.length) report.sections.push({
-      title: "İşlər",
-      paragraphs: work.map((name, index) => `${index + 1}. ${name}`),
-    });
-  }
   return report;
 }

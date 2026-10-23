@@ -1,6 +1,6 @@
 "use client";
-import { createContext, useContext, useState } from "react";
-import { useDraftState } from "@/components/form-draft";
+import { createContext, useContext } from "react";
+import { FormDraft, useDraftState } from "@/components/form-draft";
 import * as Dialog from "@radix-ui/react-dialog";
 import {
   ArrowDownLeft,
@@ -52,7 +52,7 @@ export function FinanceDialog({
   danger?: boolean;
   icon?: "in" | "out" | "transfer" | "settle";
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useDraftState("finance-dialog:open", false);
   const Icon = danger
     ? Trash2
     : icon === "out"
@@ -230,7 +230,12 @@ export function MovementDetails({
     </>
   );
 }
-export function NewMovement({
+export function NewMovement(props: React.ComponentProps<typeof NewMovementInner>) {
+  return <FormDraft id={`movement:${props.direction}:${props.channel}:${props.account ?? "cash"}:${props.job?.id ?? "general"}:${props.opening ?? false}`}>
+    <NewMovementInner {...props} />
+  </FormDraft>;
+}
+function NewMovementInner({
   data,
   direction,
   channel,
@@ -245,11 +250,11 @@ export function NewMovement({
   job?: FinanceJob;
   opening?: boolean;
 }) {
-  const [selected, setSelected] = useState(job?.id || "");
-  const [category, setCategory] = useState("");
-  const [worker, setWorker] = useState("");
-  const [target, setTarget] = useState("");
-  const [amount, setAmount] = useState("");
+  const [selected, setSelected] = useDraftState("movement:job", job?.id || "");
+  const [category, setCategory] = useDraftState("movement:category", "");
+  const [worker, setWorker] = useDraftState("movement:worker", "");
+  const [target, setTarget] = useDraftState("movement:target", "");
+  const [amount, setAmount] = useDraftState("movement:amount", "");
   const purposeName = data.categories.find((c) => c.id === category)?.name;
   const customer =
     !opening &&
@@ -325,6 +330,7 @@ export function NewMovement({
             Avtomobil / servis kartı
             <select
               name="service_job_id"
+              data-draft-managed
               required={customer}
               className="field mt-1"
               value={selected}
@@ -361,6 +367,7 @@ export function NewMovement({
             : "Məbləğ (AZN)"}
           <DecimalInput
             name="amount"
+            data-draft-managed
             required
             min="0.01"
             max={paymentJob?.customer_due}

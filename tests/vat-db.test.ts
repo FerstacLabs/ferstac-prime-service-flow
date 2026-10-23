@@ -9,8 +9,18 @@ const admin = randomUUID(),
   cashier = randomUUID(),
   intake = randomUUID();
 let org: string, job: string, supplier: string, purchase: string;
+let deliveryBeforeUpgrade: Record<string, unknown>, deliveryAfterUpgrade: Record<string, unknown>;
 async function value<T = string>(sql: string, args: unknown[] = []) {
   return (await db.query<{ v: T }>(sql, args)).rows[0]?.v;
+}
+async function deliveryInstallation() {
+  return value<Record<string, unknown>>(`select jsonb_build_object(
+    'function_oid',p.oid,'owner',p.proowner,'security_definer',p.prosecdef,'config',p.proconfig,'acl',p.proacl,
+    'trigger_oid',t.oid,'trigger_definition',pg_get_triggerdef(t.oid),'enabled',t.tgenabled,
+    'jobs',(select jsonb_agg(to_jsonb(j) order by id) from public.service_jobs j),
+    'policies',(select jsonb_agg(to_jsonb(r) order by policyname) from pg_policies r where schemaname='public' and tablename='service_jobs')
+  ) v from pg_trigger t join pg_proc p on p.oid=t.tgfoid
+  where t.tgrelid='public.service_jobs'::regclass and t.tgname='ab_vehicle_delivery'`);
 }
 async function user(id: string) {
   await db.exec(`reset role; set app.uid='${id}'; set role authenticated;`);
@@ -82,12 +92,14 @@ beforeAll(async () => {
     grant usage on schema storage to authenticated,service_role;
     grant select on storage.objects to authenticated; grant all on storage.objects to service_role;`);
   for (const file of readdirSync("supabase/migrations").sort()) {
+    if (file.startsWith("0018")) deliveryBeforeUpgrade = await deliveryInstallation();
     await db.exec(
       readFileSync(`supabase/migrations/${file}`, "utf8").replace(
         'create extension if not exists "pgcrypto";',
         "",
       ),
     );
+    if (file.startsWith("0018")) deliveryAfterUpgrade = await deliveryInstallation();
     if (file.startsWith("0001")) {
       await db.exec(readFileSync("supabase/seed.sql", "utf8"));
       await db.exec(`insert into vehicles(owner_user_id,plate,make,model) values('${admin}','10-AB-123','BMW','F30');
@@ -156,6 +168,163 @@ describe("0015 customer discounts", () => {
       JSON.stringify([{ catalogId: catalog, quotedPrice: "1000", quantity: 1 }]), key,
     ]);
   }
+  it("0017 protects final delivery with readiness and role checks", async () => {
+    await user(admin);
+    const id = await createDiscount("NONE", 0);
+    const before = await value("select to_jsonb(j) v from service_jobs j where id=$1", [id]);
+    await expect(value("update service_jobs set status='DELIVERED' where id=$1 returning id v", [id]))
+      .rejects.toThrow("Yekun təhvil");
+    await expect(value("update service_jobs set delivered_at=now() where id=$1 returning id v", [id]))
+      .rejects.toThrow("Yekun təhvil");
+    expect(await value("select to_jsonb(j) v from service_jobs j where id=$1", [id])).toEqual(before);
+    await value("update service_jobs set status='READY' where id=$1 returning id v", [id]);
+    await expect(value("update service_jobs set status='DELIVERED' where id=$1 returning id v", [id]))
+      .rejects.toThrow("Yekun təhvil");
+    await value("update job_work_items set status='CANCELLED' where service_job_id=$1 returning id v", [id]);
+    expect(await value("select status v from service_jobs where id=$1", [id])).toBe("READY");
+    await user(intake);
+    await value("update service_jobs set status='DELIVERED' where id=$1 returning id v", [id]);
+    await user(cashier);
+    await value("update service_jobs set status='DELIVERED' where id=$1 returning id v", [id]);
+    await user(admin);
+    expect(await value("select status v from service_jobs where id=$1", [id])).toBe("READY");
+    await value("update service_jobs set status='DELIVERED' where id=$1 returning id v", [id]);
+    expect(await value("select status='DELIVERED' and delivered_at is not null v from service_jobs where id=$1", [id])).toBe(true);
+  });
+  describe("0018 delivered terminal state", () => {
+    let id: string;
+    const snapshot = () => value("select to_jsonb(j) v from service_jobs j where id=$1", [id]);
+    async function ready() {
+      await value("update job_work_items set status='CANCELLED' where service_job_id=$1 returning id v", [id]);
+      expect(await value("select status v from service_jobs where id=$1", [id])).toBe("READY");
+    }
+    async function deliver() {
+      await ready();
+      await value("update service_jobs set status='DELIVERED' where id=$1 returning id v", [id]);
+    }
+    async function rejectedUpdate(set: string, args: unknown[] = [], message = "Təhvil verilmiş") {
+      const before = await snapshot();
+      const audits = await value("select count(*) v from audit_logs");
+      await expect(value(`update service_jobs set ${set} where id=$1 returning id v`, [id, ...args])).rejects.toThrow(message);
+      expect(await snapshot()).toEqual(before);
+      expect(await value("select count(*) v from audit_logs")).toBe(audits);
+    }
+    beforeEach(async () => {
+      await user(admin);
+      id = await createDiscount("NONE", 0);
+    });
+    it("upgrades installed 0017 in place without changing existing rows, trigger identity, privileges or RLS", () => {
+      expect(deliveryBeforeUpgrade).toBeDefined();
+      expect(deliveryBeforeUpgrade.jobs).toEqual(expect.arrayContaining([expect.objectContaining({ job_no: "LEGACY-VAT" })]));
+      expect(deliveryBeforeUpgrade.security_definer).toBe(true);
+      expect(deliveryAfterUpgrade).toEqual(deliveryBeforeUpgrade);
+    });
+    it("allows authorized ADMIN READY -> DELIVERED and fills delivered_at", async () => {
+      await ready();
+      expect(await value("select delivered_at v from service_jobs where id=$1", [id])).toBeNull();
+      await value("update service_jobs set status='DELIVERED' where id=$1 returning id v", [id]);
+      expect(await value("select status='DELIVERED' and delivered_at=now() v from service_jobs where id=$1", [id])).toBe(true);
+    });
+    it("blocks WAITING -> DELIVERED and a timestamp-only bypass", async () => {
+      expect(await value("select status v from service_jobs where id=$1", [id])).toBe("WAITING");
+      await rejectedUpdate("status='DELIVERED'", [], "Yekun təhvil");
+      await rejectedUpdate("delivered_at=now()", [], "Yekun təhvil");
+    });
+    it("blocks delivery of forced READY cards with unfinished work", async () => {
+      await value("update service_jobs set status='READY' where id=$1 returning id v", [id]);
+      await rejectedUpdate("status='DELIVERED'", [], "Yekun təhvil");
+    });
+    it.each(["WAITING", "READY", "IN_PROGRESS", "RECEIVED", "WAITING_PARTS", "PAUSED"])("blocks DELIVERED -> %s", async (status) => {
+      await deliver();
+      await rejectedUpdate("status=$2::public.service_job_status", [status]);
+      await rejectedUpdate("status=$2::public.service_job_status,delivered_at=null", [status]);
+    });
+    it.each(["null", "delivered_at + interval '1 second'", "delivered_at - interval '1 day'"])("blocks changing delivered_at to %s after delivery", async (timestamp) => {
+      await deliver();
+      await rejectedUpdate(`delivered_at=${timestamp}`);
+    });
+    it("allows unrelated ADMIN changes and same-value delivery fields without rewriting the timestamp", async () => {
+      await deliver();
+      const timestamp = await value("select delivered_at v from service_jobs where id=$1", [id]);
+      await value("update service_jobs set notes='After delivery',customer_phone='0500000018',status=status,delivered_at=delivered_at where id=$1 returning id v", [id]);
+      expect(await value("select notes v from service_jobs where id=$1", [id])).toBe("After delivery");
+      expect(await value("select status v from service_jobs where id=$1", [id])).toBe("DELIVERED");
+      expect(await value("select delivered_at v from service_jobs where id=$1", [id])).toEqual(timestamp);
+    });
+    it("preserves permitted INTAKE metadata edits without changing delivery state", async () => {
+      await deliver();
+      const timestamp = await value("select delivered_at v from service_jobs where id=$1", [id]);
+      await user(intake);
+      await value("select update_vehicle_intake($1,'{}',$2) v", [id, JSON.stringify({ notes: "Intake correction" })]);
+      expect(await value("select notes v from service_jobs where id=$1", [id])).toBe("Intake correction");
+      expect(await value("select status v from service_jobs where id=$1", [id])).toBe("DELIVERED");
+      expect(await value("select delivered_at v from service_jobs where id=$1", [id])).toEqual(timestamp);
+    });
+    it.each([["CASHIER", cashier], ["INTAKE", intake]])("prevents %s from delivering or reopening, including RLS-bypassing execution", async (_role, uid) => {
+      await ready();
+      await user(uid);
+      expect(await value("update service_jobs set status='DELIVERED' where id=$1 returning id v", [id])).toBeUndefined();
+      await db.exec("reset role");
+      await rejectedUpdate("status='DELIVERED'", [], "Giriş icazəsi yoxdur");
+      await user(admin);
+      await value("update service_jobs set status='DELIVERED' where id=$1 returning id v", [id]);
+      await user(uid);
+      expect(await value("update service_jobs set status='WAITING',delivered_at=null where id=$1 returning id v", [id])).toBeUndefined();
+      await db.exec("reset role");
+      await rejectedUpdate("status='WAITING'");
+      await rejectedUpdate("delivered_at=null");
+    });
+    it.each(["anonymous", "missing profile", "inactive", "expired session", "password change required"])("rejects final delivery for %s", async (kind) => {
+      await ready();
+      await db.exec("reset role");
+      const uid = kind === "anonymous" ? "" : randomUUID();
+      if (uid) await value("insert into auth.users(id) values($1) returning id v", [uid]);
+      if (!["anonymous", "missing profile"].includes(kind)) {
+        await value(`insert into user_profiles(auth_user_id,organization_id,username,display_name,role,is_active,must_change_password,session_not_before)
+          values($1,$2,'restricted','Restricted','ADMIN',$3,$4,$5) returning auth_user_id v`,
+        [uid, org, kind !== "inactive", kind === "password change required", kind === "expired session" ? "2099-01-01" : "1970-01-01"]);
+      }
+      await user(uid);
+      if (kind === "anonymous") {
+        await db.exec("set role anon");
+        await expect(value("update service_jobs set status='DELIVERED' where id=$1 returning id v", [id])).rejects.toThrow("permission denied");
+      } else {
+        expect(await value("update service_jobs set status='DELIVERED' where id=$1 returning id v", [id])).toBeUndefined();
+      }
+      await db.exec("reset role");
+      await rejectedUpdate("status='DELIVERED'", [], "Giriş icazəsi yoxdur");
+    });
+    it("retains organization checks even when table RLS is bypassed", async () => {
+      await ready();
+      await db.exec("reset role");
+      const uid = randomUUID();
+      const otherOrg = await value("insert into organizations(name,slug) values('Other','other-delivery') returning id v");
+      await value("insert into auth.users(id) values($1) returning id v", [uid]);
+      await value("insert into user_profiles(auth_user_id,organization_id,username,display_name,role,must_change_password) values($1,$2,'other_admin','Other','ADMIN',false) returning auth_user_id v", [uid, otherOrg]);
+      await user(uid);
+      expect(await value("update service_jobs set status='DELIVERED' where id=$1 returning id v", [id])).toBeUndefined();
+      await db.exec("reset role");
+      await rejectedUpdate("status='DELIVERED'", [], "Bu müəssisəyə giriş yoxdur");
+    });
+    it.each(["archived_at", "deleted_at"])("retains the active-card check for %s", async (field) => {
+      await ready();
+      const fields = field === "deleted_at" ? "archived_at=now(),deleted_at=now()" : "archived_at=now()";
+      await value(`update service_jobs set ${fields} where id=$1 returning id v`, [id]);
+      await rejectedUpdate("status='DELIVERED'", [], "Yekun təhvil");
+    });
+    it.each(["status", "delivered_at"])("retains the insert guard for %s", async (field) => {
+      const data = field === "status" ? "'DELIVERED'" : "now()";
+      await expect(value(`insert into service_jobs(owner_user_id,vehicle_id,job_no,funding_source,${field})
+        select auth.uid(),vehicle_id,'INVALID-DELIVERY','CUSTOMER_FUNDED',${data} from service_jobs where id=$1 returning id v`, [id]))
+        .rejects.toThrow("Yeni avtomobil əvvəlcə");
+    });
+    it("does not reopen a delivered card through the work-status derivation trigger", async () => {
+      await deliver();
+      const before = await snapshot();
+      await value("update job_work_items set status='TODO' where service_job_id=$1 returning id v", [id]);
+      expect(await snapshot()).toEqual(before);
+    });
+  });
   it("0016 rejects missing/invalid costing workers atomically and preserves assignments and earnings", async () => {
     await user(admin);
     const id = await createDiscount("NONE", 0);
