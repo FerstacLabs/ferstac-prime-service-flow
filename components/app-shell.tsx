@@ -68,7 +68,7 @@ export function AppShell({
             >
               <KeyRound size={16} />
             </Link>
-            <form action={signOutAction}>
+            <form action={signOutAction} data-draft-logout>
               <button className="btn btn-secondary text-[var(--muted)]">
                 <LogOut size={16} />
                 Çıxış

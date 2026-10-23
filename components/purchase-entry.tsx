@@ -1,6 +1,7 @@
 "use client";
 import { IntakeDateInput } from "@/components/intake-date-input";
 import { useState } from "react";
+import { FormDraft, useDraftState } from "@/components/form-draft";
 import { savePurchaseAction } from "@/app/actions/purchases";
 import { ActionForm } from "@/components/action-form";
 import { SearchSelect, type SelectOption } from "@/components/search-select";
@@ -21,7 +22,12 @@ import { VatMode } from "@/components/vat-mode";
 import { VatTotals } from "@/components/vat-totals";
 import { PaymentSource } from "@/components/finance-forms";
 import type { FinanceAccount } from "@/lib/finance";
-export function PurchaseEntry({
+export function PurchaseEntry(props: React.ComponentProps<typeof PurchaseEntryInner>) {
+  return <FormDraft id={`purchase:${props.jobId}:${props.purchase?.id ?? props.part?.id ?? "new"}`}>
+    <PurchaseEntryInner {...props} />
+  </FormDraft>;
+}
+function PurchaseEntryInner({
   jobId,
   part,
   purchase,
@@ -40,16 +46,16 @@ export function PurchaseEntry({
   units?: SelectOption[];
   accounts?: FinanceAccount[];
 }) {
-  const [source, setSource] = useState(purchase?.source_type ?? "SUPPLIER");
-  const [buyer, setBuyer] = useState(
+  const [source, setSource] = useDraftState("purchase:source", purchase?.source_type ?? "SUPPLIER");
+  const [buyer, setBuyer] = useDraftState("purchase:buyer",
     purchase?.purchased_by_admin === false ? "worker" : "admin",
   );
-  const [payment, setPayment] = useState(purchase?.payment_status ?? "UNPAID");
+  const [payment, setPayment] = useDraftState("purchase:payment", purchase?.payment_status ?? "UNPAID");
   const [paymentAt] = useState(() =>
     new Date(Date.now() + 4 * 3600000).toISOString().slice(0, 16),
   );
-  const [vatEnabled, setVatEnabled] = useState(purchase?.vat_enabled ?? false);
-  const [cost, setCost] = useState(String(purchase?.unit_price ?? ""));
+  const [vatEnabled, setVatEnabled] = useDraftState("purchase:vat", purchase?.vat_enabled ?? false);
+  const [cost, setCost] = useDraftState("purchase:cost", String(purchase?.unit_price ?? ""));
   let actualTotal: number | null = null;
   try {
     actualTotal =
@@ -127,6 +133,7 @@ export function PurchaseEntry({
         Mənbə
         <select
           name="source_type"
+          data-draft-managed
           value={source}
           onChange={(e) => setSource(e.target.value as typeof source)}
           className="field mt-1"
@@ -144,6 +151,7 @@ export function PurchaseEntry({
           : "Faktiki vahid mayası (AZN)"}
         <DecimalInput
           name="unit_price"
+          data-draft-managed
           step="0.01"
           min="0"
           required
@@ -166,6 +174,7 @@ export function PurchaseEntry({
         Alıcı
         <select
           name="purchased_by"
+          data-draft-managed
           value={buyer}
           onChange={(event) => setBuyer(event.target.value)}
           className="field mt-1"
@@ -197,6 +206,7 @@ export function PurchaseEntry({
             Ödəniş
             <select
               name="payment_status"
+              data-draft-managed
               value={payment}
               onChange={(e) => setPayment(e.target.value as typeof payment)}
               className="field mt-1"

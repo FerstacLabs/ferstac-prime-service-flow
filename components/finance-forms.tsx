@@ -1,5 +1,6 @@
 "use client";
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext } from "react";
+import { FormDraft, useDraftState } from "@/components/form-draft";
 import * as Dialog from "@radix-ui/react-dialog";
 import {
   ArrowDownLeft,
@@ -51,7 +52,7 @@ export function FinanceDialog({
   danger?: boolean;
   icon?: "in" | "out" | "transfer" | "settle";
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useDraftState("finance-dialog:open", false);
   const Icon = danger
     ? Trash2
     : icon === "out"
@@ -103,7 +104,7 @@ export function PaymentSource({
   initial?: MoneyChannel;
   defaultAccount?: string;
 }) {
-  const [channel, setChannel] = useState<MoneyChannel>(initial);
+  const [channel, setChannel] = useDraftState<MoneyChannel>("payment:channel", initial);
   return (
     <>
       <label className="text-sm">
@@ -111,6 +112,7 @@ export function PaymentSource({
         <select
           className="field mt-1"
           name="channel"
+          data-draft-managed
           value={channel}
           onChange={(e) => setChannel(e.target.value as MoneyChannel)}
         >
@@ -228,7 +230,12 @@ export function MovementDetails({
     </>
   );
 }
-export function NewMovement({
+export function NewMovement(props: React.ComponentProps<typeof NewMovementInner>) {
+  return <FormDraft id={`movement:${props.direction}:${props.channel}:${props.account ?? "cash"}:${props.job?.id ?? "general"}:${props.opening ?? false}`}>
+    <NewMovementInner {...props} />
+  </FormDraft>;
+}
+function NewMovementInner({
   data,
   direction,
   channel,
@@ -243,11 +250,11 @@ export function NewMovement({
   job?: FinanceJob;
   opening?: boolean;
 }) {
-  const [selected, setSelected] = useState(job?.id || "");
-  const [category, setCategory] = useState("");
-  const [worker, setWorker] = useState("");
-  const [target, setTarget] = useState("");
-  const [amount, setAmount] = useState("");
+  const [selected, setSelected] = useDraftState("movement:job", job?.id || "");
+  const [category, setCategory] = useDraftState("movement:category", "");
+  const [worker, setWorker] = useDraftState("movement:worker", "");
+  const [target, setTarget] = useDraftState("movement:target", "");
+  const [amount, setAmount] = useDraftState("movement:amount", "");
   const purposeName = data.categories.find((c) => c.id === category)?.name;
   const customer =
     !opening &&
@@ -323,6 +330,7 @@ export function NewMovement({
             Avtomobil / servis kartı
             <select
               name="service_job_id"
+              data-draft-managed
               required={customer}
               className="field mt-1"
               value={selected}
@@ -342,12 +350,24 @@ export function NewMovement({
             </select>
           </label>
         ) : null}
+        {paymentJob?.discount_type && paymentJob.discount_type !== "NONE" && (
+          <dl className="grid gap-3 border-y border-[var(--border)] py-3 text-sm sm:col-span-2 sm:grid-cols-3">
+            {[
+              ["Endirimdən əvvəl (ƏDV-siz)", paymentJob.before_discount],
+              ["Müştəri endirimi", paymentJob.discount_amount],
+              ["Müştəri yekun məbləği", paymentJob.gross_quotation],
+              ["Alınmış ödənişlər", moneyDiff(Number(paymentJob.gross_quotation), paymentJob.customer_due)],
+              ["Müştərinin qalıq borcu", paymentJob.customer_due],
+            ].map(([label, value]) => <div key={String(label)}><dt>{label}</dt><dd>{formatMoney(Number(value))}</dd></div>)}
+          </dl>
+        )}
         <label className="text-sm">
           {paymentJob?.vat_enabled
             ? "Yekun ödəniş (ƏDV daxil, AZN)"
             : "Məbləğ (AZN)"}
           <DecimalInput
             name="amount"
+            data-draft-managed
             required
             min="0.01"
             max={paymentJob?.customer_due}

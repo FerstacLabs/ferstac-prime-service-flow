@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { FormDraft, useDraftState } from "@/components/form-draft";
 import { ActionForm } from "@/components/action-form";
 import { SubmitButton } from "@/components/submit-button";
 import { SearchSelect, type SelectOption } from "@/components/search-select";
@@ -17,10 +17,11 @@ import {
 import { costKnown } from "@/lib/workshop";
 import type { DbWorkItem } from "@/lib/supabase/queries";
 import { statusLabels } from "@/components/app-shell";
+import { workerSelectionRequired } from "@/lib/action-errors";
 
 export function AdditionalMeasureFields({ units }: { units: SelectOption[] }) {
-  const [quantity, setQuantity] = useState("1"),
-    [price, setPrice] = useState("0");
+  const [quantity, setQuantity] = useDraftState("measure:quantity", "1"),
+    [price, setPrice] = useDraftState("measure:price", "0");
   let total: string | null = null;
   try {
     total = multiplyMoney(
@@ -34,6 +35,7 @@ export function AdditionalMeasureFields({ units }: { units: SelectOption[] }) {
         Miqdar
         <DecimalInput
           name="quoted_quantity"
+          data-draft-managed
           scale={3}
           min="0.001"
           max="100000"
@@ -54,6 +56,7 @@ export function AdditionalMeasureFields({ units }: { units: SelectOption[] }) {
         Müştəri vahid qiyməti (AZN)
         <DecimalInput
           name="customer_unit_price"
+          data-draft-managed
           required
           value={price}
           onChange={(e) => setPrice(e.target.value)}
@@ -77,7 +80,10 @@ export function AdditionalMeasureFields({ units }: { units: SelectOption[] }) {
   );
 }
 
-export function WorkerCostForm({
+export function WorkerCostForm(props: React.ComponentProps<typeof WorkerCostFormInner>) {
+  return <FormDraft id={`work-cost:${props.work.id}`}><WorkerCostFormInner {...props} /></FormDraft>;
+}
+function WorkerCostFormInner({
   work,
   paid,
   workers = [],
@@ -86,12 +92,18 @@ export function WorkerCostForm({
   paid: number;
   workers?: SelectOption[];
 }) {
-  const [percentage, setPercentage] = useState(
+  const [percentage, setPercentage] = useDraftState("worker:percentage",
     work.compensation_mode === "PERCENTAGE",
   );
+  const [cost, setCost] = useDraftState(`worker-cost:${work.id}`, costKnown(work) ? String(work.labor_cost) : "");
   return (
     <ActionForm
       action={saveWorkCostingAction}
+      validate={(form) => {
+        const selected = form.get("assigned_worker_id");
+        if (!selected || !workers.some((worker) => worker.id === selected))
+          return workerSelectionRequired;
+      }}
       className="grid max-w-4xl items-end gap-3 sm:grid-cols-2"
     >
       <input type="hidden" name="id" value={work.id} />
@@ -130,10 +142,12 @@ export function WorkerCostForm({
         Usta maya dəyəri
         <DecimalInput
           name="labor_cost"
+          data-draft-managed
           disabled={percentage}
           min={0}
           required
-          defaultValue={costKnown(work) ? work.labor_cost : ""}
+          value={cost}
+          onChange={(event) => setCost(event.target.value)}
           className="field mt-1"
         />
       </label>
@@ -141,6 +155,7 @@ export function WorkerCostForm({
         <input
           type="checkbox"
           name="percentage"
+          data-draft-managed
           checked={percentage}
           onChange={(e) => setPercentage(e.target.checked)}
         />
@@ -182,7 +197,10 @@ export function WorkerCostForm({
   );
 }
 
-export function AdditionalWorkForm({
+export function AdditionalWorkForm(props: React.ComponentProps<typeof AdditionalWorkFormInner>) {
+  return <FormDraft id={`additional-work:${props.jobId}`}><AdditionalWorkFormInner {...props} /></FormDraft>;
+}
+function AdditionalWorkFormInner({
   jobId,
   catalog,
   units,
@@ -193,7 +211,7 @@ export function AdditionalWorkForm({
   units: SelectOption[];
   workers: SelectOption[];
 }) {
-  const [percentage, setPercentage] = useState(false);
+  const [percentage, setPercentage] = useDraftState("additional:percentage", false);
   return (
     <ActionForm
       action={createAdditionalWorkAction}
@@ -227,6 +245,7 @@ export function AdditionalWorkForm({
         <input
           type="checkbox"
           name="percentage"
+          data-draft-managed
           checked={percentage}
           onChange={(e) => setPercentage(e.target.checked)}
         />

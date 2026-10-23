@@ -24,7 +24,7 @@ export default async function NewVehiclePage() {
         eyebrow="Sürətli qəbul"
       />
       <div>
-        <ActionForm action={createServiceJobAction} className="grid gap-6">
+        <ActionForm draftKey="vehicle:new" action={createServiceJobAction} className="grid gap-6">
           <section className="grid gap-4 md:grid-cols-2">
             <Field label="Dövlət qeydiyyat nişanı">
               <PlateInput />

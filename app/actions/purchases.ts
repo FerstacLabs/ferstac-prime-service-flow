@@ -11,7 +11,7 @@ import {
 import { decimalMinor, multiplyMoney, fromMinor } from "@/lib/decimal";
 import { bakuDate } from "@/lib/filters";
 import { z } from "zod";
-import { databaseActionError, duplicatePartFailure } from "@/lib/action-errors";
+import { databaseActionError, duplicatePartFailure, workerSelectionRequired } from "@/lib/action-errors";
 import { serverMutation } from "@/lib/server-mutation";
 import { vatPricing } from "@/lib/vat";
 import { createHash } from "node:crypto";
@@ -259,11 +259,11 @@ export async function savePurchaseAction(formData: FormData) {
 
 export async function saveWorkCostingAction(form: FormData) {
   const { supabase } = await getAuthedSupabase("ADMIN");
+  const worker = z.string().uuid().safeParse(form.get("assigned_worker_id"));
+  if (!worker.success) return { error: workerSelectionRequired };
   const { error } = await supabase.rpc("set_work_compensation", {
     p_id: uuidValue(form, "id"),
-    p_worker: text(form.get("assigned_worker_id"))
-      ? uuidValue(form, "assigned_worker_id")
-      : null,
+    p_worker: worker.data,
     p_percentage: form.get("percentage") === "on",
     p_cost:
       form.get("percentage") === "on"

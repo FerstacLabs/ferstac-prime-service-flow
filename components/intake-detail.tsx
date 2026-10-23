@@ -7,8 +7,9 @@ import {
   fundingLabels,
 } from "@/components/app-shell";
 import { ReportActions } from "@/components/report-actions";
+import { HandoverAction } from "@/components/handover-action";
 import { formatDate, formatMoney } from "@/lib/format";
-import { sumMoney } from "@/lib/workshop";
+import { jobFinance } from "@/lib/workshop";
 import { workTitle } from "@/lib/supabase/queries";
 import type { WorkshopData } from "@/lib/supabase/workshop";
 import { vehicleIntakeFields } from "@/lib/intake-fields";
@@ -17,6 +18,7 @@ import { formatQuantity } from "@/lib/decimal";
 export function IntakeDetail({ data }: { data: WorkshopData }) {
   const job = data.jobs[0],
     vehicle = job.vehicles!;
+  const totals = jobFinance(job, data.work, data.parts, [], []);
   return (
     <>
       <PageHeader
@@ -25,6 +27,7 @@ export function IntakeDetail({ data }: { data: WorkshopData }) {
         actions={<ReportActions report="quotation" query={`job=${job.id}`} />}
       />
       <div className="mb-6 flex flex-wrap items-center gap-3">
+        <HandoverAction job={job} />
         <StatusBadge>{statusLabels[job.status]}</StatusBadge>
         {job.archived_at ? (
           <StatusBadge>Arxivdə</StatusBadge>
@@ -120,23 +123,18 @@ export function IntakeDetail({ data }: { data: WorkshopData }) {
           </div>
         </section>
       ))}
-      <div className="mt-6 flex justify-between border-t border-[var(--border)] py-4 font-semibold">
-        <span>İlkin təklif</span>
-        <span>
-          {formatMoney(
-            job.has_line_quotes
-              ? sumMoney([
-                  ...data.work
-                    .filter((w) => !w.is_additional)
-                    .map((w) => w.quoted_price),
-                  ...data.parts
-                    .filter((p) => !p.is_additional)
-                    .map((p) => p.quoted_price),
-                ])
-              : job.agreed_budget,
-          )}
-        </span>
-      </div>
+      <dl className="mt-6 grid grid-cols-[1fr_auto] gap-3 border-t border-[var(--border)] py-4">
+        {[
+          ...(job.discount_type && job.discount_type !== "NONE" ? [
+            ["Endirimdən əvvəl (ƏDV-siz)", totals.beforeDiscount],
+            ["Müştəri endirimi", totals.discountAmount],
+          ] : []),
+          ...(job.vat_enabled ? [["ƏDV-siz cəm", totals.quotedTotal], ["ƏDV (18%)", totals.quotedVat]] : []),
+          ["Yekun təklif", totals.quotedGross],
+        ].map(([label, value]) => <div className="contents" key={String(label)}>
+          <dt>{label}</dt><dd>{formatMoney(Number(value))}</dd>
+        </div>)}
+      </dl>
     </>
   );
 }

@@ -2,6 +2,7 @@
 import { useId, useRef, useState, useTransition } from "react";
 import { Check, ChevronDown, Plus, X } from "lucide-react";
 import { createCatalogAction } from "@/app/actions/finance";
+import { useDraftState } from "@/components/form-draft";
 export type SelectOption = { id: string; name: string };
 export function SearchSelect({
   name,
@@ -23,7 +24,7 @@ export function SearchSelect({
   createKind?: "work" | "part" | "role" | "unit";
 }) {
   const id = useId();
-  const [local, setLocal] = useState(defaultValue);
+  const [local, setLocal] = useDraftState(`select:${name ?? id}`, defaultValue);
   const selected = value ?? local;
   const [added, setAdded] = useState<SelectOption[]>([]);
   const all = [

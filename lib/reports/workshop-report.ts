@@ -22,7 +22,6 @@ import {
   allocationLabels,
   missingValue,
   missingCostDescription,
-  canGenerateHandover,
 } from "@/lib/workshop";
 import { workerWorkFinance } from "@/lib/worker-finance";
 import { workerReport } from "@/lib/reports/worker-report";
@@ -108,11 +107,6 @@ export async function loadWorkshopReport(
     !data.jobs.some((j) => j.id === f.job)
   )
     return null;
-  if (
-    scope === "handover" &&
-    !data.jobs.some((j) => j.id === f.job && canGenerateHandover(j.status))
-  )
-    return null;
   if (scope === "vehicle") {
     const finance = await loadFinanceReport({
       reportType: "vehicle",
@@ -125,6 +119,10 @@ export async function loadWorkshopReport(
     const n = jobFinance(job, data.work, data.parts, data.purchases, data.cash);
     finance.title = "Servis kartı maliyyə hesabatı";
     finance.summary = pairs([
+      ...(job.discount_type && job.discount_type !== "NONE" ? [
+        ["Endirimdən əvvəl (ƏDV-siz)", money(n.beforeDiscount)],
+        ["Müştəri endirimi", money(n.discountAmount)],
+      ] as [string, string][] : []),
       ["ƏDV-siz təklif", money(n.quotedTotal)],
       ["Çıxış ƏDV-si", money(n.quotedVat)],
       ["Müştəri yekun məbləği", money(n.quotedGross)],
@@ -244,7 +242,10 @@ export function buildWorkshopReport(
     orientation: "portrait",
   };
   const job = data.jobs.find((j) => j.id === f.job) ?? data.jobs[0];
-  if (scope === "handover") return handoverReport(job?.vehicles?.plate ?? "");
+  if (scope === "handover") {
+    if (!job) return report;
+    return handoverReport(job.vehicles?.plate ?? "");
+  }
   if (scope === "quotation") {
     if (!job) return report;
     const works = data.work
@@ -420,6 +421,10 @@ function vehicleSections(
       summary: pairs([
         ["İş təklifi", n.detailed ? money(n.quotedWork) : missingValue],
         ["Detal təklifi", n.detailed ? money(n.quotedParts) : missingValue],
+        ...(job.discount_type && job.discount_type !== "NONE" ? [
+          ["Endirimdən əvvəl (ƏDV-siz)", money(n.beforeDiscount)],
+          ["Müştəri endirimi", money(n.discountAmount)],
+        ] as [string, string][] : []),
         ["ƏDV-siz təklif / əvvəlki büdcə", money(n.quotedTotal)],
         ["Çıxış ƏDV-si", money(n.quotedVat)],
         ["Yekun təklif", money(n.quotedGross)],
@@ -470,7 +475,7 @@ function vehicleSections(
                 `${date(w.planned_at)} / ${date(w.completed_at) || "-"}`,
               ],
               [
-                "Marja",
+                job.discount_type && job.discount_type !== "NONE" ? "Marja (endirimdən əvvəl)" : "Marja",
                 w.quoted_price != null && costKnown(w)
                   ? money(
                       subtractMoney(
@@ -488,7 +493,7 @@ function vehicleSections(
     {
       title: "Tələb olunan detallar",
       table: table(
-        ["Detal", "Müştəri qiyməti", "Maya / marja"],
+        ["Detal", "Müştəri qiyməti", job.discount_type && job.discount_type !== "NONE" ? "Maya / endirimdən əvvəl marja" : "Maya / marja"],
         parts.map((r) => {
           const purchases = data.purchases.filter(
               (p) => p.required_part_id === r.id,

@@ -268,6 +268,13 @@ export function financeReport(
       report.sections.push({
         title: `${n.job.plate} · ${n.job.job_no}`,
         fields: [
+          ...(n.job.discount_type && n.job.discount_type !== "NONE" ? [
+            ["Endirimdən əvvəl (ƏDV-siz)", n.job.before_discount],
+            ["Müştəri endirimi", n.job.discount_amount],
+            ["Endirimdən sonra (ƏDV-siz)", n.job.net_quotation],
+            ["Çıxış ƏDV-si", n.job.vat_quotation],
+            ["Müştəri yekun məbləği", n.job.gross_quotation],
+          ] : []),
           ["Detal mayası", n.partsCost],
           ["Usta mayası", n.workerCost],
           ["Əlavə avtomobil xərci", n.otherCost],

@@ -18,7 +18,7 @@ export const canReport = (role: AppRole, scope: string) =>
   role === "ADMIN" ||
   (role === "CASHIER"
     ? ["kassa", "workers", "finance"].includes(scope)
-    : ["quotation", "work"].includes(scope));
+    : ["quotation", "work", "handover"].includes(scope));
 export function canAccessPath(role: AppRole, path: string) {
   if (path === "/change-password") return true;
   const report = /^\/(?:api\/)?reports\/([^/]+)\//.exec(path);

@@ -14,6 +14,7 @@ import {
   Truck,
 } from "lucide-react";
 import { canAccessPath, type AppRole } from "@/lib/security";
+import { useModuleHref } from "@/components/workflow-navigation";
 
 const items = [
   { href: "/vehicles", label: "Avtomobillər", icon: CarFront },
@@ -33,21 +34,17 @@ export function SidebarNav({ role }: { role: AppRole }) {
     <nav aria-label="Əsas naviqasiya" className="sidebar-nav">
       {items
         .filter(({ href }) => canAccessPath(role, href))
-        .map(({ href, label, icon: Icon }) => (
-          <Link
-            key={href}
-            href={href}
-            className="sidebar-link"
-            aria-current={
-              pathname === href || pathname.startsWith(`${href}/`)
-                ? "page"
-                : undefined
-            }
-          >
-            <Icon size={18} aria-hidden="true" />
-            {label}
-          </Link>
-        ))}
+        .map((item) => <ModuleLink key={item.href} item={item} pathname={pathname} />)}
     </nav>
   );
+}
+function ModuleLink({ item: { href, label, icon: Icon }, pathname }: { item: typeof items[number]; pathname: string }) {
+  const remembered = useModuleHref(href);
+  const active = pathname === href || pathname.startsWith(`${href}/`);
+  return <div className="flex items-center">
+    <Link href={remembered} className="sidebar-link min-w-0 flex-1" aria-current={active ? "page" : undefined}>
+      <Icon size={18} aria-hidden="true" />{label}
+    </Link>
+    {remembered !== href && <Link href={href} className="p-2 text-[var(--muted)]" title={`${label}: əsas siyahı`} aria-label={`${label}: əsas siyahı`}><ClipboardList size={16} /></Link>}
+  </div>;
 }

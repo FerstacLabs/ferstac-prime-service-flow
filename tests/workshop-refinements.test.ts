@@ -229,10 +229,10 @@ describe("archive and cashier refinements", () => {
     expect(history[0].item.id).toBe("work");
     expect(history[0].job?.vehicles?.plate).toBe("77-ZZ-777");
   });
-  it("only enables handover for ready and delivered service jobs", () => {
+  it("enables acceptance documents immediately and preserves final handover access", () => {
     expect(canGenerateHandover("READY")).toBe(true);
     expect(canGenerateHandover("DELIVERED")).toBe(true);
-    for (const status of ["WAITING", "IN_PROGRESS", "PAUSED"] as const)
-      expect(canGenerateHandover(status)).toBe(false);
+    for (const status of ["RECEIVED", "WAITING", "IN_PROGRESS", "WAITING_PARTS", "PAUSED"] as const)
+      expect(canGenerateHandover(status)).toBe(true);
   });
 });

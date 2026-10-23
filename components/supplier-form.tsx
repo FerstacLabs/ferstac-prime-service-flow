@@ -5,6 +5,7 @@ import type { DbSupplier } from "@/lib/supabase/queries";
 export function SupplierForm({ supplier: s }: { supplier?: DbSupplier }) {
   return (
     <ActionForm
+      draftKey={`supplier:${s?.id ?? "new"}`}
       action={saveSupplierAction}
       className="my-4 grid items-end gap-4 sm:grid-cols-2 xl:grid-cols-3"
     >

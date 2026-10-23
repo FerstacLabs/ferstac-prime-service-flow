@@ -5,6 +5,7 @@ import type {
 } from "@/lib/supabase/queries";
 import { decimalMinor, multiplyMoney } from "@/lib/decimal";
 import { vatPricing } from "@/lib/vat";
+import { discountedPricing } from "@/lib/discount";
 
 export type QuoteMeasure = {
   is_additional?: boolean;
@@ -94,7 +95,7 @@ export function missingCostDescription({
 }
 
 export const canGenerateHandover = (status: DbServiceJob["status"]) =>
-  status === "READY" || status === "DELIVERED";
+  ["RECEIVED", "WAITING", "IN_PROGRESS", "WAITING_PARTS", "READY", "DELIVERED", "PAUSED"].includes(status);
 
 // Calculate in integer qəpik; NUMERIC remains the persistence format.
 export const cents = (value: number | string | null | undefined) =>
@@ -206,14 +207,20 @@ export function jobFinance(
   const detailed =
     job.has_line_quotes ??
     (work.some((w) => w.quoted_price != null) || required.length > 0);
-  const quotedTotal = detailed
+  const beforeDiscount = detailed
     ? sumMoney([quotedWork, quotedParts])
     : sumMoney([
         Number(job.agreed_budget),
         ...work.filter((w) => w.is_additional).map((w) => w.quoted_price),
         ...required.filter((p) => p.is_additional).map((p) => p.quoted_price),
       ]);
-  const quotation = vatPricing(quotedTotal, job.vat_enabled ?? false);
+  const quotation = discountedPricing(beforeDiscount, job);
+  const quotedTotal = Number(quotation.net);
+  const discountCents = decimalMinor(quotation.discount);
+  const baseCents = decimalMinor(quotation.beforeDiscount);
+  // Allocate the rounded contract discount once; the parts share receives the residual cent.
+  const workDiscount = baseCents > 0n ? (discountCents * BigInt(cents(quotedWork)) + baseCents / 2n) / baseCents : 0n;
+  const partsDiscount = discountCents - workDiscount;
   const activeWork = work.filter((w) => w.status !== "CANCELLED");
   const workCost = sumMoney(
     activeWork.filter(costKnown).map((w) => w.labor_cost),
@@ -261,6 +268,8 @@ export function jobFinance(
     detailed,
     quotedWork,
     quotedParts,
+    beforeDiscount,
+    discountAmount: Number(quotation.discount),
     quotedTotal,
     quotedVat: Number(quotation.vat),
     quotedGross: Number(quotation.gross),
@@ -283,9 +292,9 @@ export function jobFinance(
       activeWork.map((w) => workerWorkFinance(w, cash).remaining),
     ),
     workProfit:
-      detailed && !missingWork ? subtractMoney(quotedWork, workCost) : null,
+      detailed && !missingWork ? subtractMoney(quotedWork, sumMoney([workCost, Number(workDiscount) / 100])) : null,
     partProfit:
-      detailed && !missingParts ? subtractMoney(quotedParts, partsCost) : null,
+      detailed && !missingParts ? subtractMoney(quotedParts, sumMoney([partsCost, Number(partsDiscount) / 100])) : null,
     grossProfit:
       detailed && !missingWork && !missingParts
         ? subtractMoney(quotedTotal, sumMoney([workCost, partsCost, otherCost]))

@@ -5,9 +5,12 @@ import {
 } from "@/lib/reports/report-format";
 import { bakuDate } from "@/lib/filters";
 // Transcription of the supplied printed form. Handwritten details are deliberately excluded.
-export function handoverReport(plate: string): PrimeReport {
-  const date = formatReportDate(bakuDate());
-  return {
+export function handoverReport(
+  plate: string,
+  documentDate = bakuDate(),
+): PrimeReport {
+  const date = formatReportDate(documentDate);
+  const report: PrimeReport = {
     scope: "handover",
     documentContext: [plate],
     title: "TƏHVİL-TƏSLİM AKTI",
@@ -44,4 +47,5 @@ export function handoverReport(plate: string): PrimeReport {
       },
     ],
   };
+  return report;
 }
